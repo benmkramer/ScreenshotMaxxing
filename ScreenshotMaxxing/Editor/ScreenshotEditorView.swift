@@ -10,16 +10,22 @@ import SwiftUI
 struct ScreenshotEditorView: View {
     let imageURL: URL
     private let image: NSImage?
+    @State private var editorState: ScreenshotEditorState
 
     init(imageURL: URL) {
         self.imageURL = imageURL
         self.image = NSImage(contentsOf: imageURL)
+        self._editorState = State(initialValue: ScreenshotEditorState(originalImageURL: imageURL))
     }
 
     var body: some View {
         Group {
             if let image {
-                ScreenshotImageCanvas(image: image)
+                VStack(spacing: 0) {
+                    EditorToolbar(selectedTool: $editorState.selectedTool)
+                    Divider()
+                    ScreenshotImageCanvas(image: image, annotations: editorState.annotations)
+                }
             } else {
                 unavailableImageView
             }
@@ -45,6 +51,7 @@ struct ScreenshotEditorView: View {
 
 struct ScreenshotImageCanvas: View {
     let image: NSImage
+    let annotations: [Annotation]
 
     var body: some View {
         GeometryReader { proxy in
@@ -64,6 +71,29 @@ struct ScreenshotImageCanvas: View {
                     .accessibilityLabel("Screenshot")
             }
         }
+    }
+}
+
+private struct EditorToolbar: View {
+    @Binding var selectedTool: EditorTool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Picker("Tool", selection: $selectedTool) {
+                ForEach(EditorTool.allCases) { tool in
+                    Image(systemName: tool.systemImageName)
+                        .help(tool.displayName)
+                        .tag(tool)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 180)
+
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 

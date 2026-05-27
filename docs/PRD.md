@@ -166,7 +166,7 @@ ScreenshotMaxxing/
 | 7 | Done | SwiftData capture model | Replace starter model with `Capture` | Successful captures create persisted metadata |
 | 8 | Done | Editor window | Open captured image in editor window | Capture immediately displays in editor |
 | 9 | Done | Editor canvas | Display screenshot with correct scaling | Image fits window without distortion |
-| 10 | Pending | Blur annotation model | Represent blur rectangles separately from image pixels | Drawing state stores one or more blur rects |
+| 10 | Done | Blur annotation model | Represent blur rectangles separately from image pixels | Drawing state stores one or more blur rects |
 | 11 | Pending | Draw blur rectangles | Let user drag to place blur regions | User can draw visible blur selection rectangles |
 | 12 | Pending | Render redactions | Bake blur into exported bitmap | Saved/copied image contains actual blurred pixels |
 | 13 | Pending | Copy action | Copy edited image to clipboard | Paste into another app shows edited image |

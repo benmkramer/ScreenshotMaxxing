@@ -187,4 +187,19 @@ struct ScreenshotMaxxingTests {
         #expect(geometry.viewRect(forImageRect: imageRect) == CGRect(x: 25, y: 25, width: 50, height: 25))
     }
 
+    @MainActor
+    @Test func editorStateStoresBlurRectAnnotationsInImageCoordinates() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000010")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        let addedAnnotation = state.addBlurRect(CGRect(x: 20, y: 30, width: 40, height: 50), id: annotationID)
+        let annotation = try #require(addedAnnotation)
+
+        #expect(state.originalImageURL == imageURL)
+        #expect(state.selectedTool == .blur)
+        #expect(annotation == Annotation(id: annotationID, type: .blur, rect: CGRect(x: 20, y: 30, width: 40, height: 50)))
+        #expect(state.annotations == [annotation])
+    }
+
 }
