@@ -6,12 +6,19 @@
 //
 
 import Testing
+import AppKit
 @testable import ScreenshotMaxxing
 
 struct ScreenshotMaxxingTests {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
+    @MainActor
+    @Test func menuBarMenuContainsRequiredItems() async throws {
+        let menu = MenuBarController.makeMenu(target: nil)
+        let visibleTitles = menu.items.compactMap { item in
+            item.isSeparatorItem ? nil : item.title
+        }
+
+        #expect(visibleTitles == MenuBarController.visibleMenuTitles)
     }
 
 }
