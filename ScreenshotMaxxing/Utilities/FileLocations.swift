@@ -75,17 +75,24 @@ enum FileLocations {
         let safePrefix = prefix
             .lowercased()
             .replacingOccurrences(of: " ", with: "-")
-        let timestamp = fileNameDateFormatter.string(from: date)
+        let timestamp = utcTimestamp(from: date)
 
         return "\(safePrefix)-\(timestamp)-\(uuid.uuidString.prefix(8)).png"
     }
 
-    private static let fileNameDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return formatter
-    }()
+    private static func utcTimestamp(from date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+
+        return String(
+            format: "%04d%02d%02d-%02d%02d%02d",
+            components.year ?? 0,
+            components.month ?? 0,
+            components.day ?? 0,
+            components.hour ?? 0,
+            components.minute ?? 0,
+            components.second ?? 0
+        )
+    }
 }
