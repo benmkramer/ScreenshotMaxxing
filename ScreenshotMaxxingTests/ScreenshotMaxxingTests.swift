@@ -232,6 +232,42 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureOptionsView.availableModes == [.area, .window, .fullscreen])
     }
 
+    @Test func screenCapturePermissionSkipsRequestWhenAlreadyGranted() {
+        var preflightCount = 0
+        var requestCount = 0
+        let controller = ScreenCapturePermissionController {
+            preflightCount += 1
+            return true
+        } requestAccess: {
+            requestCount += 1
+            return false
+        }
+
+        let granted = controller.requestAccessIfNeeded()
+
+        #expect(granted)
+        #expect(preflightCount == 1)
+        #expect(requestCount == 0)
+    }
+
+    @Test func screenCapturePermissionRequestsAccessWhenMissing() {
+        var preflightCount = 0
+        var requestCount = 0
+        let controller = ScreenCapturePermissionController {
+            preflightCount += 1
+            return false
+        } requestAccess: {
+            requestCount += 1
+            return true
+        }
+
+        let granted = controller.requestAccessIfNeeded()
+
+        #expect(granted)
+        #expect(preflightCount == 1)
+        #expect(requestCount == 1)
+    }
+
     @Test func shortcutSettingsStorePersistsAreaCaptureShortcut() throws {
         let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
