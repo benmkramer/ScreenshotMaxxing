@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var editorWindowControllers: [ScreenshotEditorWindowController] = []
     private var historyWindowController: NSWindowController?
+    private var preferencesWindowController: NSWindowController?
     private var hotKeyManager: HotKeyManager?
     private let captureController = CaptureController()
     private let metadataStore = CaptureMetadataStore()
@@ -45,7 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .openHistory:
             openHistory()
         case .openPreferences:
-            break
+            openPreferences()
         }
     }
 
@@ -118,5 +119,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         historyWindowController = windowController
         windowController.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func openPreferences() {
+        if let window = preferencesWindowController?.window {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        do {
+            let preferences = try PreferencesData.current(
+                areaCaptureShortcut: hotKeyManager?.registeredShortcut ?? .defaultAreaCapture
+            )
+            let hostingController = NSHostingController(rootView: PreferencesView(preferences: preferences))
+            let window = NSWindow(contentViewController: hostingController)
+            window.title = "ScreenshotMaxxing Preferences"
+            window.setContentSize(NSSize(width: 560, height: 320))
+            window.minSize = NSSize(width: 520, height: 300)
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.isReleasedWhenClosed = false
+
+            let windowController = NSWindowController(window: window)
+            preferencesWindowController = windowController
+            windowController.showWindow(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        } catch {
+            presentCaptureError(error)
+        }
     }
 }

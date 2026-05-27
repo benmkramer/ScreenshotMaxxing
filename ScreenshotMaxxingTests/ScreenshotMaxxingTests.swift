@@ -133,6 +133,30 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func preferencesDataShowsShortcutAndSaveLocations() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        let preferences = try PreferencesData.current(
+            areaCaptureShortcut: .defaultAreaCapture,
+            baseDirectory: baseDirectory,
+            fileManager: fileManager
+        )
+
+        #expect(preferences.areaCaptureShortcut.displayString == "Control-Shift-5")
+        #expect(URL(fileURLWithPath: preferences.originalsFolderPath).lastPathComponent == "originals")
+        #expect(URL(fileURLWithPath: preferences.originalsFolderPath).deletingLastPathComponent().lastPathComponent == "Captures")
+        #expect(URL(fileURLWithPath: preferences.editedFolderPath).lastPathComponent == "edited")
+        #expect(URL(fileURLWithPath: preferences.editedFolderPath).deletingLastPathComponent().lastPathComponent == "Captures")
+        #expect(fileManager.fileExists(atPath: preferences.originalsFolderPath))
+        #expect(fileManager.fileExists(atPath: preferences.editedFolderPath))
+    }
+
+    @MainActor
     @Test func captureMetadataStorePersistsImageDetails() throws {
         let fileManager = FileManager.default
         let baseDirectory = fileManager.temporaryDirectory
