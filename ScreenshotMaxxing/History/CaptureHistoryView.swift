@@ -11,9 +11,11 @@ import SwiftUI
 struct CaptureHistoryView: View {
     @Query(sort: \Capture.createdAt, order: .reverse) private var captures: [Capture]
     private let fileManager: FileManager
+    private let openCapture: (Capture) -> Void
 
-    init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default, openCapture: @escaping (Capture) -> Void = { _ in }) {
         self.fileManager = fileManager
+        self.openCapture = openCapture
     }
 
     var body: some View {
@@ -22,10 +24,15 @@ struct CaptureHistoryView: View {
                 emptyState
             } else {
                 List(captures) { capture in
-                    CaptureHistoryRow(
-                        capture: capture,
-                        fileExists: CaptureHistoryData.fileExists(for: capture, fileManager: fileManager)
-                    )
+                    let fileExists = CaptureHistoryData.fileExists(for: capture, fileManager: fileManager)
+
+                    Button {
+                        openCapture(capture)
+                    } label: {
+                        CaptureHistoryRow(capture: capture, fileExists: fileExists)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!fileExists)
                     .listRowSeparator(.visible)
                 }
                 .listStyle(.inset)

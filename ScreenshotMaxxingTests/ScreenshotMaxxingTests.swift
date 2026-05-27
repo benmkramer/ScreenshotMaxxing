@@ -345,6 +345,7 @@ struct ScreenshotMaxxingTests {
 
         #expect(captures.map(\.fileName) == ["newer.png", "older.png"])
         #expect(CaptureHistoryData.previewFilePath(for: newerCapture) == "/tmp/newer-edited.png")
+        #expect(CaptureHistoryData.previewFileURL(for: newerCapture) == URL(fileURLWithPath: "/tmp/newer-edited.png"))
         #expect(CaptureHistoryData.detailText(for: newerCapture) == "Fullscreen - 40x30")
     }
 

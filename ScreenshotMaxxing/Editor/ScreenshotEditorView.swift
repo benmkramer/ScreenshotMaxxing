@@ -86,7 +86,7 @@ struct ScreenshotEditorView: View {
             )
             let editedFileURL = try EditorFileSaver().saveEditedPNG(
                 pngData,
-                originalFileName: imageURL.lastPathComponent,
+                originalFileName: capture?.fileName ?? imageURL.lastPathComponent,
                 capture: capture
             )
 

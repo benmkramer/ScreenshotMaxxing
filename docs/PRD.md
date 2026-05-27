@@ -172,7 +172,7 @@ ScreenshotMaxxing/
 | 13 | Done | Copy action | Copy edited image to clipboard | Paste into another app shows edited image |
 | 14 | Done | Save action | Save edited image to `edited/` folder | Edited file path is written and metadata updates |
 | 15 | Done | Basic history | Show recent captures from SwiftData | Relaunch app and previous captures still appear |
-| 16 | Pending | Reopen from history | Open a past capture in viewer/editor | Clicking history item opens its image |
+| 16 | Done | Reopen from history | Open a past capture in viewer/editor | Clicking history item opens its image |
 | 17 | Pending | Global hotkey | Register default capture-area shortcut | Keyboard shortcut starts area capture |
 | 18 | Pending | Preferences | Show shortcut and default save settings | Preferences window opens and displays app settings |
 | 19 | Pending | Shortcut configuration | Let user change area capture shortcut | New shortcut persists and works after relaunch |

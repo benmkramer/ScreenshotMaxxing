@@ -89,7 +89,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let rootView = CaptureHistoryView()
+        let rootView = CaptureHistoryView { [weak self] capture in
+            self?.openEditor(for: CaptureHistoryData.previewFileURL(for: capture), capture: capture)
+        }
             .modelContainer(PersistenceController.sharedModelContainer)
         let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)

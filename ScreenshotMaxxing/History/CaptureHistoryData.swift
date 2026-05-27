@@ -21,6 +21,10 @@ enum CaptureHistoryData {
         capture.editedFilePath ?? capture.originalFilePath
     }
 
+    static func previewFileURL(for capture: Capture) -> URL {
+        URL(fileURLWithPath: previewFilePath(for: capture))
+    }
+
     static func fileExists(for capture: Capture, fileManager: FileManager = .default) -> Bool {
         fileManager.fileExists(atPath: previewFilePath(for: capture))
     }
