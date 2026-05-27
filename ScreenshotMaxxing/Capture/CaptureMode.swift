@@ -30,11 +30,11 @@ enum CaptureMode: String, CaseIterable {
     func screencaptureArguments(outputURL: URL) -> [String] {
         switch self {
         case .area:
-            ["-i", "-s", "-x", outputURL.path()]
+            ["-i", "-s", "-x", outputURL.fileSystemPath]
         case .window:
-            ["-i", "-w", "-x", outputURL.path()]
+            ["-i", "-w", "-x", outputURL.fileSystemPath]
         case .fullscreen:
-            ["-x", outputURL.path()]
+            ["-x", outputURL.fileSystemPath]
         }
     }
 }

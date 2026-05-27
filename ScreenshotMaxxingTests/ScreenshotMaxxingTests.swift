@@ -45,20 +45,20 @@ struct ScreenshotMaxxingTests {
             uuid: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         )
 
-        #expect(fileManager.fileExists(atPath: directories.originals.path()))
-        #expect(fileManager.fileExists(atPath: directories.edited.path()))
+        #expect(fileManager.fileExists(atPath: directories.originals.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: directories.edited.fileSystemPath))
         #expect(originalURL.deletingLastPathComponent() == directories.originals)
         #expect(originalURL.lastPathComponent == "capture-area-19700101-000000-00000000.png")
 
         try Data("png".utf8).write(to: originalURL)
-        #expect(fileManager.fileExists(atPath: originalURL.path()))
+        #expect(fileManager.fileExists(atPath: originalURL.fileSystemPath))
     }
 
     @MainActor
     @Test func areaCaptureRunsInteractiveSelectionAndReturnsFile() async throws {
         let fileManager = FileManager.default
         let baseDirectory = fileManager.temporaryDirectory
-            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("ScreenshotMaxxing Tests-\(UUID().uuidString)", isDirectory: true)
         final class RecordedCommand {
             var arguments: [String] = []
         }
@@ -80,9 +80,10 @@ struct ScreenshotMaxxingTests {
         let result = try await controller.captureArea(baseDirectory: baseDirectory)
 
         #expect(result.mode == .area)
-        #expect(recordedCommand.arguments == ["-i", "-s", "-x", result.fileURL.path()])
+        #expect(recordedCommand.arguments == ["-i", "-s", "-x", result.fileURL.fileSystemPath])
+        #expect(!recordedCommand.arguments.joined(separator: " ").contains("%20"))
         #expect(result.fileURL.deletingLastPathComponent().lastPathComponent == "originals")
-        #expect(fileManager.fileExists(atPath: result.fileURL.path()))
+        #expect(fileManager.fileExists(atPath: result.fileURL.fileSystemPath))
     }
 
     @MainActor
@@ -108,11 +109,11 @@ struct ScreenshotMaxxingTests {
     }
 
     @Test func captureModesBuildExpectedScreencaptureArguments() {
-        let outputURL = URL(fileURLWithPath: "/tmp/screenshot.png")
+        let outputURL = URL(fileURLWithPath: "/tmp/Application Support/screenshot.png")
 
-        #expect(CaptureMode.area.screencaptureArguments(outputURL: outputURL) == ["-i", "-s", "-x", "/tmp/screenshot.png"])
-        #expect(CaptureMode.window.screencaptureArguments(outputURL: outputURL) == ["-i", "-w", "-x", "/tmp/screenshot.png"])
-        #expect(CaptureMode.fullscreen.screencaptureArguments(outputURL: outputURL) == ["-x", "/tmp/screenshot.png"])
+        #expect(CaptureMode.area.screencaptureArguments(outputURL: outputURL) == ["-i", "-s", "-x", "/tmp/Application Support/screenshot.png"])
+        #expect(CaptureMode.window.screencaptureArguments(outputURL: outputURL) == ["-i", "-w", "-x", "/tmp/Application Support/screenshot.png"])
+        #expect(CaptureMode.fullscreen.screencaptureArguments(outputURL: outputURL) == ["-x", "/tmp/Application Support/screenshot.png"])
     }
 
     @Test func defaultAreaCaptureShortcutUsesControlShiftFour() {
@@ -270,7 +271,7 @@ struct ScreenshotMaxxingTests {
         #expect(capture.captureMode == "area")
         #expect(capture.width == 2)
         #expect(capture.height == 3)
-        #expect(capture.originalFilePath == imageURL.path())
+        #expect(capture.originalFilePath == imageURL.fileSystemPath)
         #expect(captures.count == 1)
     }
 
@@ -429,7 +430,7 @@ struct ScreenshotMaxxingTests {
             captureMode: "area",
             width: 2,
             height: 2,
-            originalFilePath: baseDirectory.appendingPathComponent("original.png").path()
+            originalFilePath: baseDirectory.appendingPathComponent("original.png").fileSystemPath
         )
         modelContainer.mainContext.insert(capture)
         try modelContainer.mainContext.save()
@@ -445,9 +446,9 @@ struct ScreenshotMaxxingTests {
             baseDirectory: baseDirectory
         )
 
-        #expect(fileManager.fileExists(atPath: editedFileURL.path()))
+        #expect(fileManager.fileExists(atPath: editedFileURL.fileSystemPath))
         #expect(editedFileURL.deletingLastPathComponent().lastPathComponent == "edited")
-        #expect(capture.editedFilePath == editedFileURL.path())
+        #expect(capture.editedFilePath == editedFileURL.fileSystemPath)
     }
 
     @MainActor

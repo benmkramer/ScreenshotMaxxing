@@ -7,6 +7,12 @@
 
 import Foundation
 
+extension URL {
+    var fileSystemPath: String {
+        path(percentEncoded: false)
+    }
+}
+
 struct CaptureDirectories: Equatable {
     let root: URL
     let originals: URL
