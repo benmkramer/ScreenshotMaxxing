@@ -108,6 +108,50 @@ struct ScreenshotMaxxingTests {
         Issue.record("Expected canceled capture to throw CaptureError.cancelled")
     }
 
+    @MainActor
+    @Test func areaCaptureTreatsMissingOutputAsCancellationWhenCommandSucceeds() async throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        let controller = CaptureController(fileManager: fileManager) { _ in
+            0
+        }
+
+        do {
+            _ = try await controller.captureArea(baseDirectory: baseDirectory)
+        } catch CaptureError.cancelled {
+            return
+        }
+
+        Issue.record("Expected successful interactive capture without output to be treated as cancellation")
+    }
+
+    @MainActor
+    @Test func fullscreenCaptureTreatsMissingOutputAsFailureWhenCommandSucceeds() async throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        let controller = CaptureController(fileManager: fileManager) { _ in
+            0
+        }
+
+        do {
+            _ = try await controller.captureFullscreen(baseDirectory: baseDirectory)
+        } catch CaptureError.missingOutput {
+            return
+        }
+
+        Issue.record("Expected successful fullscreen capture without output to remain a failure")
+    }
+
     @Test func captureModesBuildExpectedScreencaptureArguments() {
         let outputURL = URL(fileURLWithPath: "/tmp/Application Support/screenshot.png")
 

@@ -27,6 +27,15 @@ enum CaptureMode: String, CaseIterable {
         rawValue
     }
 
+    var usesInteractiveSelection: Bool {
+        switch self {
+        case .area, .window:
+            true
+        case .fullscreen:
+            false
+        }
+    }
+
     func screencaptureArguments(outputURL: URL) -> [String] {
         switch self {
         case .area:
