@@ -12,6 +12,7 @@ struct ScreenshotEditorView: View {
     private let image: NSImage?
     @State private var editorState: ScreenshotEditorState
     @State private var draftBlurRect: CGRect?
+    @State private var statusMessage: String?
 
     init(imageURL: URL) {
         self.imageURL = imageURL
@@ -23,7 +24,11 @@ struct ScreenshotEditorView: View {
         Group {
             if let image {
                 VStack(spacing: 0) {
-                    EditorToolbar(selectedTool: $editorState.selectedTool)
+                    EditorToolbar(
+                        selectedTool: $editorState.selectedTool,
+                        statusMessage: statusMessage,
+                        copyAction: copyEditedImage
+                    )
                     Divider()
                     ScreenshotImageCanvas(
                         image: image,
@@ -51,6 +56,23 @@ struct ScreenshotEditorView: View {
                 .lineLimit(1)
         }
         .padding(32)
+    }
+
+    private func copyEditedImage() {
+        do {
+            let pngData = try ImageRenderer().renderPNG(
+                imageURL: imageURL,
+                annotations: editorState.annotations
+            )
+
+            if EditorClipboard.copyPNGData(pngData) {
+                statusMessage = "Copied"
+            } else {
+                statusMessage = "Copy failed"
+            }
+        } catch {
+            statusMessage = error.localizedDescription
+        }
     }
 }
 
@@ -144,6 +166,8 @@ private struct BlurAnnotationOverlay: View {
 
 private struct EditorToolbar: View {
     @Binding var selectedTool: EditorTool
+    let statusMessage: String?
+    let copyAction: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
@@ -158,6 +182,19 @@ private struct EditorToolbar: View {
             .frame(width: 180)
 
             Spacer()
+
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button(action: copyAction) {
+                Image(systemName: "doc.on.doc")
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.bordered)
+            .help("Copy edited image")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

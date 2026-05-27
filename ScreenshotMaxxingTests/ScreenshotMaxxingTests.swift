@@ -265,6 +265,21 @@ struct ScreenshotMaxxingTests {
         #expect(changedPixels)
     }
 
+    @MainActor
+    @Test func editorClipboardWritesPNGDataToPasteboard() throws {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("ScreenshotMaxxingTests-\(UUID().uuidString)"))
+        defer {
+            pasteboard.releaseGlobally()
+        }
+        let pngData = try makeVerticalSplitPNGData(width: 2, height: 2)
+
+        let copied = EditorClipboard.copyPNGData(pngData, to: pasteboard)
+
+        #expect(copied)
+        #expect(pasteboard.data(forType: .png) == pngData)
+        #expect(pasteboard.data(forType: .tiff) != nil)
+    }
+
     private func makeVerticalSplitPNGData(width: Int, height: Int) throws -> Data {
         let imageRep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
