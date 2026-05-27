@@ -166,4 +166,25 @@ struct ScreenshotMaxxingTests {
         #expect(ScreenshotEditorWindowController.windowTitle(for: imageURL) == "ScreenshotMaxxing - example-capture.png")
     }
 
+    @Test func imageCanvasFitsImageWithoutDistortion() {
+        let geometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 100, height: 100)
+        )
+
+        #expect(geometry.imageRect == CGRect(x: 0, y: 25, width: 100, height: 50))
+    }
+
+    @Test func imageCanvasConvertsViewRectToImageCoordinates() throws {
+        let geometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 100, height: 100)
+        )
+
+        let imageRect = try #require(geometry.imageRect(forViewRect: CGRect(x: 25, y: 25, width: 50, height: 25)))
+
+        #expect(imageRect == CGRect(x: 50, y: 0, width: 100, height: 50))
+        #expect(geometry.viewRect(forImageRect: imageRect) == CGRect(x: 25, y: 25, width: 50, height: 25))
+    }
+
 }
