@@ -176,7 +176,7 @@ ScreenshotMaxxing/
 | 17 | Done | Global hotkey | Register default capture-area shortcut | Keyboard shortcut starts area capture |
 | 18 | Done | Preferences | Show shortcut and default save settings | Preferences window opens and displays app settings |
 | 19 | Done | Shortcut configuration | Let user change area capture shortcut | New shortcut persists and works after relaunch |
-| 20 | Pending | Polish pass | Improve empty states, errors, menu labels, window titles | App feels coherent for local daily use |
+| 20 | Done | Polish pass | Improve empty states, errors, menu labels, window titles | App feels coherent for local daily use |
 
 ## Chunk Details
 

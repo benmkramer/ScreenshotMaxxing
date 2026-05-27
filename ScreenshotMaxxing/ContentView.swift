@@ -18,9 +18,11 @@ struct ContentView: View {
             Text("ScreenshotMaxxing")
                 .font(.title2.weight(.semibold))
 
-            Text("Use the menu bar to capture screenshots.")
+            Text("Use the menu bar or Control-Shift-5 to capture an area.")
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .padding(32)
         .frame(minWidth: 420, minHeight: 280)
     }
 }

@@ -21,13 +21,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        menuBarController = MenuBarController { [weak self] action in
+        let areaCaptureShortcut = shortcutSettingsStore.areaCaptureShortcut()
+        menuBarController = MenuBarController(areaCaptureShortcut: areaCaptureShortcut) { [weak self] action in
             self?.handleMenuBarAction(action)
         }
         hotKeyManager = HotKeyManager { [weak self] in
             self?.startCapture(.area)
         }
-        registerDefaultHotKey()
+        registerAreaCaptureHotKey()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -70,21 +71,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch CaptureError.cancelled {
                 return
             } catch {
-                presentCaptureError(error)
+                presentError(error, title: "Capture Failed")
             }
         }
     }
 
-    private func presentCaptureError(_ error: Error) {
-        let alert = NSAlert(error: error)
+    private func presentError(_ error: Error, title: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = title
+        alert.informativeText = error.localizedDescription
         alert.runModal()
     }
 
-    private func registerDefaultHotKey() {
+    private func registerAreaCaptureHotKey() {
         do {
             try hotKeyManager?.registerAreaCaptureShortcut(shortcutSettingsStore.areaCaptureShortcut())
         } catch {
-            presentCaptureError(error)
+            presentError(error, title: "Shortcut Unavailable")
         }
     }
 
@@ -92,9 +96,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try hotKeyManager?.registerAreaCaptureShortcut(shortcut)
             try shortcutSettingsStore.saveAreaCaptureShortcut(shortcut)
+            menuBarController?.updateAreaCaptureShortcut(shortcut)
             return true
         } catch {
-            presentCaptureError(error)
+            presentError(error, title: "Shortcut Unavailable")
             return false
         }
     }
@@ -121,7 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .modelContainer(PersistenceController.sharedModelContainer)
         let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "ScreenshotMaxxing History"
+        window.title = "History - ScreenshotMaxxing"
         window.setContentSize(NSSize(width: 620, height: 480))
         window.minSize = NSSize(width: 520, height: 420)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
@@ -149,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let hostingController = NSHostingController(rootView: rootView)
             let window = NSWindow(contentViewController: hostingController)
-            window.title = "ScreenshotMaxxing Preferences"
+            window.title = "Preferences - ScreenshotMaxxing"
             window.setContentSize(NSSize(width: 560, height: 320))
             window.minSize = NSSize(width: 520, height: 300)
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
@@ -160,7 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             windowController.showWindow(nil)
             NSApp.activate(ignoringOtherApps: true)
         } catch {
-            presentCaptureError(error)
+            presentError(error, title: "Preferences Unavailable")
         }
     }
 }

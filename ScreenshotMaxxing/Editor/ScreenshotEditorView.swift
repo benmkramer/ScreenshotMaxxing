@@ -57,6 +57,9 @@ struct ScreenshotEditorView: View {
             Text("Could not load \(imageURL.lastPathComponent)")
                 .font(.headline)
                 .lineLimit(1)
+
+            Text("The file may have been moved or deleted.")
+                .foregroundStyle(.secondary)
         }
         .padding(32)
     }
@@ -194,14 +197,14 @@ private struct EditorToolbar: View {
     var body: some View {
         HStack(spacing: 8) {
             Picker("Tool", selection: $selectedTool) {
-                ForEach(EditorTool.allCases) { tool in
+                ForEach(EditorTool.implementedTools) { tool in
                     Image(systemName: tool.systemImageName)
                         .help(tool.displayName)
                         .tag(tool)
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 180)
+            .frame(width: 96)
 
             Spacer()
 

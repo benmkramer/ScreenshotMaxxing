@@ -22,7 +22,7 @@ struct ScreenshotMaxxingTests {
             item.isSeparatorItem ? nil : item.title
         }
 
-        #expect(visibleTitles == MenuBarController.visibleMenuTitles)
+        #expect(visibleTitles == MenuBarController.visibleMenuTitles())
     }
 
     @MainActor
@@ -119,6 +119,25 @@ struct ScreenshotMaxxingTests {
         let shortcut = GlobalKeyboardShortcut.defaultAreaCapture
 
         #expect(shortcut.displayString == "Control-Shift-5")
+    }
+
+    @MainActor
+    @Test func menuBarMenuReflectsCustomAreaCaptureShortcut() {
+        let shortcut = GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_A),
+            carbonModifiers: UInt32(cmdKey | optionKey)
+        )
+        let menu = MenuBarController.makeMenu(target: nil, areaCaptureShortcut: shortcut)
+        let visibleTitles = menu.items.compactMap { item in
+            item.isSeparatorItem ? nil : item.title
+        }
+
+        #expect(visibleTitles == MenuBarController.visibleMenuTitles(areaCaptureShortcut: shortcut))
+        #expect(visibleTitles.first == "Capture Area (Option-Command-A)")
+    }
+
+    @Test func editorToolbarOnlyShowsImplementedTools() {
+        #expect(EditorTool.implementedTools == [.select, .blur])
     }
 
     @Test func hotKeyManagerRunsAreaCaptureHandlerForRegisteredHotKeyID() {
@@ -264,7 +283,7 @@ struct ScreenshotMaxxingTests {
     @Test func editorWindowTitleUsesCapturedFileName() {
         let imageURL = URL(fileURLWithPath: "/tmp/example-capture.png")
 
-        #expect(ScreenshotEditorWindowController.windowTitle(for: imageURL) == "ScreenshotMaxxing - example-capture.png")
+        #expect(ScreenshotEditorWindowController.windowTitle(for: imageURL) == "example-capture.png - ScreenshotMaxxing")
     }
 
     @Test func imageCanvasFitsImageWithoutDistortion() {

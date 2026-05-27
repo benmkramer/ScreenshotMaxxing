@@ -18,27 +18,40 @@ enum MenuBarAction: Equatable {
 
 @MainActor
 final class MenuBarController: NSObject {
-    static let visibleMenuTitles = [
-        "Capture Area",
-        "Capture Window",
-        "Capture Fullscreen",
-        "History",
-        "Preferences",
-        "Quit"
-    ]
-
     private let statusItem: NSStatusItem
     private let actionHandler: @MainActor (MenuBarAction) -> Void
+    private var areaCaptureShortcut: GlobalKeyboardShortcut
 
     init(
         statusItem: NSStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength),
+        areaCaptureShortcut: GlobalKeyboardShortcut? = nil,
         actionHandler: @escaping @MainActor (MenuBarAction) -> Void = MenuBarController.defaultActionHandler
     ) {
         self.statusItem = statusItem
+        self.areaCaptureShortcut = areaCaptureShortcut ?? .defaultAreaCapture
         self.actionHandler = actionHandler
         super.init()
 
         configureStatusItem()
+    }
+
+    static func visibleMenuTitles(areaCaptureShortcut: GlobalKeyboardShortcut? = nil) -> [String] {
+        let areaCaptureShortcut = areaCaptureShortcut ?? GlobalKeyboardShortcut.defaultAreaCapture
+
+        return [
+            "Capture Area (\(areaCaptureShortcut.displayString))",
+            "Capture Window...",
+            "Capture Fullscreen",
+            "Open History",
+            "Preferences...",
+            "Quit ScreenshotMaxxing"
+        ]
+    }
+
+    func updateAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) {
+        areaCaptureShortcut = shortcut
+        statusItem.button?.toolTip = "ScreenshotMaxxing - Capture Area: \(shortcut.displayString)"
+        statusItem.menu = MenuBarController.makeMenu(target: self, areaCaptureShortcut: shortcut)
     }
 
     private static func defaultActionHandler(action: MenuBarAction) {
@@ -53,20 +66,28 @@ final class MenuBarController: NSObject {
             accessibilityDescription: "ScreenshotMaxxing"
         )
         statusItem.button?.image?.isTemplate = true
-        statusItem.button?.toolTip = "ScreenshotMaxxing"
-        statusItem.menu = MenuBarController.makeMenu(target: self)
+        statusItem.button?.toolTip = "ScreenshotMaxxing - Capture Area: \(areaCaptureShortcut.displayString)"
+        statusItem.menu = MenuBarController.makeMenu(target: self, areaCaptureShortcut: areaCaptureShortcut)
     }
 
-    static func makeMenu(target: AnyObject?) -> NSMenu {
+    static func makeMenu(
+        target: AnyObject?,
+        areaCaptureShortcut: GlobalKeyboardShortcut? = nil
+    ) -> NSMenu {
+        let areaCaptureShortcut = areaCaptureShortcut ?? GlobalKeyboardShortcut.defaultAreaCapture
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Capture Area", action: #selector(captureArea), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Capture Window", action: #selector(captureWindow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(
+            title: "Capture Area (\(areaCaptureShortcut.displayString))",
+            action: #selector(captureArea),
+            keyEquivalent: ""
+        ))
+        menu.addItem(NSMenuItem(title: "Capture Window...", action: #selector(captureWindow), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Capture Fullscreen", action: #selector(captureFullscreen), keyEquivalent: ""))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "History", action: #selector(openHistory), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Preferences", action: #selector(openPreferences), keyEquivalent: ","))
+        menu.addItem(NSMenuItem(title: "Open History", action: #selector(openHistory), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ","))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit ScreenshotMaxxing", action: #selector(quit), keyEquivalent: "q"))
 
         menu.items.forEach { item in
             item.target = target

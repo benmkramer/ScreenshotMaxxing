@@ -14,6 +14,8 @@ enum EditorTool: String, CaseIterable, Identifiable {
     case arrow
     case text
 
+    static let implementedTools: [EditorTool] = [.select, .blur]
+
     var id: String {
         rawValue
     }

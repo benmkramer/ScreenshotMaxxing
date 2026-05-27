@@ -52,8 +52,9 @@ struct CaptureHistoryView: View {
             Text("No captures yet")
                 .font(.headline)
 
-            Text("Captured screenshots will appear here.")
+            Text("Capture an area, window, or full screen from the menu bar. Recent screenshots stay local on this Mac.")
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .padding(32)
     }
@@ -84,7 +85,7 @@ private struct CaptureHistoryRow: View {
             Spacer(minLength: 12)
 
             if !fileExists {
-                Label("Missing", systemImage: "exclamationmark.triangle")
+                Label("File missing", systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

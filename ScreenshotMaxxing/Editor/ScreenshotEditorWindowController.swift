@@ -24,7 +24,7 @@ final class ScreenshotEditorWindowController: NSObject, NSWindowDelegate {
     }
 
     nonisolated static func windowTitle(for imageURL: URL) -> String {
-        "ScreenshotMaxxing - \(imageURL.lastPathComponent)"
+        "\(imageURL.lastPathComponent) - ScreenshotMaxxing"
     }
 
     func show() {
