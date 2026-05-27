@@ -11,13 +11,15 @@ import SwiftUI
 @MainActor
 final class ScreenshotEditorWindowController: NSObject, NSWindowDelegate {
     private let imageURL: URL
+    private let capture: Capture?
     private(set) var window: NSWindow?
     var onClose: ((ScreenshotEditorWindowController) -> Void)?
 
-    init(imageURL: URL) {
+    init(imageURL: URL, capture: Capture? = nil) {
         self.imageURL = imageURL
+        self.capture = capture
         super.init()
-        self.window = makeWindow(imageURL: imageURL)
+        self.window = makeWindow(imageURL: imageURL, capture: capture)
         self.window?.delegate = self
     }
 
@@ -35,8 +37,8 @@ final class ScreenshotEditorWindowController: NSObject, NSWindowDelegate {
         window = nil
     }
 
-    private func makeWindow(imageURL: URL) -> NSWindow {
-        let hostingController = NSHostingController(rootView: ScreenshotEditorView(imageURL: imageURL))
+    private func makeWindow(imageURL: URL, capture: Capture?) -> NSWindow {
+        let hostingController = NSHostingController(rootView: ScreenshotEditorView(imageURL: imageURL, capture: capture))
         let window = NSWindow(contentViewController: hostingController)
         window.title = ScreenshotEditorWindowController.windowTitle(for: imageURL)
         window.setContentSize(NSSize(width: 900, height: 620))

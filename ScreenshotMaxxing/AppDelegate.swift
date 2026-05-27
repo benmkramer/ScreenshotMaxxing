@@ -53,8 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     result = try await captureController.captureFullscreen()
                 }
 
-                try metadataStore.saveCapture(result: result)
-                openEditor(for: result.fileURL)
+                let capture = try metadataStore.saveCapture(result: result)
+                openEditor(for: result.fileURL, capture: capture)
             } catch CaptureError.cancelled {
                 return
             } catch {
@@ -68,8 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.runModal()
     }
 
-    private func openEditor(for imageURL: URL) {
-        let controller = ScreenshotEditorWindowController(imageURL: imageURL)
+    private func openEditor(for imageURL: URL, capture: Capture?) {
+        let controller = ScreenshotEditorWindowController(imageURL: imageURL, capture: capture)
         controller.onClose = { [weak self] closedController in
             self?.editorWindowControllers.removeAll { $0 === closedController }
         }

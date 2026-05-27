@@ -9,13 +9,15 @@ import SwiftUI
 
 struct ScreenshotEditorView: View {
     let imageURL: URL
+    private let capture: Capture?
     private let image: NSImage?
     @State private var editorState: ScreenshotEditorState
     @State private var draftBlurRect: CGRect?
     @State private var statusMessage: String?
 
-    init(imageURL: URL) {
+    init(imageURL: URL, capture: Capture? = nil) {
         self.imageURL = imageURL
+        self.capture = capture
         self.image = NSImage(contentsOf: imageURL)
         self._editorState = State(initialValue: ScreenshotEditorState(originalImageURL: imageURL))
     }
@@ -27,7 +29,8 @@ struct ScreenshotEditorView: View {
                     EditorToolbar(
                         selectedTool: $editorState.selectedTool,
                         statusMessage: statusMessage,
-                        copyAction: copyEditedImage
+                        copyAction: copyEditedImage,
+                        saveAction: saveEditedImage
                     )
                     Divider()
                     ScreenshotImageCanvas(
@@ -70,6 +73,24 @@ struct ScreenshotEditorView: View {
             } else {
                 statusMessage = "Copy failed"
             }
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    private func saveEditedImage() {
+        do {
+            let pngData = try ImageRenderer().renderPNG(
+                imageURL: imageURL,
+                annotations: editorState.annotations
+            )
+            let editedFileURL = try EditorFileSaver().saveEditedPNG(
+                pngData,
+                originalFileName: imageURL.lastPathComponent,
+                capture: capture
+            )
+
+            statusMessage = "Saved \(editedFileURL.lastPathComponent)"
         } catch {
             statusMessage = error.localizedDescription
         }
@@ -168,6 +189,7 @@ private struct EditorToolbar: View {
     @Binding var selectedTool: EditorTool
     let statusMessage: String?
     let copyAction: () -> Void
+    let saveAction: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
@@ -195,6 +217,13 @@ private struct EditorToolbar: View {
             }
             .buttonStyle(.bordered)
             .help("Copy edited image")
+
+            Button(action: saveAction) {
+                Image(systemName: "square.and.arrow.down")
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.bordered)
+            .help("Save edited image")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

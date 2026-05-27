@@ -38,6 +38,11 @@ final class CaptureMetadataStore {
         return capture
     }
 
+    func updateEditedFilePath(for capture: Capture, editedFileURL: URL) throws {
+        capture.editedFilePath = editedFileURL.path()
+        try modelContainer.mainContext.save()
+    }
+
     private func imageDimensions(for url: URL) throws -> (width: Int, height: Int) {
         guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],

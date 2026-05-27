@@ -170,7 +170,7 @@ ScreenshotMaxxing/
 | 11 | Done | Draw blur rectangles | Let user drag to place blur regions | User can draw visible blur selection rectangles |
 | 12 | Done | Render redactions | Bake blur into exported bitmap | Saved/copied image contains actual blurred pixels |
 | 13 | Done | Copy action | Copy edited image to clipboard | Paste into another app shows edited image |
-| 14 | Pending | Save action | Save edited image to `edited/` folder | Edited file path is written and metadata updates |
+| 14 | Done | Save action | Save edited image to `edited/` folder | Edited file path is written and metadata updates |
 | 15 | Pending | Basic history | Show recent captures from SwiftData | Relaunch app and previous captures still appear |
 | 16 | Pending | Reopen from history | Open a past capture in viewer/editor | Clicking history item opens its image |
 | 17 | Pending | Global hotkey | Register default capture-area shortcut | Keyboard shortcut starts area capture |

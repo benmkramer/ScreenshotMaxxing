@@ -280,6 +280,42 @@ struct ScreenshotMaxxingTests {
         #expect(pasteboard.data(forType: .tiff) != nil)
     }
 
+    @MainActor
+    @Test func editorFileSaverWritesEditedImageAndUpdatesCaptureMetadata() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let capture = Capture(
+            fileName: "original.png",
+            captureMode: "area",
+            width: 2,
+            height: 2,
+            originalFilePath: baseDirectory.appendingPathComponent("original.png").path()
+        )
+        modelContainer.mainContext.insert(capture)
+        try modelContainer.mainContext.save()
+
+        let saver = EditorFileSaver(
+            fileManager: fileManager,
+            metadataStore: CaptureMetadataStore(modelContainer: modelContainer)
+        )
+        let editedFileURL = try saver.saveEditedPNG(
+            Data("edited".utf8),
+            originalFileName: capture.fileName,
+            capture: capture,
+            baseDirectory: baseDirectory
+        )
+
+        #expect(fileManager.fileExists(atPath: editedFileURL.path()))
+        #expect(editedFileURL.deletingLastPathComponent().lastPathComponent == "edited")
+        #expect(capture.editedFilePath == editedFileURL.path())
+    }
+
     private func makeVerticalSplitPNGData(width: Int, height: Int) throws -> Data {
         let imageRep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
