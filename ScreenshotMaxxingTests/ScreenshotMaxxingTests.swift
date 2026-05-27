@@ -8,6 +8,7 @@
 import Testing
 import AppKit
 import Foundation
+import SwiftData
 @testable import ScreenshotMaxxing
 
 struct ScreenshotMaxxingTests {
@@ -110,6 +111,53 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureMode.area.screencaptureArguments(outputURL: outputURL) == ["-i", "-s", "-x", "/tmp/screenshot.png"])
         #expect(CaptureMode.window.screencaptureArguments(outputURL: outputURL) == ["-i", "-w", "-x", "/tmp/screenshot.png"])
         #expect(CaptureMode.fullscreen.screencaptureArguments(outputURL: outputURL) == ["-x", "/tmp/screenshot.png"])
+    }
+
+    @MainActor
+    @Test func captureMetadataStorePersistsImageDetails() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("area.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makePNGData(width: 2, height: 3).write(to: imageURL)
+
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let store = CaptureMetadataStore(modelContainer: modelContainer)
+        let capture = try store.saveCapture(result: CaptureResult(mode: .area, fileURL: imageURL))
+        let captures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+
+        #expect(capture.fileName == "area.png")
+        #expect(capture.captureMode == "area")
+        #expect(capture.width == 2)
+        #expect(capture.height == 3)
+        #expect(capture.originalFilePath == imageURL.path())
+        #expect(captures.count == 1)
+    }
+
+    private func makePNGData(width: Int, height: Int) throws -> Data {
+        let imageRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+
+        guard let pngData = imageRep?.representation(using: .png, properties: [:]) else {
+            throw CaptureMetadataError.unreadableImage(URL(fileURLWithPath: "/tmp/test.png"))
+        }
+
+        return pngData
     }
 
 }

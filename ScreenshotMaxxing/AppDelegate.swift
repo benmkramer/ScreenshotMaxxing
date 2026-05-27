@@ -10,6 +10,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private let captureController = CaptureController()
+    private let metadataStore = CaptureMetadataStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -40,14 +41,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startCapture(_ mode: CaptureMode) {
         Task {
             do {
+                let result: CaptureResult
+
                 switch mode {
                 case .area:
-                    _ = try await captureController.captureArea()
+                    result = try await captureController.captureArea()
                 case .window:
-                    _ = try await captureController.captureWindow()
+                    result = try await captureController.captureWindow()
                 case .fullscreen:
-                    _ = try await captureController.captureFullscreen()
+                    result = try await captureController.captureFullscreen()
                 }
+
+                try metadataStore.saveCapture(result: result)
             } catch CaptureError.cancelled {
                 return
             } catch {

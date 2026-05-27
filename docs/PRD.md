@@ -163,7 +163,7 @@ ScreenshotMaxxing/
 | 4 | Done | Capture file storage | Create app support folders for original/edited captures | App can create and write to capture folders |
 | 5 | Done | Area capture | Invoke macOS area selection and save PNG | Dragging an area creates a screenshot file |
 | 6 | Done | Window/fullscreen capture | Add remaining capture modes | All three capture modes produce files |
-| 7 | Pending | SwiftData capture model | Replace starter model with `Capture` | Successful captures create persisted metadata |
+| 7 | Done | SwiftData capture model | Replace starter model with `Capture` | Successful captures create persisted metadata |
 | 8 | Pending | Editor window | Open captured image in editor window | Capture immediately displays in editor |
 | 9 | Pending | Editor canvas | Display screenshot with correct scaling | Image fits window without distortion |
 | 10 | Pending | Blur annotation model | Represent blur rectangles separately from image pixels | Drawing state stores one or more blur rects |

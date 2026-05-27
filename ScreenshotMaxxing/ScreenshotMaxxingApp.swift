@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct ScreenshotMaxxingApp: App {
@@ -15,5 +16,6 @@ struct ScreenshotMaxxingApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(PersistenceController.sharedModelContainer)
     }
 }
