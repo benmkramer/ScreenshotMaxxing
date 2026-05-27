@@ -1,0 +1,33 @@
+name: Xcode CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: macos-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.2
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Run tests
+        run: |
+          xcodebuild test \
+            -project ScreenshotMaxxing.xcodeproj \
+            -scheme ScreenshotMaxxing \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/ScreenshotMaxxingDerivedData" \
+            CODE_SIGNING_ALLOWED=NO
