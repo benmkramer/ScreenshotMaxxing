@@ -11,6 +11,7 @@ struct ScreenshotEditorView: View {
     let imageURL: URL
     private let image: NSImage?
     @State private var editorState: ScreenshotEditorState
+    @State private var draftBlurRect: CGRect?
 
     init(imageURL: URL) {
         self.imageURL = imageURL
@@ -24,7 +25,11 @@ struct ScreenshotEditorView: View {
                 VStack(spacing: 0) {
                     EditorToolbar(selectedTool: $editorState.selectedTool)
                     Divider()
-                    ScreenshotImageCanvas(image: image, annotations: editorState.annotations)
+                    ScreenshotImageCanvas(
+                        image: image,
+                        editorState: $editorState,
+                        draftBlurRect: $draftBlurRect
+                    )
                 }
             } else {
                 unavailableImageView
@@ -51,7 +56,8 @@ struct ScreenshotEditorView: View {
 
 struct ScreenshotImageCanvas: View {
     let image: NSImage
-    let annotations: [Annotation]
+    @Binding var editorState: ScreenshotEditorState
+    @Binding var draftBlurRect: CGRect?
 
     var body: some View {
         GeometryReader { proxy in
@@ -69,8 +75,70 @@ struct ScreenshotImageCanvas: View {
                     .frame(width: geometry.imageRect.width, height: geometry.imageRect.height)
                     .position(x: geometry.imageRect.midX, y: geometry.imageRect.midY)
                     .accessibilityLabel("Screenshot")
+
+                ForEach(editorState.annotations) { annotation in
+                    if annotation.type == .blur {
+                        BlurAnnotationOverlay(rect: geometry.viewRect(forImageRect: annotation.rect), isDraft: false)
+                    }
+                }
+
+                if let draftBlurRect {
+                    BlurAnnotationOverlay(rect: geometry.viewRect(forImageRect: draftBlurRect), isDraft: true)
+                }
             }
+            .contentShape(Rectangle())
+            .gesture(blurDragGesture(geometry: geometry))
         }
+    }
+
+    private func blurDragGesture(geometry: ImageCanvasGeometry) -> some Gesture {
+        DragGesture(minimumDistance: 1, coordinateSpace: .local)
+            .onChanged { value in
+                guard editorState.selectedTool == .blur else {
+                    draftBlurRect = nil
+                    return
+                }
+
+                draftBlurRect = geometry.imageRect(
+                    fromViewStart: value.startLocation,
+                    toViewEnd: value.location
+                )
+            }
+            .onEnded { value in
+                defer {
+                    draftBlurRect = nil
+                }
+
+                guard editorState.selectedTool == .blur,
+                      let imageRect = geometry.imageRect(
+                        fromViewStart: value.startLocation,
+                        toViewEnd: value.location
+                      ) else {
+                    return
+                }
+
+                editorState.addBlurRect(imageRect)
+            }
+    }
+}
+
+private struct BlurAnnotationOverlay: View {
+    let rect: CGRect
+    let isDraft: Bool
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.accentColor.opacity(isDraft ? 0.14 : 0.18))
+            .overlay {
+                Rectangle()
+                    .strokeBorder(
+                        Color.accentColor,
+                        style: StrokeStyle(lineWidth: 2, dash: isDraft ? [6, 4] : [])
+                    )
+            }
+            .frame(width: rect.width, height: rect.height)
+            .position(x: rect.midX, y: rect.midY)
+            .allowsHitTesting(false)
     }
 }
 

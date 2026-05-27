@@ -202,4 +202,20 @@ struct ScreenshotMaxxingTests {
         #expect(state.annotations == [annotation])
     }
 
+    @Test func imageCanvasConvertsDragToImageRect() throws {
+        let geometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 100, height: 100)
+        )
+
+        let imageRect = try #require(
+            geometry.imageRect(
+                fromViewStart: CGPoint(x: 75, y: 75),
+                toViewEnd: CGPoint(x: 25, y: 25)
+            )
+        )
+
+        #expect(imageRect == CGRect(x: 50, y: 0, width: 100, height: 100))
+    }
+
 }

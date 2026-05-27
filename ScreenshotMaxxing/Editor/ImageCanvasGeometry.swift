@@ -66,6 +66,17 @@ struct ImageCanvasGeometry: Equatable {
         return CGRect(origin: origin, size: size)
     }
 
+    func imageRect(fromViewStart startPoint: CGPoint, toViewEnd endPoint: CGPoint) -> CGRect? {
+        let viewRect = CGRect(
+            x: min(startPoint.x, endPoint.x),
+            y: min(startPoint.y, endPoint.y),
+            width: abs(endPoint.x - startPoint.x),
+            height: abs(endPoint.y - startPoint.y)
+        )
+
+        return imageRect(forViewRect: viewRect)
+    }
+
     func viewRect(forImageRect imageRect: CGRect) -> CGRect {
         let rect = self.imageRect
 
