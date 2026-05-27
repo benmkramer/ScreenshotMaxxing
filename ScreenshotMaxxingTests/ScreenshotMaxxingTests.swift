@@ -160,4 +160,10 @@ struct ScreenshotMaxxingTests {
         return pngData
     }
 
+    @Test func editorWindowTitleUsesCapturedFileName() {
+        let imageURL = URL(fileURLWithPath: "/tmp/example-capture.png")
+
+        #expect(ScreenshotEditorWindowController.windowTitle(for: imageURL) == "ScreenshotMaxxing - example-capture.png")
+    }
+
 }

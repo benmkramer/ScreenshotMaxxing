@@ -9,6 +9,7 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
+    private var editorWindowControllers: [ScreenshotEditorWindowController] = []
     private let captureController = CaptureController()
     private let metadataStore = CaptureMetadataStore()
 
@@ -53,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 try metadataStore.saveCapture(result: result)
+                openEditor(for: result.fileURL)
             } catch CaptureError.cancelled {
                 return
             } catch {
@@ -64,5 +66,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func presentCaptureError(_ error: Error) {
         let alert = NSAlert(error: error)
         alert.runModal()
+    }
+
+    private func openEditor(for imageURL: URL) {
+        let controller = ScreenshotEditorWindowController(imageURL: imageURL)
+        controller.onClose = { [weak self] closedController in
+            self?.editorWindowControllers.removeAll { $0 === closedController }
+        }
+        editorWindowControllers.append(controller)
+        controller.show()
     }
 }
