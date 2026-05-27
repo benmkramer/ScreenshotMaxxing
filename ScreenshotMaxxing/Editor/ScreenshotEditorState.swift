@@ -21,22 +21,45 @@ enum AnnotationResizeHandle: CaseIterable, Hashable {
 
 struct ScreenshotEditorState: Equatable {
     static let minimumAnnotationSideLength: CGFloat = 8
+    static let minimumStrokeLineWidth = AnnotationStrokeStyle.minimumLineWidth
+    static let maximumStrokeLineWidth = AnnotationStrokeStyle.maximumLineWidth
+    static let strokeSelectionHitPadding: CGFloat = 6
 
     let originalImageURL: URL
     var selectedTool: EditorTool
     var annotations: [Annotation]
     var selectedAnnotationID: UUID?
+    var strokeToolSettings: StrokeToolSettings
+
+    var selectedAnnotationUsesStrokeStyle: Bool {
+        guard let selectedAnnotationID,
+              case .stroke = annotation(id: selectedAnnotationID)?.type else {
+            return false
+        }
+
+        return true
+    }
+
+    var selectedStrokeColor: AnnotationColor {
+        selectedStrokeStyle.color
+    }
+
+    var selectedStrokeLineWidth: CGFloat {
+        selectedStrokeStyle.lineWidth
+    }
 
     init(
         originalImageURL: URL,
         selectedTool: EditorTool = .blur,
         annotations: [Annotation] = [],
-        selectedAnnotationID: UUID? = nil
+        selectedAnnotationID: UUID? = nil,
+        strokeToolSettings: StrokeToolSettings = .defaultSettings
     ) {
         self.originalImageURL = originalImageURL
         self.selectedTool = selectedTool
         self.annotations = annotations
         self.selectedAnnotationID = selectedAnnotationID
+        self.strokeToolSettings = strokeToolSettings.normalized
     }
 
     @discardableResult
@@ -47,7 +70,34 @@ struct ScreenshotEditorState: Equatable {
 
         let annotation = Annotation(id: id, type: .blur, rect: rect)
         annotations.append(annotation)
-        selectedAnnotationID = annotation.id
+        selectAnnotation(id: annotation.id)
+        return annotation
+    }
+
+    @discardableResult
+    mutating func addStroke(
+        kind: AnnotationStrokeKind,
+        points: [CGPoint],
+        color: AnnotationColor,
+        lineWidth: CGFloat,
+        id: UUID = UUID()
+    ) -> Annotation? {
+        let clampedLineWidth = AnnotationStrokeStyle.clampedLineWidth(lineWidth)
+        let stroke = AnnotationStroke(
+            kind: kind,
+            points: points,
+            color: color,
+            lineWidth: clampedLineWidth
+        )
+
+        guard stroke.points.count >= 2, stroke.hasVisibleLength else {
+            return nil
+        }
+
+        let annotation = Annotation(id: id, type: .stroke(stroke), rect: stroke.visibleBounds)
+        annotations.append(annotation)
+        strokeToolSettings.update(stroke.style, for: kind)
+        selectAnnotation(id: annotation.id)
         return annotation
     }
 
@@ -73,13 +123,20 @@ struct ScreenshotEditorState: Equatable {
     @discardableResult
     mutating func selectAnnotation(containing imagePoint: CGPoint) -> UUID? {
         let annotationID = annotationID(containing: imagePoint)
-        selectedAnnotationID = annotationID
+        selectAnnotation(id: annotationID)
         return annotationID
     }
 
     func annotationID(containing imagePoint: CGPoint) -> UUID? {
         annotations.reversed().first { annotation in
-            annotation.type == .blur && annotation.rect.standardized.contains(imagePoint)
+            switch annotation.type {
+            case .blur:
+                annotation.rect.standardized.contains(imagePoint)
+            case .stroke(let stroke):
+                stroke.contains(imagePoint, hitPadding: Self.strokeSelectionHitPadding)
+            case .rectangle, .arrow, .text:
+                false
+            }
         }?.id
     }
 
@@ -88,10 +145,18 @@ struct ScreenshotEditorState: Equatable {
     }
 
     mutating func moveAnnotation(id: UUID, from originalRect: CGRect, by translation: CGSize, within imageSize: CGSize) {
-        let imageBounds = CGRect(origin: .zero, size: imageSize)
-        let movedRect = originalRect.offsetBy(dx: translation.width, dy: translation.height)
+        guard let annotation = annotation(id: id) else {
+            return
+        }
 
-        updateAnnotation(id: id, rect: movedRect.clamped(within: imageBounds))
+        moveAnnotation(id: id, from: annotation.withRect(originalRect), by: translation, within: imageSize)
+    }
+
+    mutating func moveAnnotation(id: UUID, from originalAnnotation: Annotation, by translation: CGSize, within imageSize: CGSize) {
+        let imageBounds = CGRect(origin: .zero, size: imageSize)
+        let movedRect = originalAnnotation.rect.offsetBy(dx: translation.width, dy: translation.height)
+
+        updateAnnotation(id: id, from: originalAnnotation, to: movedRect.clamped(within: imageBounds))
     }
 
     mutating func resizeAnnotation(
@@ -101,15 +166,29 @@ struct ScreenshotEditorState: Equatable {
         by translation: CGSize,
         within imageSize: CGSize
     ) {
+        guard let annotation = annotation(id: id) else {
+            return
+        }
+
+        resizeAnnotation(id: id, from: annotation.withRect(originalRect), handle: handle, by: translation, within: imageSize)
+    }
+
+    mutating func resizeAnnotation(
+        id: UUID,
+        from originalAnnotation: Annotation,
+        handle: AnnotationResizeHandle,
+        by translation: CGSize,
+        within imageSize: CGSize
+    ) {
         let imageBounds = CGRect(origin: .zero, size: imageSize)
-        let resizedRect = originalRect.resized(
+        let resizedRect = originalAnnotation.rect.resized(
             by: translation,
             handle: handle,
             within: imageBounds,
             minimumSideLength: Self.minimumAnnotationSideLength
         )
 
-        updateAnnotation(id: id, rect: resizedRect)
+        updateAnnotation(id: id, from: originalAnnotation, to: resizedRect)
     }
 
     mutating func undoLastAnnotation() {
@@ -120,14 +199,85 @@ struct ScreenshotEditorState: Equatable {
         }
     }
 
-    private mutating func updateAnnotation(id: UUID, rect: CGRect) {
+    mutating func updateSelectedStrokeColor(_ color: AnnotationColor) {
+        let kind = activeStrokeStyleKind ?? .pen
+        var style = selectedStrokeStyle
+        style.color = color
+        strokeToolSettings.update(style, for: kind)
+        updateSelectedStroke { stroke in
+            stroke.color = color
+        }
+    }
+
+    mutating func updateSelectedStrokeLineWidth(_ lineWidth: CGFloat) {
+        let kind = activeStrokeStyleKind ?? .pen
+        let clampedLineWidth = AnnotationStrokeStyle.clampedLineWidth(lineWidth)
+        var style = selectedStrokeStyle
+        style.lineWidth = clampedLineWidth
+        strokeToolSettings.update(style, for: kind)
+        updateSelectedStroke { stroke in
+            stroke.lineWidth = clampedLineWidth
+        }
+    }
+
+    func strokeStyle(for kind: AnnotationStrokeKind) -> AnnotationStrokeStyle {
+        strokeToolSettings.style(for: kind)
+    }
+
+    private mutating func updateAnnotation(id: UUID, from originalAnnotation: Annotation, to rect: CGRect) {
         guard let annotationIndex = annotations.firstIndex(where: { $0.id == id }) else {
             return
         }
 
-        annotations[annotationIndex].rect = rect
+        switch originalAnnotation.type {
+        case .stroke(var stroke):
+            stroke.transformPoints(from: originalAnnotation.rect, to: rect)
+            annotations[annotationIndex].type = .stroke(stroke)
+            annotations[annotationIndex].rect = stroke.visibleBounds
+        case .blur, .rectangle, .arrow, .text:
+            annotations[annotationIndex].rect = rect
+        }
+
         selectedAnnotationID = id
     }
+
+    private mutating func updateSelectedStroke(_ update: (inout AnnotationStroke) -> Void) {
+        guard let selectedAnnotationID,
+              let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
+              case .stroke(var stroke) = annotations[annotationIndex].type else {
+            return
+        }
+
+        update(&stroke)
+        annotations[annotationIndex].type = .stroke(stroke)
+        annotations[annotationIndex].rect = stroke.visibleBounds
+    }
+
+    private func selectedStrokeAnnotation() -> AnnotationStroke? {
+        guard let selectedAnnotationID,
+              case .stroke(let stroke) = annotation(id: selectedAnnotationID)?.type else {
+            return nil
+        }
+
+        return stroke
+    }
+
+    private var activeStrokeStyleKind: AnnotationStrokeKind? {
+        selectedStrokeAnnotation()?.kind ?? selectedTool.strokeKind
+    }
+
+    private var selectedStrokeStyle: AnnotationStrokeStyle {
+        if let selectedStroke = selectedStrokeAnnotation() {
+            return selectedStroke.style
+        }
+
+        guard let strokeKind = selectedTool.strokeKind else {
+            return strokeToolSettings.style(for: .pen)
+        }
+
+        return strokeToolSettings.style(for: strokeKind)
+    }
+
 }
 
 private extension CGRect {

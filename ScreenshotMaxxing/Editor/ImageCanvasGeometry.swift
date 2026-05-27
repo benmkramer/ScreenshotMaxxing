@@ -42,6 +42,22 @@ struct ImageCanvasGeometry: Equatable {
         )
     }
 
+    func viewPoint(forImagePoint imagePoint: CGPoint) -> CGPoint {
+        let rect = imageRect
+
+        guard imageSize.width > 0,
+              imageSize.height > 0,
+              rect.width > 0,
+              rect.height > 0 else {
+            return .zero
+        }
+
+        return CGPoint(
+            x: rect.minX + (imagePoint.x / imageSize.width) * rect.width,
+            y: rect.minY + (imagePoint.y / imageSize.height) * rect.height
+        )
+    }
+
     func imageRect(forViewRect viewRect: CGRect) -> CGRect? {
         let rect = imageRect
         let clippedRect = viewRect.standardized.intersection(rect)

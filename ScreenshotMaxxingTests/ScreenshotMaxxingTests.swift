@@ -160,7 +160,34 @@ struct ScreenshotMaxxingTests {
     }
 
     @Test func editorToolbarOnlyShowsImplementedTools() {
-        #expect(EditorTool.implementedTools == [.select, .blur])
+        #expect(EditorTool.implementedTools == [.select, .blur, .pen, .highlighter])
+    }
+
+    @Test func editorStrokeToolSettingsUseSeparateDefaultSizes() {
+        let settings = StrokeToolSettings.defaultSettings
+
+        #expect(settings.pen.color == .red)
+        #expect(settings.pen.lineWidth == 13)
+        #expect(settings.highlighter.color == .yellow)
+        #expect(settings.highlighter.lineWidth == 36)
+    }
+
+    @Test func editorSettingsStorePersistsStrokeToolSettings() throws {
+        let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+        var settings = StrokeToolSettings.defaultSettings
+        settings.update(AnnotationStrokeStyle(color: .black, lineWidth: 7), for: .pen)
+        settings.update(AnnotationStrokeStyle(color: .green, lineWidth: 40), for: .highlighter)
+
+        let store = EditorSettingsStore(userDefaults: userDefaults)
+        try store.saveStrokeToolSettings(settings)
+
+        let reloadedStore = EditorSettingsStore(userDefaults: userDefaults)
+
+        #expect(reloadedStore.strokeToolSettings() == settings)
     }
 
     @Test func hotKeyManagerRoutesRegisteredHotKeyIDs() {
@@ -353,6 +380,107 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func editorStateStoresPenStrokeAnnotationsWithStyle() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000018")!
+        let points = [CGPoint(x: 10, y: 20), CGPoint(x: 50, y: 20)]
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        let addedAnnotation = state.addStroke(
+            kind: .pen,
+            points: points,
+            color: .blue,
+            lineWidth: 10,
+            id: annotationID
+        )
+        let annotation = try #require(addedAnnotation)
+        let stroke = AnnotationStroke(kind: .pen, points: points, color: .blue, lineWidth: 10)
+
+        #expect(state.selectedAnnotationID == annotationID)
+        #expect(state.selectedStrokeColor == .blue)
+        #expect(state.selectedStrokeLineWidth == 10)
+        #expect(state.strokeStyle(for: .pen) == AnnotationStrokeStyle(color: .blue, lineWidth: 10))
+        #expect(annotation == Annotation(id: annotationID, type: .stroke(stroke), rect: CGRect(x: 5, y: 15, width: 50, height: 10)))
+    }
+
+    @MainActor
+    @Test func editorStateUpdatesCurrentStrokeToolSettingsSeparately() {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        var state = ScreenshotEditorState(originalImageURL: imageURL, selectedTool: .highlighter)
+
+        state.updateSelectedStrokeColor(.green)
+        state.updateSelectedStrokeLineWidth(24)
+
+        #expect(state.strokeStyle(for: .highlighter) == AnnotationStrokeStyle(color: .green, lineWidth: 24))
+        #expect(state.strokeStyle(for: .pen) == .defaultPen)
+        #expect(state.selectedStrokeColor == .green)
+        #expect(state.selectedStrokeLineWidth == 24)
+    }
+
+    @MainActor
+    @Test func editorStateSelectsTopmostStrokeAtImagePointAndAppliesItsStyle() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let firstAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000019")!
+        let secondAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000020")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        state.addStroke(
+            kind: .pen,
+            points: [CGPoint(x: 0, y: 10), CGPoint(x: 100, y: 10)],
+            color: .red,
+            lineWidth: 4,
+            id: firstAnnotationID
+        )
+        state.addStroke(
+            kind: .highlighter,
+            points: [CGPoint(x: 0, y: 12), CGPoint(x: 100, y: 12)],
+            color: .yellow,
+            lineWidth: 12,
+            id: secondAnnotationID
+        )
+
+        #expect(state.selectAnnotation(containing: CGPoint(x: 50, y: 12)) == secondAnnotationID)
+        #expect(state.selectedAnnotationID == secondAnnotationID)
+        #expect(state.selectedStrokeColor == .yellow)
+        #expect(state.selectedStrokeLineWidth == 12)
+        #expect(state.selectedAnnotationUsesStrokeStyle)
+
+        #expect(state.selectAnnotation(containing: CGPoint(x: 50, y: 40)) == nil)
+        #expect(state.selectedAnnotationID == nil)
+        #expect(!state.selectedAnnotationUsesStrokeStyle)
+    }
+
+    @MainActor
+    @Test func editorStateUpdatesSelectedStrokeStyleAndBounds() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000021")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        state.addStroke(
+            kind: .highlighter,
+            points: [CGPoint(x: 10, y: 10), CGPoint(x: 20, y: 10)],
+            color: .red,
+            lineWidth: 4,
+            id: annotationID
+        )
+        state.updateSelectedStrokeColor(.green)
+        state.updateSelectedStrokeLineWidth(14)
+
+        let annotation = try #require(state.annotation(id: annotationID))
+        guard case .stroke(let stroke) = annotation.type else {
+            Issue.record("Expected a stroke annotation")
+            return
+        }
+
+        #expect(stroke.kind == .highlighter)
+        #expect(stroke.opacity == 0.35)
+        #expect(stroke.color == .green)
+        #expect(stroke.lineWidth == 14)
+        #expect(state.strokeStyle(for: .highlighter) == AnnotationStrokeStyle(color: .green, lineWidth: 14))
+        #expect(annotation.rect == CGRect(x: 3, y: 3, width: 24, height: 14))
+    }
+
+    @MainActor
     @Test func editorStateSelectsTopmostBlurAnnotationAtImagePoint() throws {
         let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
         let firstAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000011")!
@@ -404,6 +532,75 @@ struct ScreenshotMaxxingTests {
 
         #expect(movedAnnotation.rect == CGRect(x: 120, y: 70, width: 40, height: 50))
         #expect(state.selectedAnnotationID == annotationID)
+    }
+
+    @MainActor
+    @Test func editorStateMovesStrokeAnnotationAndKeepsPointsInsideBounds() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000022")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+        let addedStrokeAnnotation = state.addStroke(
+            kind: .pen,
+            points: [CGPoint(x: 20, y: 30), CGPoint(x: 60, y: 30)],
+            color: .black,
+            lineWidth: 8,
+            id: annotationID
+        )
+        let addedAnnotation = try #require(addedStrokeAnnotation)
+
+        state.moveAnnotation(
+            id: annotationID,
+            from: addedAnnotation,
+            by: CGSize(width: 120, height: 80),
+            within: CGSize(width: 160, height: 120)
+        )
+
+        let movedAnnotation = try #require(state.annotation(id: annotationID))
+        guard case .stroke(let stroke) = movedAnnotation.type else {
+            Issue.record("Expected a stroke annotation")
+            return
+        }
+
+        #expect(stroke.points == [CGPoint(x: 116, y: 110), CGPoint(x: 156, y: 110)])
+        #expect(movedAnnotation.rect == CGRect(x: 112, y: 106, width: 48, height: 8))
+        #expect(state.selectedAnnotationID == annotationID)
+    }
+
+    @MainActor
+    @Test func editorStateMovesStrokeFromOriginalDragSnapshotWithoutAccumulating() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000023")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+        let addedStrokeAnnotation = state.addStroke(
+            kind: .pen,
+            points: [CGPoint(x: 20, y: 30), CGPoint(x: 60, y: 30)],
+            color: .black,
+            lineWidth: 8,
+            id: annotationID
+        )
+        let originalAnnotation = try #require(addedStrokeAnnotation)
+
+        state.moveAnnotation(
+            id: annotationID,
+            from: originalAnnotation,
+            by: CGSize(width: 10, height: 0),
+            within: CGSize(width: 200, height: 120)
+        )
+        state.moveAnnotation(
+            id: annotationID,
+            from: originalAnnotation,
+            by: CGSize(width: 20, height: 0),
+            within: CGSize(width: 200, height: 120)
+        )
+
+        let movedAnnotation = try #require(state.annotation(id: annotationID))
+        guard case .stroke(let stroke) = movedAnnotation.type else {
+            Issue.record("Expected a stroke annotation")
+            return
+        }
+
+        #expect(stroke.points == [CGPoint(x: 40, y: 30), CGPoint(x: 80, y: 30)])
+        #expect(movedAnnotation.rect == CGRect(x: 36, y: 26, width: 48, height: 8))
     }
 
     @MainActor
@@ -540,6 +737,97 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func imageRendererBakesEdgeBlurAnnotationsIntoPNG() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makeVerticalSplitPNGData(width: 12, height: 8).write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let uneditedPNGData = try renderer.renderPNG(imageURL: imageURL, annotations: [])
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [
+                Annotation(type: .blur, rect: CGRect(x: 0, y: 0, width: 8, height: 8))
+            ]
+        )
+        let originalRed = try redChannel(in: uneditedPNGData, x: 5, y: 4)
+        let renderedRed = try redChannel(in: renderedPNGData, x: 5, y: 4)
+        let outsideOriginalRed = try redChannel(in: uneditedPNGData, x: 10, y: 4)
+        let outsideRenderedRed = try redChannel(in: renderedPNGData, x: 10, y: 4)
+
+        #expect(abs(renderedRed - originalRed) > 0.01)
+        #expect(abs(outsideRenderedRed - outsideOriginalRed) < 0.01)
+    }
+
+    @MainActor
+    @Test func imageRendererBakesPenStrokeAnnotationsIntoPNG() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makeVerticalSplitPNGData(width: 12, height: 8).write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let stroke = AnnotationStroke(
+            kind: .pen,
+            points: [CGPoint(x: 1, y: 4), CGPoint(x: 10, y: 4)],
+            color: .blue,
+            lineWidth: 4
+        )
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [Annotation(type: .stroke(stroke), rect: stroke.visibleBounds)]
+        )
+        let renderedColor = try color(in: renderedPNGData, x: 6, y: 4)
+
+        #expect(renderedColor.blueComponent > 0.5)
+        #expect(renderedColor.redComponent < 0.4)
+    }
+
+    @MainActor
+    @Test func imageRendererBakesHighlighterStrokeWithOpacityIntoPNG() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makeVerticalSplitPNGData(width: 12, height: 8).write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let stroke = AnnotationStroke(
+            kind: .highlighter,
+            points: [CGPoint(x: 1, y: 4), CGPoint(x: 5, y: 4)],
+            color: .yellow,
+            lineWidth: 6
+        )
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [Annotation(type: .stroke(stroke), rect: stroke.visibleBounds)]
+        )
+        let renderedColor = try color(in: renderedPNGData, x: 2, y: 4)
+
+        #expect(renderedColor.redComponent > 0.15)
+        #expect(renderedColor.redComponent < 0.8)
+        #expect(renderedColor.greenComponent > 0.10)
+    }
+
+    @MainActor
     @Test func editorClipboardWritesPNGDataToPasteboard() throws {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("ScreenshotMaxxingTests-\(UUID().uuidString)"))
         defer {
@@ -658,12 +946,16 @@ struct ScreenshotMaxxingTests {
     }
 
     private func redChannel(in pngData: Data, x: Int, y: Int) throws -> CGFloat {
+        try color(in: pngData, x: x, y: y).redComponent
+    }
+
+    private func color(in pngData: Data, x: Int, y: Int) throws -> NSColor {
         guard let imageRep = NSBitmapImageRep(data: pngData),
               let color = imageRep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
             throw ImageRendererError.renderFailed
         }
 
-        return color.redComponent
+        return color
     }
 
 }
