@@ -122,6 +122,12 @@ struct ScreenshotMaxxingTests {
         #expect(shortcut.displayString == "Control-Shift-4")
     }
 
+    @Test func defaultCaptureOptionsShortcutUsesControlShiftFive() {
+        let shortcut = GlobalKeyboardShortcut.defaultCaptureOptions
+
+        #expect(shortcut.displayString == "Control-Shift-5")
+    }
+
     @Test func commandShiftScreenshotShortcutsAreReservedForMacOS() {
         let commandShiftFour = GlobalKeyboardShortcut(
             keyCode: UInt32(kVK_ANSI_4),
@@ -150,22 +156,24 @@ struct ScreenshotMaxxingTests {
 
         #expect(visibleTitles == MenuBarController.visibleMenuTitles(areaCaptureShortcut: shortcut))
         #expect(visibleTitles.first == "Capture Area (Option-Command-A)")
+        #expect(visibleTitles[1] == "Capture Options (Control-Shift-5)")
     }
 
     @Test func editorToolbarOnlyShowsImplementedTools() {
         #expect(EditorTool.implementedTools == [.select, .blur])
     }
 
-    @Test func hotKeyManagerRunsAreaCaptureHandlerForRegisteredHotKeyID() {
-        var triggerCount = 0
-        let manager = HotKeyManager {
-            triggerCount += 1
+    @Test func hotKeyManagerRoutesRegisteredHotKeyIDs() {
+        var actions: [HotKeyAction] = []
+        let manager = HotKeyManager { action in
+            actions.append(action)
         }
 
         manager.handleHotKeyPressed(id: HotKeyManager.areaCaptureHotKeyID)
+        manager.handleHotKeyPressed(id: HotKeyManager.captureOptionsHotKeyID)
         manager.handleHotKeyPressed(id: 999)
 
-        #expect(triggerCount == 1)
+        #expect(actions == [.captureArea, .showCaptureOptions])
     }
 
     @MainActor
@@ -184,12 +192,17 @@ struct ScreenshotMaxxingTests {
         )
 
         #expect(preferences.areaCaptureShortcut.displayString == "Control-Shift-4")
+        #expect(preferences.captureOptionsShortcut.displayString == "Control-Shift-5")
         #expect(URL(fileURLWithPath: preferences.originalsFolderPath).lastPathComponent == "originals")
         #expect(URL(fileURLWithPath: preferences.originalsFolderPath).deletingLastPathComponent().lastPathComponent == "Captures")
         #expect(URL(fileURLWithPath: preferences.editedFolderPath).lastPathComponent == "edited")
         #expect(URL(fileURLWithPath: preferences.editedFolderPath).deletingLastPathComponent().lastPathComponent == "Captures")
         #expect(fileManager.fileExists(atPath: preferences.originalsFolderPath))
         #expect(fileManager.fileExists(atPath: preferences.editedFolderPath))
+    }
+
+    @Test func captureOptionsOnlyIncludeStillImageCaptureModes() {
+        #expect(CaptureOptionsView.availableModes == [.area, .window, .fullscreen])
     }
 
     @Test func shortcutSettingsStorePersistsAreaCaptureShortcut() throws {

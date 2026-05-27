@@ -9,11 +9,13 @@ import Foundation
 
 struct PreferencesData: Equatable {
     let areaCaptureShortcut: GlobalKeyboardShortcut
+    let captureOptionsShortcut: GlobalKeyboardShortcut
     let originalsFolderPath: String
     let editedFolderPath: String
 
     static func current(
         areaCaptureShortcut: GlobalKeyboardShortcut,
+        captureOptionsShortcut: GlobalKeyboardShortcut = .defaultCaptureOptions,
         baseDirectory: URL? = nil,
         fileManager: FileManager = .default
     ) throws -> PreferencesData {
@@ -24,6 +26,7 @@ struct PreferencesData: Equatable {
 
         return PreferencesData(
             areaCaptureShortcut: areaCaptureShortcut,
+            captureOptionsShortcut: captureOptionsShortcut,
             originalsFolderPath: directories.originals.fileSystemPath,
             editedFolderPath: directories.edited.fileSystemPath
         )
@@ -32,6 +35,7 @@ struct PreferencesData: Equatable {
     func updatingAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) -> PreferencesData {
         PreferencesData(
             areaCaptureShortcut: shortcut,
+            captureOptionsShortcut: captureOptionsShortcut,
             originalsFolderPath: originalsFolderPath,
             editedFolderPath: editedFolderPath
         )

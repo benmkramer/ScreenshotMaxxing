@@ -34,6 +34,11 @@ struct PreferencesView: View {
                     .frame(width: 160)
                 }
 
+                LabeledContent("Capture options shortcut") {
+                    Text(preferences.captureOptionsShortcut.displayString)
+                        .foregroundStyle(.secondary)
+                }
+
                 Text("Command-Shift-3, Command-Shift-4, and Command-Shift-5 stay reserved for macOS screenshots unless changed in System Settings.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -67,6 +72,7 @@ struct PreferencesView: View {
     PreferencesView(
         preferences: PreferencesData(
             areaCaptureShortcut: .defaultAreaCapture,
+            captureOptionsShortcut: .defaultCaptureOptions,
             originalsFolderPath: "/Users/example/Library/Application Support/ScreenshotMaxxing/Captures/originals",
             editedFolderPath: "/Users/example/Library/Application Support/ScreenshotMaxxing/Captures/edited"
         )

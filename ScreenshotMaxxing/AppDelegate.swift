@@ -12,6 +12,7 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var editorWindowControllers: [ScreenshotEditorWindowController] = []
+    private var captureOptionsWindowController: CaptureOptionsWindowController?
     private var historyWindowController: NSWindowController?
     private var preferencesWindowController: NSWindowController?
     private var hotKeyManager: HotKeyManager?
@@ -25,10 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController = MenuBarController(areaCaptureShortcut: areaCaptureShortcut) { [weak self] action in
             self?.handleMenuBarAction(action)
         }
-        hotKeyManager = HotKeyManager { [weak self] in
-            self?.startCapture(.area)
+        hotKeyManager = HotKeyManager { [weak self] action in
+            self?.handleHotKeyAction(action)
         }
-        registerAreaCaptureHotKey()
+        registerCaptureHotKeys()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -39,6 +40,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch action {
         case .captureArea:
             startCapture(.area)
+        case .captureOptions:
+            openCaptureOptions()
         case .captureWindow:
             startCapture(.window)
         case .captureFullscreen:
@@ -49,6 +52,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openHistory()
         case .openPreferences:
             openPreferences()
+        }
+    }
+
+    private func handleHotKeyAction(_ action: HotKeyAction) {
+        switch action {
+        case .captureArea:
+            startCapture(.area)
+        case .showCaptureOptions:
+            openCaptureOptions()
         }
     }
 
@@ -104,6 +116,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func registerCaptureOptionsHotKey() {
+        do {
+            try hotKeyManager?.registerCaptureOptionsShortcut()
+        } catch {
+            presentError(error, title: "Shortcut Unavailable")
+        }
+    }
+
+    private func registerCaptureHotKeys() {
+        registerAreaCaptureHotKey()
+        registerCaptureOptionsHotKey()
+    }
+
     private func updateAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) -> Bool {
         do {
             try hotKeyManager?.registerAreaCaptureShortcut(shortcut)
@@ -114,6 +139,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             presentError(error, title: "Shortcut Unavailable")
             return false
         }
+    }
+
+    private func openCaptureOptions() {
+        if let window = captureOptionsWindowController?.window {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let controller = CaptureOptionsWindowController { [weak self] mode in
+            self?.startCapture(mode)
+        }
+        controller.onClose = { [weak self] closedController in
+            if self?.captureOptionsWindowController === closedController {
+                self?.captureOptionsWindowController = nil
+            }
+        }
+        captureOptionsWindowController = controller
+        controller.show()
     }
 
     private func openEditor(for imageURL: URL, capture: Capture?) {
@@ -159,7 +203,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             let preferences = try PreferencesData.current(
-                areaCaptureShortcut: hotKeyManager?.registeredShortcut ?? shortcutSettingsStore.areaCaptureShortcut()
+                areaCaptureShortcut: hotKeyManager?.registeredAreaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut(),
+                captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut ?? .defaultCaptureOptions
             )
             let rootView = PreferencesView(preferences: preferences) { [weak self] shortcut in
                 self?.updateAreaCaptureShortcut(shortcut) ?? false

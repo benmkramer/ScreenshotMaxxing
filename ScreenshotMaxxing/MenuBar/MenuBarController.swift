@@ -9,6 +9,7 @@ import AppKit
 
 enum MenuBarAction: Equatable {
     case captureArea
+    case captureOptions
     case captureWindow
     case captureFullscreen
     case openHistory
@@ -21,23 +22,30 @@ final class MenuBarController: NSObject {
     private let statusItem: NSStatusItem
     private let actionHandler: @MainActor (MenuBarAction) -> Void
     private var areaCaptureShortcut: GlobalKeyboardShortcut
+    private let captureOptionsShortcut: GlobalKeyboardShortcut
 
     init(
         statusItem: NSStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength),
         areaCaptureShortcut: GlobalKeyboardShortcut? = nil,
+        captureOptionsShortcut: GlobalKeyboardShortcut = .defaultCaptureOptions,
         actionHandler: @escaping @MainActor (MenuBarAction) -> Void = MenuBarController.defaultActionHandler
     ) {
         self.statusItem = statusItem
         self.areaCaptureShortcut = areaCaptureShortcut ?? .defaultAreaCapture
+        self.captureOptionsShortcut = captureOptionsShortcut
         self.actionHandler = actionHandler
         super.init()
 
         configureStatusItem()
     }
 
-    static func visibleMenuTitles(areaCaptureShortcut: GlobalKeyboardShortcut? = nil) -> [String] {
+    static func visibleMenuTitles(
+        areaCaptureShortcut: GlobalKeyboardShortcut? = nil,
+        captureOptionsShortcut: GlobalKeyboardShortcut = .defaultCaptureOptions
+    ) -> [String] {
         return [
             areaCaptureMenuTitle(areaCaptureShortcut: areaCaptureShortcut),
+            captureOptionsMenuTitle(captureOptionsShortcut: captureOptionsShortcut),
             "Capture Window...",
             "Capture Fullscreen",
             "Open History",
@@ -48,8 +56,15 @@ final class MenuBarController: NSObject {
 
     func updateAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) {
         areaCaptureShortcut = shortcut
-        statusItem.button?.toolTip = "ScreenshotMaxxing - Capture Area: \(Self.areaCaptureShortcutSummary(areaCaptureShortcut: shortcut))"
-        statusItem.menu = MenuBarController.makeMenu(target: self, areaCaptureShortcut: shortcut)
+        statusItem.button?.toolTip = Self.statusItemToolTip(
+            areaCaptureShortcut: shortcut,
+            captureOptionsShortcut: captureOptionsShortcut
+        )
+        statusItem.menu = MenuBarController.makeMenu(
+            target: self,
+            areaCaptureShortcut: shortcut,
+            captureOptionsShortcut: captureOptionsShortcut
+        )
     }
 
     private static func defaultActionHandler(action: MenuBarAction) {
@@ -64,18 +79,31 @@ final class MenuBarController: NSObject {
             accessibilityDescription: "ScreenshotMaxxing"
         )
         statusItem.button?.image?.isTemplate = true
-        statusItem.button?.toolTip = "ScreenshotMaxxing - Capture Area: \(Self.areaCaptureShortcutSummary(areaCaptureShortcut: areaCaptureShortcut))"
-        statusItem.menu = MenuBarController.makeMenu(target: self, areaCaptureShortcut: areaCaptureShortcut)
+        statusItem.button?.toolTip = Self.statusItemToolTip(
+            areaCaptureShortcut: areaCaptureShortcut,
+            captureOptionsShortcut: captureOptionsShortcut
+        )
+        statusItem.menu = MenuBarController.makeMenu(
+            target: self,
+            areaCaptureShortcut: areaCaptureShortcut,
+            captureOptionsShortcut: captureOptionsShortcut
+        )
     }
 
     static func makeMenu(
         target: AnyObject?,
-        areaCaptureShortcut: GlobalKeyboardShortcut? = nil
+        areaCaptureShortcut: GlobalKeyboardShortcut? = nil,
+        captureOptionsShortcut: GlobalKeyboardShortcut = .defaultCaptureOptions
     ) -> NSMenu {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(
             title: areaCaptureMenuTitle(areaCaptureShortcut: areaCaptureShortcut),
             action: #selector(captureArea),
+            keyEquivalent: ""
+        ))
+        menu.addItem(NSMenuItem(
+            title: captureOptionsMenuTitle(captureOptionsShortcut: captureOptionsShortcut),
+            action: #selector(captureOptions),
             keyEquivalent: ""
         ))
         menu.addItem(NSMenuItem(title: "Capture Window...", action: #selector(captureWindow), keyEquivalent: ""))
@@ -97,12 +125,27 @@ final class MenuBarController: NSObject {
         "Capture Area (\(areaCaptureShortcutSummary(areaCaptureShortcut: areaCaptureShortcut)))"
     }
 
+    private static func captureOptionsMenuTitle(captureOptionsShortcut: GlobalKeyboardShortcut) -> String {
+        "Capture Options (\(captureOptionsShortcut.displayString))"
+    }
+
     private static func areaCaptureShortcutSummary(areaCaptureShortcut: GlobalKeyboardShortcut? = nil) -> String {
         (areaCaptureShortcut ?? GlobalKeyboardShortcut.defaultAreaCapture).displayString
     }
 
+    private static func statusItemToolTip(
+        areaCaptureShortcut: GlobalKeyboardShortcut,
+        captureOptionsShortcut: GlobalKeyboardShortcut
+    ) -> String {
+        "ScreenshotMaxxing - Capture Area: \(areaCaptureShortcut.displayString), Options: \(captureOptionsShortcut.displayString)"
+    }
+
     @objc private func captureArea() {
         actionHandler(.captureArea)
+    }
+
+    @objc private func captureOptions() {
+        actionHandler(.captureOptions)
     }
 
     @objc private func captureWindow() {

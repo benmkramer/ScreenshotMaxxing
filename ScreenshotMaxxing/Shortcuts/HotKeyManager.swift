@@ -12,14 +12,23 @@ struct GlobalKeyboardShortcut: Codable, Equatable {
     let keyCode: UInt32
     let carbonModifiers: UInt32
 
-    static let defaultAreaCapture = GlobalKeyboardShortcut(
+    nonisolated static let defaultAreaCapture = GlobalKeyboardShortcut(
         keyCode: UInt32(kVK_ANSI_4),
+        carbonModifiers: UInt32(controlKey | shiftKey)
+    )
+
+    nonisolated static let defaultCaptureOptions = GlobalKeyboardShortcut(
+        keyCode: UInt32(kVK_ANSI_5),
         carbonModifiers: UInt32(controlKey | shiftKey)
     )
 
     init(keyCode: UInt32, carbonModifiers: UInt32) {
         self.keyCode = keyCode
         self.carbonModifiers = carbonModifiers
+    }
+
+    nonisolated static func == (lhs: GlobalKeyboardShortcut, rhs: GlobalKeyboardShortcut) -> Bool {
+        lhs.keyCode == rhs.keyCode && lhs.carbonModifiers == rhs.carbonModifiers
     }
 
     init?(event: NSEvent) {
@@ -138,8 +147,14 @@ struct GlobalKeyboardShortcut: Codable, Equatable {
     }
 }
 
+enum HotKeyAction: UInt32, Equatable {
+    case captureArea = 1
+    case showCaptureOptions = 2
+}
+
 enum HotKeyManagerError: LocalizedError, Equatable {
     case systemShortcutReserved(GlobalKeyboardShortcut)
+    case shortcutAlreadyRegistered(GlobalKeyboardShortcut)
     case eventHandlerRegistrationFailed(OSStatus)
     case hotKeyRegistrationFailed(GlobalKeyboardShortcut, OSStatus)
 
@@ -147,6 +162,8 @@ enum HotKeyManagerError: LocalizedError, Equatable {
         switch self {
         case .systemShortcutReserved(let shortcut):
             "\(shortcut.displayString) is reserved by macOS screenshots. Choose another shortcut, such as Control-Shift-4."
+        case .shortcutAlreadyRegistered(let shortcut):
+            "\(shortcut.displayString) is already used by another ScreenshotMaxxing shortcut."
         case .eventHandlerRegistrationFailed(let status):
             "Could not install the global shortcut handler. OSStatus \(status)."
         case .hotKeyRegistrationFailed(let shortcut, let status):
@@ -156,16 +173,24 @@ enum HotKeyManagerError: LocalizedError, Equatable {
 }
 
 final class HotKeyManager {
-    static let areaCaptureHotKeyID: UInt32 = 1
+    static let areaCaptureHotKeyID = HotKeyAction.captureArea.rawValue
+    static let captureOptionsHotKeyID = HotKeyAction.showCaptureOptions.rawValue
     private static let hotKeySignature = OSType(0x534D6178) // SMax
 
-    private let actionHandler: () -> Void
+    private let actionHandler: (HotKeyAction) -> Void
     private var eventHandlerRef: EventHandlerRef?
-    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyRefs: [HotKeyAction: EventHotKeyRef] = [:]
+    private var registeredShortcuts: [HotKeyAction: GlobalKeyboardShortcut] = [:]
 
-    private(set) var registeredShortcut: GlobalKeyboardShortcut?
+    var registeredAreaCaptureShortcut: GlobalKeyboardShortcut? {
+        registeredShortcuts[.captureArea]
+    }
 
-    init(actionHandler: @escaping () -> Void) {
+    var registeredCaptureOptionsShortcut: GlobalKeyboardShortcut? {
+        registeredShortcuts[.showCaptureOptions]
+    }
+
+    init(actionHandler: @escaping (HotKeyAction) -> Void) {
         self.actionHandler = actionHandler
     }
 
@@ -174,16 +199,55 @@ final class HotKeyManager {
     }
 
     func registerAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut = .defaultAreaCapture) throws {
+        try registerShortcut(shortcut, for: .captureArea)
+    }
+
+    func registerCaptureOptionsShortcut(_ shortcut: GlobalKeyboardShortcut = .defaultCaptureOptions) throws {
+        try registerShortcut(shortcut, for: .showCaptureOptions)
+    }
+
+    func unregisterAreaCaptureShortcut() {
+        unregisterShortcut(for: .captureArea)
+    }
+
+    func unregisterCaptureOptionsShortcut() {
+        unregisterShortcut(for: .showCaptureOptions)
+    }
+
+    func invalidate() {
+        for action in Array(hotKeyRefs.keys) {
+            unregisterShortcut(for: action)
+        }
+
+        if let eventHandlerRef {
+            RemoveEventHandler(eventHandlerRef)
+            self.eventHandlerRef = nil
+        }
+    }
+
+    func handleHotKeyPressed(id: UInt32) {
+        guard let action = HotKeyAction(rawValue: id) else {
+            return
+        }
+
+        actionHandler(action)
+    }
+
+    private func registerShortcut(_ shortcut: GlobalKeyboardShortcut, for action: HotKeyAction) throws {
         guard !shortcut.isReservedSystemScreenshotShortcut else {
             throw HotKeyManagerError.systemShortcutReserved(shortcut)
         }
 
-        unregisterAreaCaptureShortcut()
+        guard !isRegistered(shortcut, excluding: action) else {
+            throw HotKeyManagerError.shortcutAlreadyRegistered(shortcut)
+        }
+
+        unregisterShortcut(for: action)
         try installEventHandlerIfNeeded()
 
         let hotKeyID = EventHotKeyID(
             signature: Self.hotKeySignature,
-            id: Self.areaCaptureHotKeyID
+            id: action.rawValue
         )
         var newHotKeyRef: EventHotKeyRef?
         let status = RegisterEventHotKey(
@@ -199,34 +263,23 @@ final class HotKeyManager {
             throw HotKeyManagerError.hotKeyRegistrationFailed(shortcut, status)
         }
 
-        hotKeyRef = newHotKeyRef
-        registeredShortcut = shortcut
+        hotKeyRefs[action] = newHotKeyRef
+        registeredShortcuts[action] = shortcut
     }
 
-    func unregisterAreaCaptureShortcut() {
-        if let hotKeyRef {
+    private func unregisterShortcut(for action: HotKeyAction) {
+        if let hotKeyRef = hotKeyRefs[action] {
             UnregisterEventHotKey(hotKeyRef)
-            self.hotKeyRef = nil
+            hotKeyRefs[action] = nil
         }
 
-        registeredShortcut = nil
+        registeredShortcuts[action] = nil
     }
 
-    func invalidate() {
-        unregisterAreaCaptureShortcut()
-
-        if let eventHandlerRef {
-            RemoveEventHandler(eventHandlerRef)
-            self.eventHandlerRef = nil
+    private func isRegistered(_ shortcut: GlobalKeyboardShortcut, excluding excludedAction: HotKeyAction) -> Bool {
+        registeredShortcuts.contains { action, registeredShortcut in
+            action != excludedAction && registeredShortcut == shortcut
         }
-    }
-
-    func handleHotKeyPressed(id: UInt32) {
-        guard id == Self.areaCaptureHotKeyID else {
-            return
-        }
-
-        actionHandler()
     }
 
     private func installEventHandlerIfNeeded() throws {
