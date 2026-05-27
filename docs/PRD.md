@@ -158,7 +158,7 @@ ScreenshotMaxxing/
 | ID | Status | Chunk | Goal | Done When |
 |---|---|---|---|---|
 | 1 | Done | Project cleanup | Remove starter/sample code and establish folders | App builds after cleanup |
-| 2 | Pending | App shell | Add AppKit app delegate to SwiftUI app | App launches normally |
+| 2 | Done | App shell | Add AppKit app delegate to SwiftUI app | App launches normally |
 | 3 | Pending | Menu bar | Add menu bar status item with basic menu | Menu shows Capture Area, Capture Window, Capture Fullscreen, History, Preferences, Quit |
 | 4 | Pending | Capture file storage | Create app support folders for original/edited captures | App can create and write to capture folders |
 | 5 | Pending | Area capture | Invoke macOS area selection and save PNG | Dragging an area creates a screenshot file |
