@@ -29,7 +29,7 @@ final class CaptureMetadataStore {
             captureMode: result.mode.rawValue,
             width: dimensions.width,
             height: dimensions.height,
-            originalFilePath: result.fileURL.path()
+            originalFilePath: result.fileURL.fileSystemPath
         )
 
         modelContainer.mainContext.insert(capture)
@@ -39,7 +39,7 @@ final class CaptureMetadataStore {
     }
 
     func updateEditedFilePath(for capture: Capture, editedFileURL: URL) throws {
-        capture.editedFilePath = editedFileURL.path()
+        capture.editedFilePath = editedFileURL.fileSystemPath
         try modelContainer.mainContext.save()
     }
 
@@ -61,7 +61,7 @@ enum CaptureMetadataError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .unreadableImage(let url):
-            "Could not read image dimensions for \(url.path())."
+            "Could not read image dimensions for \(url.fileSystemPath)."
         }
     }
 }

@@ -36,10 +36,8 @@ final class MenuBarController: NSObject {
     }
 
     static func visibleMenuTitles(areaCaptureShortcut: GlobalKeyboardShortcut? = nil) -> [String] {
-        let areaCaptureShortcut = areaCaptureShortcut ?? GlobalKeyboardShortcut.defaultAreaCapture
-
         return [
-            "Capture Area (\(areaCaptureShortcut.displayString))",
+            areaCaptureMenuTitle(areaCaptureShortcut: areaCaptureShortcut),
             "Capture Window...",
             "Capture Fullscreen",
             "Open History",
@@ -50,7 +48,7 @@ final class MenuBarController: NSObject {
 
     func updateAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) {
         areaCaptureShortcut = shortcut
-        statusItem.button?.toolTip = "ScreenshotMaxxing - Capture Area: \(shortcut.displayString)"
+        statusItem.button?.toolTip = "ScreenshotMaxxing - Capture Area: \(Self.areaCaptureShortcutSummary(areaCaptureShortcut: shortcut))"
         statusItem.menu = MenuBarController.makeMenu(target: self, areaCaptureShortcut: shortcut)
     }
 
@@ -66,7 +64,7 @@ final class MenuBarController: NSObject {
             accessibilityDescription: "ScreenshotMaxxing"
         )
         statusItem.button?.image?.isTemplate = true
-        statusItem.button?.toolTip = "ScreenshotMaxxing - Capture Area: \(areaCaptureShortcut.displayString)"
+        statusItem.button?.toolTip = "ScreenshotMaxxing - Capture Area: \(Self.areaCaptureShortcutSummary(areaCaptureShortcut: areaCaptureShortcut))"
         statusItem.menu = MenuBarController.makeMenu(target: self, areaCaptureShortcut: areaCaptureShortcut)
     }
 
@@ -74,10 +72,9 @@ final class MenuBarController: NSObject {
         target: AnyObject?,
         areaCaptureShortcut: GlobalKeyboardShortcut? = nil
     ) -> NSMenu {
-        let areaCaptureShortcut = areaCaptureShortcut ?? GlobalKeyboardShortcut.defaultAreaCapture
         let menu = NSMenu()
         menu.addItem(NSMenuItem(
-            title: "Capture Area (\(areaCaptureShortcut.displayString))",
+            title: areaCaptureMenuTitle(areaCaptureShortcut: areaCaptureShortcut),
             action: #selector(captureArea),
             keyEquivalent: ""
         ))
@@ -94,6 +91,14 @@ final class MenuBarController: NSObject {
         }
 
         return menu
+    }
+
+    private static func areaCaptureMenuTitle(areaCaptureShortcut: GlobalKeyboardShortcut? = nil) -> String {
+        "Capture Area (\(areaCaptureShortcutSummary(areaCaptureShortcut: areaCaptureShortcut)))"
+    }
+
+    private static func areaCaptureShortcutSummary(areaCaptureShortcut: GlobalKeyboardShortcut? = nil) -> String {
+        (areaCaptureShortcut ?? GlobalKeyboardShortcut.defaultAreaCapture).displayString
     }
 
     @objc private func captureArea() {

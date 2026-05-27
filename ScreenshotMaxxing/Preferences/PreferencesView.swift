@@ -33,6 +33,10 @@ struct PreferencesView: View {
                     }
                     .frame(width: 160)
                 }
+
+                Text("Command-Shift-3, Command-Shift-4, and Command-Shift-5 stay reserved for macOS screenshots unless changed in System Settings.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Storage") {

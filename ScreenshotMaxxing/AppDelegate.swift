@@ -52,6 +52,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func captureArea() {
+        startCapture(.area)
+    }
+
+    func openHistoryWindow() {
+        openHistory()
+    }
+
+    func openPreferencesWindow() {
+        openPreferences()
+    }
+
     private func startCapture(_ mode: CaptureMode) {
         Task {
             do {

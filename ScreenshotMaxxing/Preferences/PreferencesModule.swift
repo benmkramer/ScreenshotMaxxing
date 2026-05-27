@@ -24,8 +24,8 @@ struct PreferencesData: Equatable {
 
         return PreferencesData(
             areaCaptureShortcut: areaCaptureShortcut,
-            originalsFolderPath: directories.originals.path(),
-            editedFolderPath: directories.edited.path()
+            originalsFolderPath: directories.originals.fileSystemPath,
+            editedFolderPath: directories.edited.fileSystemPath
         )
     }
 

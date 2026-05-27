@@ -13,7 +13,7 @@ struct GlobalKeyboardShortcut: Codable, Equatable {
     let carbonModifiers: UInt32
 
     static let defaultAreaCapture = GlobalKeyboardShortcut(
-        keyCode: UInt32(kVK_ANSI_5),
+        keyCode: UInt32(kVK_ANSI_4),
         carbonModifiers: UInt32(controlKey | shiftKey)
     )
 
@@ -54,6 +54,13 @@ struct GlobalKeyboardShortcut: Codable, Equatable {
         parts.append(Self.keyDisplayName(for: keyCode))
 
         return parts.joined(separator: "-")
+    }
+
+    var isReservedSystemScreenshotShortcut: Bool {
+        let keyCode = Int(keyCode)
+        let usesCommandShift = carbonModifiers & UInt32(cmdKey | shiftKey) == UInt32(cmdKey | shiftKey)
+
+        return usesCommandShift && [kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5].contains(keyCode)
     }
 
     static func keyDisplayName(for keyCode: UInt32) -> String {
@@ -132,15 +139,18 @@ struct GlobalKeyboardShortcut: Codable, Equatable {
 }
 
 enum HotKeyManagerError: LocalizedError, Equatable {
+    case systemShortcutReserved(GlobalKeyboardShortcut)
     case eventHandlerRegistrationFailed(OSStatus)
-    case hotKeyRegistrationFailed(OSStatus)
+    case hotKeyRegistrationFailed(GlobalKeyboardShortcut, OSStatus)
 
     var errorDescription: String? {
         switch self {
+        case .systemShortcutReserved(let shortcut):
+            "\(shortcut.displayString) is reserved by macOS screenshots. Choose another shortcut, such as Control-Shift-4."
         case .eventHandlerRegistrationFailed(let status):
             "Could not install the global shortcut handler. OSStatus \(status)."
-        case .hotKeyRegistrationFailed(let status):
-            "Could not register the global shortcut. OSStatus \(status)."
+        case .hotKeyRegistrationFailed(let shortcut, let status):
+            "Could not register \(shortcut.displayString). OSStatus \(status)."
         }
     }
 }
@@ -164,6 +174,10 @@ final class HotKeyManager {
     }
 
     func registerAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut = .defaultAreaCapture) throws {
+        guard !shortcut.isReservedSystemScreenshotShortcut else {
+            throw HotKeyManagerError.systemShortcutReserved(shortcut)
+        }
+
         unregisterAreaCaptureShortcut()
         try installEventHandlerIfNeeded()
 
@@ -182,7 +196,7 @@ final class HotKeyManager {
         )
 
         guard status == noErr else {
-            throw HotKeyManagerError.hotKeyRegistrationFailed(status)
+            throw HotKeyManagerError.hotKeyRegistrationFailed(shortcut, status)
         }
 
         hotKeyRef = newHotKeyRef

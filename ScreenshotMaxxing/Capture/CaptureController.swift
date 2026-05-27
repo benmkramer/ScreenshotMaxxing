@@ -22,7 +22,7 @@ enum CaptureError: LocalizedError, Equatable {
         case .cancelled:
             "Capture canceled."
         case .missingOutput(let url):
-            "Capture finished but did not create an image at \(url.path())."
+            "Capture finished but did not create an image at \(url.fileSystemPath)."
         case .commandFailed(let status):
             "Capture failed with status \(status)."
         }
@@ -67,7 +67,7 @@ struct CaptureController {
             directories: directories
         )
         let status = try await runScreencapture(mode.screencaptureArguments(outputURL: outputURL))
-        let fileExists = fileManager.fileExists(atPath: outputURL.path())
+        let fileExists = fileManager.fileExists(atPath: outputURL.fileSystemPath)
 
         guard status == 0 else {
             if fileExists {

@@ -107,7 +107,7 @@ enum ImageRendererError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .unreadableImage(let url):
-            "Could not read image at \(url.path())."
+            "Could not read image at \(url.fileSystemPath)."
         case .renderFailed:
             "Could not render edited image."
         }
