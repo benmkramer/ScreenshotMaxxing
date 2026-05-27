@@ -38,9 +38,21 @@ final class CaptureMetadataStore {
         return capture
     }
 
-    func updateEditedFilePath(for capture: Capture, editedFileURL: URL) throws {
-        capture.editedFilePath = editedFileURL.fileSystemPath
+    @discardableResult
+    func saveEditedCapture(editedFileURL: URL, sourceCapture: Capture?) throws -> Capture {
+        let dimensions = try imageDimensions(for: editedFileURL)
+        let capture = Capture(
+            fileName: editedFileURL.lastPathComponent,
+            captureMode: sourceCapture?.captureMode ?? "edited",
+            width: dimensions.width,
+            height: dimensions.height,
+            originalFilePath: editedFileURL.fileSystemPath
+        )
+
+        modelContainer.mainContext.insert(capture)
         try modelContainer.mainContext.save()
+
+        return capture
     }
 
     private func imageDimensions(for url: URL) throws -> (width: Int, height: Int) {

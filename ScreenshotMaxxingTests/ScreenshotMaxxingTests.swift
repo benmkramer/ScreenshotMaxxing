@@ -843,7 +843,21 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
-    @Test func editorFileSaverWritesEditedImageAndUpdatesCaptureMetadata() throws {
+    @Test func editorClipboardWritesStringToPasteboard() {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("ScreenshotMaxxingTests-\(UUID().uuidString)"))
+        defer {
+            pasteboard.releaseGlobally()
+        }
+        let filePath = "/tmp/ScreenshotMaxxing Tests/edited.png"
+
+        let copied = EditorClipboard.copyString(filePath, to: pasteboard)
+
+        #expect(copied)
+        #expect(pasteboard.string(forType: .string) == filePath)
+    }
+
+    @MainActor
+    @Test func editorFileSaverWritesEditedImageAndCreatesNewHistoryCapture() throws {
         let fileManager = FileManager.default
         let baseDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
@@ -866,16 +880,25 @@ struct ScreenshotMaxxingTests {
             fileManager: fileManager,
             metadataStore: CaptureMetadataStore(modelContainer: modelContainer)
         )
+        let pngData = try makeVerticalSplitPNGData(width: 2, height: 2)
         let editedFileURL = try saver.saveEditedPNG(
-            Data("edited".utf8),
+            pngData,
             originalFileName: capture.fileName,
             capture: capture,
             baseDirectory: baseDirectory
         )
+        let captures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+        let editedCapture = try #require(captures.first { $0.originalFilePath == editedFileURL.fileSystemPath })
 
         #expect(fileManager.fileExists(atPath: editedFileURL.fileSystemPath))
         #expect(editedFileURL.deletingLastPathComponent().lastPathComponent == "edited")
-        #expect(capture.editedFilePath == editedFileURL.fileSystemPath)
+        #expect(captures.count == 2)
+        #expect(capture.editedFilePath == nil)
+        #expect(editedCapture.fileName == editedFileURL.lastPathComponent)
+        #expect(editedCapture.captureMode == capture.captureMode)
+        #expect(editedCapture.width == 2)
+        #expect(editedCapture.height == 2)
+        #expect(editedCapture.editedFilePath == nil)
     }
 
     @MainActor

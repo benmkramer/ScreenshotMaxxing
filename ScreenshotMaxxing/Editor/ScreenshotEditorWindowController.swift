@@ -38,7 +38,10 @@ final class ScreenshotEditorWindowController: NSObject, NSWindowDelegate {
     }
 
     private func makeWindow(imageURL: URL, capture: Capture?) -> NSWindow {
-        let hostingController = NSHostingController(rootView: ScreenshotEditorView(imageURL: imageURL, capture: capture))
+        let rootView = ScreenshotEditorView(imageURL: imageURL, capture: capture) { [weak self] in
+            self?.window?.close()
+        }
+        let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = ScreenshotEditorWindowController.windowTitle(for: imageURL)
         window.setContentSize(NSSize(width: 900, height: 620))

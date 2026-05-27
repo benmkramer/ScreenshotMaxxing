@@ -24,4 +24,10 @@ enum EditorClipboard {
 
         return wrotePNG || wroteTIFF
     }
+
+    static func copyString(_ string: String, to pasteboard: NSPasteboard = .general) -> Bool {
+        pasteboard.clearContents()
+
+        return pasteboard.setString(string, forType: .string)
+    }
 }
