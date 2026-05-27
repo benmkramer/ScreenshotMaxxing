@@ -11,17 +11,17 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "camera.viewfinder")
-                .font(.system(size: 48))
+                .font(.system(size: 44, weight: .medium))
                 .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
 
             Text("ScreenshotMaxxing")
-                .font(.title)
-                .fontWeight(.semibold)
+                .font(.title2.weight(.semibold))
 
-            Text("Screenshot capture tools are coming next.")
+            Text("Use the menu bar to capture screenshots.")
                 .foregroundStyle(.secondary)
         }
-        .frame(minWidth: 420, minHeight: 260)
+        .frame(minWidth: 420, minHeight: 280)
     }
 }
 
