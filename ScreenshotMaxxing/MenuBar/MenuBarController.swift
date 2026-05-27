@@ -20,17 +20,20 @@ enum MenuBarAction: Equatable {
 @MainActor
 final class MenuBarController: NSObject {
     private let statusItem: NSStatusItem
+    private let statusBar: NSStatusBar
     private let actionHandler: @MainActor (MenuBarAction) -> Void
     private var areaCaptureShortcut: GlobalKeyboardShortcut
     private let captureOptionsShortcut: GlobalKeyboardShortcut
+    private var isRemovedFromStatusBar = false
 
     init(
-        statusItem: NSStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength),
+        statusBar: NSStatusBar = .system,
         areaCaptureShortcut: GlobalKeyboardShortcut? = nil,
         captureOptionsShortcut: GlobalKeyboardShortcut = .defaultCaptureOptions,
         actionHandler: @escaping @MainActor (MenuBarAction) -> Void = MenuBarController.defaultActionHandler
     ) {
-        self.statusItem = statusItem
+        self.statusBar = statusBar
+        self.statusItem = statusBar.statusItem(withLength: NSStatusItem.squareLength)
         self.areaCaptureShortcut = areaCaptureShortcut ?? .defaultAreaCapture
         self.captureOptionsShortcut = captureOptionsShortcut
         self.actionHandler = actionHandler
@@ -65,6 +68,15 @@ final class MenuBarController: NSObject {
             areaCaptureShortcut: shortcut,
             captureOptionsShortcut: captureOptionsShortcut
         )
+    }
+
+    func removeFromStatusBar() {
+        guard !isRemovedFromStatusBar else {
+            return
+        }
+
+        statusBar.removeStatusItem(statusItem)
+        isRemovedFromStatusBar = true
     }
 
     private static func defaultActionHandler(action: MenuBarAction) {
