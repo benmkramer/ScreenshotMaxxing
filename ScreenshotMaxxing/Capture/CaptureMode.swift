@@ -9,11 +9,17 @@ import Foundation
 
 enum CaptureMode: String, CaseIterable {
     case area
+    case window
+    case fullscreen
 
     var displayName: String {
         switch self {
         case .area:
             "Area"
+        case .window:
+            "Window"
+        case .fullscreen:
+            "Fullscreen"
         }
     }
 
@@ -25,6 +31,10 @@ enum CaptureMode: String, CaseIterable {
         switch self {
         case .area:
             ["-i", "-s", "-x", outputURL.path()]
+        case .window:
+            ["-i", "-w", "-x", outputURL.path()]
+        case .fullscreen:
+            ["-x", outputURL.path()]
         }
     }
 }

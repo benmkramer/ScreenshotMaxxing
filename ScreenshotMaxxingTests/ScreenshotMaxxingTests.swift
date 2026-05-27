@@ -104,4 +104,12 @@ struct ScreenshotMaxxingTests {
         Issue.record("Expected canceled capture to throw CaptureError.cancelled")
     }
 
+    @Test func captureModesBuildExpectedScreencaptureArguments() {
+        let outputURL = URL(fileURLWithPath: "/tmp/screenshot.png")
+
+        #expect(CaptureMode.area.screencaptureArguments(outputURL: outputURL) == ["-i", "-s", "-x", "/tmp/screenshot.png"])
+        #expect(CaptureMode.window.screencaptureArguments(outputURL: outputURL) == ["-i", "-w", "-x", "/tmp/screenshot.png"])
+        #expect(CaptureMode.fullscreen.screencaptureArguments(outputURL: outputURL) == ["-x", "/tmp/screenshot.png"])
+    }
+
 }

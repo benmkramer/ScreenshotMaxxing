@@ -25,18 +25,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleMenuBarAction(_ action: MenuBarAction) {
         switch action {
         case .captureArea:
-            startAreaCapture()
+            startCapture(.area)
+        case .captureWindow:
+            startCapture(.window)
+        case .captureFullscreen:
+            startCapture(.fullscreen)
         case .quit:
             NSApp.terminate(nil)
-        case .captureWindow, .captureFullscreen, .openHistory, .openPreferences:
+        case .openHistory, .openPreferences:
             break
         }
     }
 
-    private func startAreaCapture() {
+    private func startCapture(_ mode: CaptureMode) {
         Task {
             do {
-                _ = try await captureController.captureArea()
+                switch mode {
+                case .area:
+                    _ = try await captureController.captureArea()
+                case .window:
+                    _ = try await captureController.captureWindow()
+                case .fullscreen:
+                    _ = try await captureController.captureFullscreen()
+                }
             } catch CaptureError.cancelled {
                 return
             } catch {

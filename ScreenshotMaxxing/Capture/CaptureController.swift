@@ -49,6 +49,14 @@ struct CaptureController {
         try await capture(.area, baseDirectory: baseDirectory)
     }
 
+    func captureWindow(baseDirectory: URL? = nil) async throws -> CaptureResult {
+        try await capture(.window, baseDirectory: baseDirectory)
+    }
+
+    func captureFullscreen(baseDirectory: URL? = nil) async throws -> CaptureResult {
+        try await capture(.fullscreen, baseDirectory: baseDirectory)
+    }
+
     private func capture(_ mode: CaptureMode, baseDirectory: URL?) async throws -> CaptureResult {
         let directories = try FileLocations.ensureCaptureDirectories(
             baseDirectory: baseDirectory,
