@@ -6,10 +6,13 @@
 //
 
 import AppKit
+import SwiftData
+import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var editorWindowControllers: [ScreenshotEditorWindowController] = []
+    private var historyWindowController: NSWindowController?
     private let captureController = CaptureController()
     private let metadataStore = CaptureMetadataStore()
 
@@ -34,7 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             startCapture(.fullscreen)
         case .quit:
             NSApp.terminate(nil)
-        case .openHistory, .openPreferences:
+        case .openHistory:
+            openHistory()
+        case .openPreferences:
             break
         }
     }
@@ -75,5 +80,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         editorWindowControllers.append(controller)
         controller.show()
+    }
+
+    private func openHistory() {
+        if let window = historyWindowController?.window {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let rootView = CaptureHistoryView()
+            .modelContainer(PersistenceController.sharedModelContainer)
+        let hostingController = NSHostingController(rootView: rootView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "ScreenshotMaxxing History"
+        window.setContentSize(NSSize(width: 620, height: 480))
+        window.minSize = NSSize(width: 520, height: 420)
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.isReleasedWhenClosed = false
+
+        let windowController = NSWindowController(window: window)
+        historyWindowController = windowController
+        windowController.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }

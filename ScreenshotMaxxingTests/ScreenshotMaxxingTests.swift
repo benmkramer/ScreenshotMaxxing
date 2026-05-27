@@ -316,6 +316,38 @@ struct ScreenshotMaxxingTests {
         #expect(capture.editedFilePath == editedFileURL.path())
     }
 
+    @MainActor
+    @Test func captureHistoryFetchesNewestFirstAndFormatsRows() throws {
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let olderCapture = Capture(
+            createdAt: Date(timeIntervalSince1970: 10),
+            fileName: "older.png",
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: "/tmp/older.png"
+        )
+        let newerCapture = Capture(
+            createdAt: Date(timeIntervalSince1970: 20),
+            fileName: "newer.png",
+            captureMode: "fullscreen",
+            width: 40,
+            height: 30,
+            originalFilePath: "/tmp/newer.png",
+            editedFilePath: "/tmp/newer-edited.png"
+        )
+
+        modelContainer.mainContext.insert(olderCapture)
+        modelContainer.mainContext.insert(newerCapture)
+        try modelContainer.mainContext.save()
+
+        let captures = try modelContainer.mainContext.fetch(CaptureHistoryData.newestFirstFetchDescriptor())
+
+        #expect(captures.map(\.fileName) == ["newer.png", "older.png"])
+        #expect(CaptureHistoryData.previewFilePath(for: newerCapture) == "/tmp/newer-edited.png")
+        #expect(CaptureHistoryData.detailText(for: newerCapture) == "Fullscreen - 40x30")
+    }
+
     private func makeVerticalSplitPNGData(width: Int, height: Int) throws -> Data {
         let imageRep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
