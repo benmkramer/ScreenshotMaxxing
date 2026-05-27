@@ -114,6 +114,24 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureMode.fullscreen.screencaptureArguments(outputURL: outputURL) == ["-x", "/tmp/screenshot.png"])
     }
 
+    @Test func defaultAreaCaptureShortcutUsesControlShiftFive() {
+        let shortcut = GlobalKeyboardShortcut.defaultAreaCapture
+
+        #expect(shortcut.displayString == "Control-Shift-5")
+    }
+
+    @Test func hotKeyManagerRunsAreaCaptureHandlerForRegisteredHotKeyID() {
+        var triggerCount = 0
+        let manager = HotKeyManager {
+            triggerCount += 1
+        }
+
+        manager.handleHotKeyPressed(id: HotKeyManager.areaCaptureHotKeyID)
+        manager.handleHotKeyPressed(id: 999)
+
+        #expect(triggerCount == 1)
+    }
+
     @MainActor
     @Test func captureMetadataStorePersistsImageDetails() throws {
         let fileManager = FileManager.default

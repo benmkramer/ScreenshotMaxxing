@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var editorWindowControllers: [ScreenshotEditorWindowController] = []
     private var historyWindowController: NSWindowController?
+    private var hotKeyManager: HotKeyManager?
     private let captureController = CaptureController()
     private let metadataStore = CaptureMetadataStore()
 
@@ -21,6 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController = MenuBarController { [weak self] action in
             self?.handleMenuBarAction(action)
         }
+        hotKeyManager = HotKeyManager { [weak self] in
+            self?.startCapture(.area)
+        }
+        registerDefaultHotKey()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -71,6 +76,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func presentCaptureError(_ error: Error) {
         let alert = NSAlert(error: error)
         alert.runModal()
+    }
+
+    private func registerDefaultHotKey() {
+        do {
+            try hotKeyManager?.registerAreaCaptureShortcut()
+        } catch {
+            presentCaptureError(error)
+        }
     }
 
     private func openEditor(for imageURL: URL, capture: Capture?) {
