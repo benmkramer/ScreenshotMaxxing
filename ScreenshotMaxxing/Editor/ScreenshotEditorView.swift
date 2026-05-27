@@ -12,19 +12,23 @@ struct ScreenshotEditorView: View {
     private let capture: Capture?
     private let image: NSImage?
     private let editorSettingsStore: EditorSettingsStore
+    private let closeAction: () -> Void
     @State private var editorState: ScreenshotEditorState
     @State private var draftBlurRect: CGRect?
     @State private var draftStroke: AnnotationStroke?
     @State private var statusMessage: String?
+    private static let successfulActionCloseDelay: TimeInterval = 0.6
 
     init(
         imageURL: URL,
         capture: Capture? = nil,
-        editorSettingsStore: EditorSettingsStore = EditorSettingsStore()
+        editorSettingsStore: EditorSettingsStore = EditorSettingsStore(),
+        closeAction: @escaping () -> Void = {}
     ) {
         self.imageURL = imageURL
         self.capture = capture
         self.editorSettingsStore = editorSettingsStore
+        self.closeAction = closeAction
         self.image = NSImage(contentsOf: imageURL)
         self._editorState = State(initialValue: ScreenshotEditorState(
             originalImageURL: imageURL,
@@ -98,11 +102,13 @@ struct ScreenshotEditorView: View {
                 imageURL: imageURL,
                 annotations: editorState.annotations
             )
+            _ = try saveEditedPNG(pngData)
 
             if EditorClipboard.copyPNGData(pngData) {
-                statusMessage = "Copied"
+                statusMessage = "Saved and copied image to clipboard"
+                closeAfterShowingSuccess()
             } else {
-                statusMessage = "Copy failed"
+                statusMessage = "Saved, but copy failed"
             }
         } catch {
             statusMessage = error.localizedDescription
@@ -115,15 +121,32 @@ struct ScreenshotEditorView: View {
                 imageURL: imageURL,
                 annotations: editorState.annotations
             )
-            let editedFileURL = try EditorFileSaver().saveEditedPNG(
-                pngData,
-                originalFileName: capture?.fileName ?? imageURL.lastPathComponent,
-                capture: capture
-            )
+            let editedFileURL = try saveEditedPNG(pngData)
 
-            statusMessage = "Saved \(editedFileURL.lastPathComponent)"
+            if EditorClipboard.copyString(editedFileURL.fileSystemPath) {
+                statusMessage = "Saved; path copied to clipboard"
+                closeAfterShowingSuccess()
+            } else {
+                statusMessage = "Saved, but path copy failed"
+            }
         } catch {
             statusMessage = error.localizedDescription
+        }
+    }
+
+    private func saveEditedPNG(_ pngData: Data) throws -> URL {
+        try EditorFileSaver().saveEditedPNG(
+            pngData,
+            originalFileName: capture?.fileName ?? imageURL.lastPathComponent,
+            capture: capture
+        )
+    }
+
+    private func closeAfterShowingSuccess() {
+        let closeAction = closeAction
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.successfulActionCloseDelay) {
+            closeAction()
         }
     }
 

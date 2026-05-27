@@ -39,9 +39,7 @@ struct EditorFileSaver {
 
         try pngData.write(to: editedFileURL, options: .atomic)
 
-        if let capture {
-            try metadataStore?.updateEditedFilePath(for: capture, editedFileURL: editedFileURL)
-        }
+        try metadataStore?.saveEditedCapture(editedFileURL: editedFileURL, sourceCapture: capture)
 
         return editedFileURL
     }
