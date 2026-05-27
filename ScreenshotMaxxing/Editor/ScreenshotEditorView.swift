@@ -11,15 +11,25 @@ struct ScreenshotEditorView: View {
     let imageURL: URL
     private let capture: Capture?
     private let image: NSImage?
+    private let editorSettingsStore: EditorSettingsStore
     @State private var editorState: ScreenshotEditorState
     @State private var draftBlurRect: CGRect?
+    @State private var draftStroke: AnnotationStroke?
     @State private var statusMessage: String?
 
-    init(imageURL: URL, capture: Capture? = nil) {
+    init(
+        imageURL: URL,
+        capture: Capture? = nil,
+        editorSettingsStore: EditorSettingsStore = EditorSettingsStore()
+    ) {
         self.imageURL = imageURL
         self.capture = capture
+        self.editorSettingsStore = editorSettingsStore
         self.image = NSImage(contentsOf: imageURL)
-        self._editorState = State(initialValue: ScreenshotEditorState(originalImageURL: imageURL))
+        self._editorState = State(initialValue: ScreenshotEditorState(
+            originalImageURL: imageURL,
+            strokeToolSettings: editorSettingsStore.strokeToolSettings()
+        ))
     }
 
     var body: some View {
@@ -28,6 +38,21 @@ struct ScreenshotEditorView: View {
                 VStack(spacing: 0) {
                     EditorToolbar(
                         selectedTool: $editorState.selectedTool,
+                        selectedStrokeColor: Binding(
+                            get: { editorState.selectedStrokeColor },
+                            set: {
+                                editorState.updateSelectedStrokeColor($0)
+                                persistStrokeToolSettings()
+                            }
+                        ),
+                        selectedStrokeLineWidth: Binding(
+                            get: { editorState.selectedStrokeLineWidth },
+                            set: {
+                                editorState.updateSelectedStrokeLineWidth($0)
+                                persistStrokeToolSettings()
+                            }
+                        ),
+                        showsStrokeControls: editorState.selectedTool.showsStrokeControls || editorState.selectedAnnotationUsesStrokeStyle,
                         selectedAnnotationID: editorState.selectedAnnotationID,
                         statusMessage: statusMessage,
                         deleteAction: removeSelectedAnnotation,
@@ -38,7 +63,8 @@ struct ScreenshotEditorView: View {
                     ScreenshotImageCanvas(
                         image: image,
                         editorState: $editorState,
-                        draftBlurRect: $draftBlurRect
+                        draftBlurRect: $draftBlurRect,
+                        draftStroke: $draftStroke
                     )
                 }
             } else {
@@ -104,12 +130,21 @@ struct ScreenshotEditorView: View {
     private func removeSelectedAnnotation() {
         editorState.removeSelectedAnnotation()
     }
+
+    private func persistStrokeToolSettings() {
+        do {
+            try editorSettingsStore.saveStrokeToolSettings(editorState.strokeToolSettings)
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
 }
 
 struct ScreenshotImageCanvas: View {
     let image: NSImage
     @Binding var editorState: ScreenshotEditorState
     @Binding var draftBlurRect: CGRect?
+    @Binding var draftStroke: AnnotationStroke?
     @State private var activeAnnotationDrag: AnnotationDrag?
 
     var body: some View {
@@ -131,17 +166,15 @@ struct ScreenshotImageCanvas: View {
                     .accessibilityLabel("Screenshot")
 
                 ForEach(editorState.annotations) { annotation in
-                    if annotation.type == .blur {
-                        RedactionPreviewOverlay(
-                            image: image,
-                            imageFrame: geometry.imageRect,
-                            containerSize: proxy.size,
-                            rect: geometry.viewRect(forImageRect: annotation.rect),
-                            blurRadius: previewBlurRadius,
-                            isSelected: annotation.id == editorState.selectedAnnotationID,
-                            isDraft: false
-                        )
-                    }
+                    AnnotationPreviewOverlay(
+                        annotation: annotation,
+                        image: image,
+                        imageFrame: geometry.imageRect,
+                        containerSize: proxy.size,
+                        geometry: geometry,
+                        blurRadius: previewBlurRadius,
+                        isSelected: annotation.id == editorState.selectedAnnotationID
+                    )
                 }
 
                 if let draftBlurRect {
@@ -151,6 +184,16 @@ struct ScreenshotImageCanvas: View {
                         containerSize: proxy.size,
                         rect: geometry.viewRect(forImageRect: draftBlurRect),
                         blurRadius: previewBlurRadius,
+                        isSelected: false,
+                        isDraft: true
+                    )
+                }
+
+                if let draftStroke {
+                    StrokePreviewOverlay(
+                        stroke: draftStroke,
+                        geometry: geometry,
+                        selectionRect: geometry.viewRect(forImageRect: draftStroke.visibleBounds),
                         isSelected: false,
                         isDraft: true
                     )
@@ -178,39 +221,94 @@ struct ScreenshotImageCanvas: View {
                     )
                     updateActiveAnnotationDrag(activeAnnotationDrag, by: translation)
                     draftBlurRect = nil
+                    draftStroke = nil
                     return
                 }
 
-                guard editorState.selectedTool == .blur else {
+                switch editorState.selectedTool {
+                case .blur:
+                    draftStroke = nil
+                    draftBlurRect = geometry.imageRect(
+                        fromViewStart: value.startLocation,
+                        toViewEnd: value.location
+                    )
+                case .pen, .highlighter:
                     draftBlurRect = nil
-                    return
+                    updateDraftStroke(with: value, geometry: geometry)
+                case .select, .rectangle, .arrow, .text:
+                    draftBlurRect = nil
+                    draftStroke = nil
                 }
-
-                draftBlurRect = geometry.imageRect(
-                    fromViewStart: value.startLocation,
-                    toViewEnd: value.location
-                )
             }
             .onEnded { value in
                 defer {
                     activeAnnotationDrag = nil
                     draftBlurRect = nil
+                    draftStroke = nil
                 }
 
                 guard activeAnnotationDrag == nil else {
                     return
                 }
 
-                guard editorState.selectedTool == .blur,
-                      let imageRect = geometry.imageRect(
+                if editorState.selectedTool == .blur,
+                   let imageRect = geometry.imageRect(
                         fromViewStart: value.startLocation,
                         toViewEnd: value.location
-                      ) else {
+                   ) {
+                    editorState.addBlurRect(imageRect)
                     return
                 }
 
-                editorState.addBlurRect(imageRect)
+                guard let strokeKind = editorState.selectedTool.strokeKind else {
+                    return
+                }
+
+                let strokeStyle = editorState.strokeStyle(for: strokeKind)
+                let strokePoints = draftStroke?.points ?? strokePoints(from: value, geometry: geometry)
+                editorState.addStroke(
+                    kind: strokeKind,
+                    points: strokePoints,
+                    color: strokeStyle.color,
+                    lineWidth: strokeStyle.lineWidth
+                )
             }
+    }
+
+    private func updateDraftStroke(with value: DragGesture.Value, geometry: ImageCanvasGeometry) {
+        guard let strokeKind = editorState.selectedTool.strokeKind,
+              let imagePoint = geometry.imagePoint(forViewPoint: value.location) else {
+            return
+        }
+
+        if var draftStroke {
+            if draftStroke.points.last != imagePoint {
+                draftStroke.points.append(imagePoint)
+                self.draftStroke = draftStroke
+            }
+            return
+        }
+
+        guard let startImagePoint = geometry.imagePoint(forViewPoint: value.startLocation) else {
+            return
+        }
+
+        let strokeStyle = editorState.strokeStyle(for: strokeKind)
+        draftStroke = AnnotationStroke(
+            kind: strokeKind,
+            points: [startImagePoint, imagePoint],
+            color: strokeStyle.color,
+            lineWidth: strokeStyle.lineWidth
+        )
+    }
+
+    private func strokePoints(from value: DragGesture.Value, geometry: ImageCanvasGeometry) -> [CGPoint] {
+        guard let startImagePoint = geometry.imagePoint(forViewPoint: value.startLocation),
+              let endImagePoint = geometry.imagePoint(forViewPoint: value.location) else {
+            return []
+        }
+
+        return [startImagePoint, endImagePoint]
     }
 
     private func selectTapGesture(geometry: ImageCanvasGeometry) -> some Gesture {
@@ -235,7 +333,7 @@ struct ScreenshotImageCanvas: View {
            let resizeHandle = resizeHandle(at: startLocation, geometry: geometry) {
             return AnnotationDrag(
                 annotationID: selectedAnnotationID,
-                originalRect: annotation.rect,
+                originalAnnotation: annotation,
                 resizeHandle: resizeHandle
             )
         }
@@ -246,7 +344,7 @@ struct ScreenshotImageCanvas: View {
             return nil
         }
 
-        return AnnotationDrag(annotationID: annotationID, originalRect: annotation.rect)
+        return AnnotationDrag(annotationID: annotationID, originalAnnotation: annotation)
     }
 
     private func resizeHandle(at viewPoint: CGPoint, geometry: ImageCanvasGeometry) -> AnnotationResizeHandle? {
@@ -266,7 +364,7 @@ struct ScreenshotImageCanvas: View {
         if let resizeHandle = annotationDrag.resizeHandle {
             editorState.resizeAnnotation(
                 id: annotationDrag.annotationID,
-                from: annotationDrag.originalRect,
+                from: annotationDrag.originalAnnotation,
                 handle: resizeHandle,
                 by: translation,
                 within: image.pixelSize
@@ -274,7 +372,7 @@ struct ScreenshotImageCanvas: View {
         } else {
             editorState.moveAnnotation(
                 id: annotationDrag.annotationID,
-                from: annotationDrag.originalRect,
+                from: annotationDrag.originalAnnotation,
                 by: translation,
                 within: image.pixelSize
             )
@@ -284,7 +382,7 @@ struct ScreenshotImageCanvas: View {
 
 private struct AnnotationDrag: Equatable {
     let annotationID: UUID
-    let originalRect: CGRect
+    let originalAnnotation: Annotation
     var resizeHandle: AnnotationResizeHandle? = nil
 }
 
@@ -328,6 +426,88 @@ private extension AnnotationResizeHandle {
     }
 }
 
+private struct AnnotationPreviewOverlay: View {
+    let annotation: Annotation
+    let image: NSImage
+    let imageFrame: CGRect
+    let containerSize: CGSize
+    let geometry: ImageCanvasGeometry
+    let blurRadius: CGFloat
+    let isSelected: Bool
+
+    var body: some View {
+        switch annotation.type {
+        case .blur:
+            RedactionPreviewOverlay(
+                image: image,
+                imageFrame: imageFrame,
+                containerSize: containerSize,
+                rect: geometry.viewRect(forImageRect: annotation.rect),
+                blurRadius: blurRadius,
+                isSelected: isSelected,
+                isDraft: false
+            )
+        case .stroke(let stroke):
+            StrokePreviewOverlay(
+                stroke: stroke,
+                geometry: geometry,
+                selectionRect: geometry.viewRect(forImageRect: annotation.rect),
+                isSelected: isSelected,
+                isDraft: false
+            )
+        case .rectangle, .arrow, .text:
+            EmptyView()
+        }
+    }
+}
+
+private struct StrokePreviewOverlay: View {
+    let stroke: AnnotationStroke
+    let geometry: ImageCanvasGeometry
+    let selectionRect: CGRect
+    let isSelected: Bool
+    let isDraft: Bool
+
+    var body: some View {
+        let lineWidth = max(geometry.viewDistance(forImageDistance: Double(stroke.lineWidth)), 1)
+
+        Path { path in
+            guard let firstPoint = stroke.points.first else {
+                return
+            }
+
+            path.move(to: geometry.viewPoint(forImagePoint: firstPoint))
+            for point in stroke.points.dropFirst() {
+                path.addLine(to: geometry.viewPoint(forImagePoint: point))
+            }
+        }
+        .stroke(
+            Color(annotationColor: stroke.color).opacity(stroke.opacity),
+            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+        )
+        .overlay(alignment: .topLeading) {
+            if isSelected || isDraft {
+                Rectangle()
+                    .strokeBorder(
+                        Color.accentColor,
+                        style: StrokeStyle(lineWidth: 2, dash: isDraft ? [6, 4] : [])
+                    )
+                    .frame(width: selectionRect.width, height: selectionRect.height)
+                    .offset(x: selectionRect.minX, y: selectionRect.minY)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if isSelected && !isDraft {
+                ForEach(AnnotationResizeHandle.allCases, id: \.self) { handle in
+                    ResizeHandleView()
+                        .position(handle.viewPosition(in: selectionRect))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 private struct RedactionPreviewOverlay: View {
     let image: NSImage
     let imageFrame: CGRect
@@ -344,7 +524,7 @@ private struct RedactionPreviewOverlay: View {
                 .interpolation(.high)
                 .frame(width: imageFrame.width, height: imageFrame.height)
                 .position(x: imageFrame.midX, y: imageFrame.midY)
-                .blur(radius: blurRadius)
+                .blur(radius: blurRadius, opaque: true)
         }
         .frame(width: containerSize.width, height: containerSize.height, alignment: .topLeading)
         .mask(alignment: .topLeading) {
@@ -392,6 +572,9 @@ private struct ResizeHandleView: View {
 
 private struct EditorToolbar: View {
     @Binding var selectedTool: EditorTool
+    @Binding var selectedStrokeColor: AnnotationColor
+    @Binding var selectedStrokeLineWidth: CGFloat
+    let showsStrokeControls: Bool
     let selectedAnnotationID: UUID?
     let statusMessage: String?
     let deleteAction: () -> Void
@@ -411,6 +594,16 @@ private struct EditorToolbar: View {
                 }
             }
 
+            if showsStrokeControls {
+                Divider()
+                    .frame(height: 22)
+
+                StrokeControls(
+                    selectedColor: $selectedStrokeColor,
+                    selectedLineWidth: $selectedStrokeLineWidth
+                )
+            }
+
             Spacer()
 
             if let statusMessage {
@@ -421,7 +614,7 @@ private struct EditorToolbar: View {
 
             ToolbarIconButton(
                 systemImageName: "trash",
-                helpText: selectedAnnotationID == nil ? "Select a redaction to remove it" : "Remove selected redaction",
+                helpText: selectedAnnotationID == nil ? "Select an annotation to remove it" : "Remove selected annotation",
                 action: deleteAction
             )
             .disabled(selectedAnnotationID == nil)
@@ -468,6 +661,77 @@ private struct ToolButton: View {
     }
 }
 
+private struct StrokeControls: View {
+    @Binding var selectedColor: AnnotationColor
+    @Binding var selectedLineWidth: CGFloat
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 5) {
+                ForEach(AnnotationColor.palette, id: \.self) { color in
+                    ColorSwatchButton(
+                        color: color,
+                        isSelected: selectedColor == color
+                    ) {
+                        selectedColor = color
+                    }
+                }
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "lineweight")
+                    .foregroundStyle(.secondary)
+
+                Slider(
+                    value: Binding(
+                        get: { Double(selectedLineWidth) },
+                        set: { selectedLineWidth = CGFloat($0) }
+                    ),
+                    in: Double(ScreenshotEditorState.minimumStrokeLineWidth)...Double(ScreenshotEditorState.maximumStrokeLineWidth),
+                    step: 1
+                )
+                .frame(width: 104)
+
+                Text("\(Int(selectedLineWidth.rounded()))")
+                    .monospacedDigit()
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, alignment: .trailing)
+            }
+            .help("Line thickness")
+        }
+    }
+}
+
+private struct ColorSwatchButton: View {
+    let color: AnnotationColor
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(Color(annotationColor: color))
+                .overlay {
+                    Circle()
+                        .strokeBorder(Color.primary.opacity(0.18), lineWidth: 1)
+                }
+                .overlay {
+                    if isSelected {
+                        Circle()
+                            .strokeBorder(Color.accentColor, lineWidth: 3)
+                            .padding(-3)
+                    }
+                }
+                .frame(width: 18, height: 18)
+        }
+        .buttonStyle(.plain)
+        .frame(width: 24, height: 24)
+        .accessibilityLabel("Stroke color")
+        .help("Stroke color")
+    }
+}
+
 private struct ToolbarIconButton: View {
     let systemImageName: String
     let helpText: String
@@ -481,6 +745,16 @@ private struct ToolbarIconButton: View {
         .buttonStyle(.bordered)
         .accessibilityLabel(helpText)
         .help(helpText)
+    }
+}
+
+private extension Color {
+    init(annotationColor: AnnotationColor) {
+        self.init(
+            red: Double(annotationColor.red),
+            green: Double(annotationColor.green),
+            blue: Double(annotationColor.blue)
+        )
     }
 }
 

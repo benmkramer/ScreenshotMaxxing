@@ -10,11 +10,13 @@ import Foundation
 enum EditorTool: String, CaseIterable, Identifiable {
     case select
     case blur
+    case pen
+    case highlighter
     case rectangle
     case arrow
     case text
 
-    static let implementedTools: [EditorTool] = [.select, .blur]
+    static let implementedTools: [EditorTool] = [.select, .blur, .pen, .highlighter]
 
     var id: String {
         rawValue
@@ -26,6 +28,10 @@ enum EditorTool: String, CaseIterable, Identifiable {
             "Select"
         case .blur:
             "Blur"
+        case .pen:
+            "Pen"
+        case .highlighter:
+            "Highlighter"
         case .rectangle:
             "Rectangle"
         case .arrow:
@@ -40,7 +46,11 @@ enum EditorTool: String, CaseIterable, Identifiable {
         case .select:
             "cursorarrow"
         case .blur:
-            "drop"
+            "eye.slash"
+        case .pen:
+            "pencil.tip"
+        case .highlighter:
+            "highlighter"
         case .rectangle:
             "rectangle"
         case .arrow:
@@ -53,9 +63,13 @@ enum EditorTool: String, CaseIterable, Identifiable {
     var helpText: String {
         switch self {
         case .select:
-            "Select a redaction"
+            "Select an annotation"
         case .blur:
             "Draw a blur redaction"
+        case .pen:
+            "Draw a solid line"
+        case .highlighter:
+            "Draw a translucent highlight"
         case .rectangle:
             "Draw a rectangle"
         case .arrow:
@@ -63,5 +77,20 @@ enum EditorTool: String, CaseIterable, Identifiable {
         case .text:
             "Add text"
         }
+    }
+
+    var strokeKind: AnnotationStrokeKind? {
+        switch self {
+        case .pen:
+            .pen
+        case .highlighter:
+            .highlighter
+        case .select, .blur, .rectangle, .arrow, .text:
+            nil
+        }
+    }
+
+    var showsStrokeControls: Bool {
+        strokeKind != nil
     }
 }

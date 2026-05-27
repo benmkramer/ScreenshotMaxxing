@@ -6,6 +6,7 @@
 //
 
 import CoreImage
+import CoreGraphics
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -23,7 +24,7 @@ struct ImageRenderer {
 
     func renderPNG(imageURL: URL, annotations: [Annotation]) throws -> Data {
         let sourceImage = try loadImage(from: imageURL)
-        let renderedImage = render(sourceImage: sourceImage, annotations: annotations)
+        let renderedImage = try render(sourceImage: sourceImage, annotations: annotations)
 
         guard let cgImage = context.createCGImage(renderedImage, from: sourceImage.extent) else {
             throw ImageRendererError.renderFailed
@@ -32,31 +33,16 @@ struct ImageRenderer {
         return try pngData(from: cgImage)
     }
 
-    func render(sourceImage: CIImage, annotations: [Annotation]) -> CIImage {
-        let blurRects = annotations.compactMap { annotation -> CGRect? in
-            guard annotation.type == .blur else {
-                return nil
+    func render(sourceImage: CIImage, annotations: [Annotation]) throws -> CIImage {
+        try annotations.reduce(sourceImage.cropped(to: sourceImage.extent)) { currentImage, annotation in
+            switch annotation.type {
+            case .blur:
+                renderBlur(on: currentImage, imageRect: annotation.rect)
+            case .stroke(let stroke):
+                try renderStroke(stroke, over: currentImage)
+            case .rectangle, .arrow, .text:
+                currentImage
             }
-
-            return coreImageRect(forImageRect: annotation.rect, imageHeight: sourceImage.extent.height)
-                .intersection(sourceImage.extent)
-        }
-        let usableBlurRects = blurRects.filter { !$0.isNull && $0.width > 0 && $0.height > 0 }
-
-        guard !usableBlurRects.isEmpty else {
-            return sourceImage.cropped(to: sourceImage.extent)
-        }
-
-        let blurredImage = sourceImage
-            .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: blurRadius])
-            .cropped(to: sourceImage.extent)
-
-        return usableBlurRects.reduce(sourceImage) { currentImage, blurRect in
-            blurredImage
-                .cropped(to: blurRect)
-                .composited(over: currentImage)
-                .cropped(to: sourceImage.extent)
         }
     }
 
@@ -100,6 +86,80 @@ struct ImageRenderer {
 
         return data as Data
     }
+
+    private func renderBlur(on image: CIImage, imageRect: CGRect) -> CIImage {
+        let blurRect = coreImageRect(forImageRect: imageRect, imageHeight: image.extent.height)
+            .intersection(image.extent)
+
+        guard !blurRect.isNull, blurRect.width > 0, blurRect.height > 0 else {
+            return image.cropped(to: image.extent)
+        }
+
+        let blurredImage = image
+            .clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: blurRadius])
+            .cropped(to: image.extent)
+
+        return blurredImage
+            .cropped(to: blurRect)
+            .composited(over: image)
+            .cropped(to: image.extent)
+    }
+
+    private func renderStroke(_ stroke: AnnotationStroke, over image: CIImage) throws -> CIImage {
+        guard stroke.points.count > 1, stroke.hasVisibleLength else {
+            return image.cropped(to: image.extent)
+        }
+
+        let width = Int(image.extent.width.rounded(.up))
+        let height = Int(image.extent.height.rounded(.up))
+
+        guard width > 0, height > 0,
+              let cgImage = context.createCGImage(image, from: image.extent),
+              let bitmapContext = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
+            throw ImageRendererError.renderFailed
+        }
+
+        bitmapContext.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        draw(stroke, in: bitmapContext, imageHeight: CGFloat(height))
+
+        guard let renderedCGImage = bitmapContext.makeImage() else {
+            throw ImageRendererError.renderFailed
+        }
+
+        return CIImage(cgImage: renderedCGImage).cropped(to: image.extent)
+    }
+
+    private func draw(_ stroke: AnnotationStroke, in context: CGContext, imageHeight: CGFloat) {
+        guard let firstPoint = stroke.points.first else {
+            return
+        }
+
+        context.saveGState()
+        context.translateBy(x: 0, y: imageHeight)
+        context.scaleBy(x: 1, y: -1)
+        context.setBlendMode(.normal)
+        context.setStrokeColor(stroke.color.cgColor(opacity: stroke.opacity))
+        context.setLineWidth(stroke.lineWidth)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+
+        context.beginPath()
+        context.move(to: firstPoint)
+        for point in stroke.points.dropFirst() {
+            context.addLine(to: point)
+        }
+        context.strokePath()
+        context.restoreGState()
+    }
 }
 
 enum ImageRendererError: LocalizedError, Equatable {
@@ -113,5 +173,11 @@ enum ImageRendererError: LocalizedError, Equatable {
         case .renderFailed:
             "Could not render edited image."
         }
+    }
+}
+
+private extension AnnotationColor {
+    func cgColor(opacity: CGFloat) -> CGColor {
+        CGColor(red: red, green: green, blue: blue, alpha: opacity)
     }
 }
