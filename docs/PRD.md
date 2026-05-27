@@ -155,28 +155,28 @@ ScreenshotMaxxing/
 
 ## Build TODOs
 
-| ID | Chunk | Goal | Done When |
-|---|---|---|---|
-| 1 | Project cleanup | Remove starter/sample code and establish folders | App builds after cleanup |
-| 2 | App shell | Add AppKit app delegate to SwiftUI app | App launches normally |
-| 3 | Menu bar | Add menu bar status item with basic menu | Menu shows Capture Area, Capture Window, Capture Fullscreen, History, Preferences, Quit |
-| 4 | Capture file storage | Create app support folders for original/edited captures | App can create and write to capture folders |
-| 5 | Area capture | Invoke macOS area selection and save PNG | Dragging an area creates a screenshot file |
-| 6 | Window/fullscreen capture | Add remaining capture modes | All three capture modes produce files |
-| 7 | SwiftData capture model | Replace starter model with `Capture` | Successful captures create persisted metadata |
-| 8 | Editor window | Open captured image in editor window | Capture immediately displays in editor |
-| 9 | Editor canvas | Display screenshot with correct scaling | Image fits window without distortion |
-| 10 | Blur annotation model | Represent blur rectangles separately from image pixels | Drawing state stores one or more blur rects |
-| 11 | Draw blur rectangles | Let user drag to place blur regions | User can draw visible blur selection rectangles |
-| 12 | Render redactions | Bake blur into exported bitmap | Saved/copied image contains actual blurred pixels |
-| 13 | Copy action | Copy edited image to clipboard | Paste into another app shows edited image |
-| 14 | Save action | Save edited image to `edited/` folder | Edited file path is written and metadata updates |
-| 15 | Basic history | Show recent captures from SwiftData | Relaunch app and previous captures still appear |
-| 16 | Reopen from history | Open a past capture in viewer/editor | Clicking history item opens its image |
-| 17 | Global hotkey | Register default capture-area shortcut | Keyboard shortcut starts area capture |
-| 18 | Preferences | Show shortcut and default save settings | Preferences window opens and displays app settings |
-| 19 | Shortcut configuration | Let user change area capture shortcut | New shortcut persists and works after relaunch |
-| 20 | Polish pass | Improve empty states, errors, menu labels, window titles | App feels coherent for local daily use |
+| ID | Status | Chunk | Goal | Done When |
+|---|---|---|---|---|
+| 1 | Done | Project cleanup | Remove starter/sample code and establish folders | App builds after cleanup |
+| 2 | Pending | App shell | Add AppKit app delegate to SwiftUI app | App launches normally |
+| 3 | Pending | Menu bar | Add menu bar status item with basic menu | Menu shows Capture Area, Capture Window, Capture Fullscreen, History, Preferences, Quit |
+| 4 | Pending | Capture file storage | Create app support folders for original/edited captures | App can create and write to capture folders |
+| 5 | Pending | Area capture | Invoke macOS area selection and save PNG | Dragging an area creates a screenshot file |
+| 6 | Pending | Window/fullscreen capture | Add remaining capture modes | All three capture modes produce files |
+| 7 | Pending | SwiftData capture model | Replace starter model with `Capture` | Successful captures create persisted metadata |
+| 8 | Pending | Editor window | Open captured image in editor window | Capture immediately displays in editor |
+| 9 | Pending | Editor canvas | Display screenshot with correct scaling | Image fits window without distortion |
+| 10 | Pending | Blur annotation model | Represent blur rectangles separately from image pixels | Drawing state stores one or more blur rects |
+| 11 | Pending | Draw blur rectangles | Let user drag to place blur regions | User can draw visible blur selection rectangles |
+| 12 | Pending | Render redactions | Bake blur into exported bitmap | Saved/copied image contains actual blurred pixels |
+| 13 | Pending | Copy action | Copy edited image to clipboard | Paste into another app shows edited image |
+| 14 | Pending | Save action | Save edited image to `edited/` folder | Edited file path is written and metadata updates |
+| 15 | Pending | Basic history | Show recent captures from SwiftData | Relaunch app and previous captures still appear |
+| 16 | Pending | Reopen from history | Open a past capture in viewer/editor | Clicking history item opens its image |
+| 17 | Pending | Global hotkey | Register default capture-area shortcut | Keyboard shortcut starts area capture |
+| 18 | Pending | Preferences | Show shortcut and default save settings | Preferences window opens and displays app settings |
+| 19 | Pending | Shortcut configuration | Let user change area capture shortcut | New shortcut persists and works after relaunch |
+| 20 | Pending | Polish pass | Improve empty states, errors, menu labels, window titles | App feels coherent for local daily use |
 
 ## Chunk Details
 
