@@ -16,6 +16,10 @@ struct GlobalKeyboardShortcut: Codable, Equatable {
         keyCode: UInt32(kVK_ANSI_5),
         carbonModifiers: UInt32(controlKey | shiftKey)
     )
+    static let commandShiftAreaCapture = GlobalKeyboardShortcut(
+        keyCode: UInt32(kVK_ANSI_4),
+        carbonModifiers: UInt32(cmdKey | shiftKey)
+    )
 
     init(keyCode: UInt32, carbonModifiers: UInt32) {
         self.keyCode = keyCode
@@ -147,13 +151,15 @@ enum HotKeyManagerError: LocalizedError, Equatable {
 
 final class HotKeyManager {
     static let areaCaptureHotKeyID: UInt32 = 1
+    static let commandShiftAreaCaptureHotKeyID: UInt32 = 2
     private static let hotKeySignature = OSType(0x534D6178) // SMax
 
     private let actionHandler: () -> Void
     private var eventHandlerRef: EventHandlerRef?
-    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyRefs: [UInt32: EventHotKeyRef] = [:]
 
     private(set) var registeredShortcut: GlobalKeyboardShortcut?
+    private(set) var registeredCommandShiftAreaShortcut: GlobalKeyboardShortcut?
 
     init(actionHandler: @escaping () -> Void) {
         self.actionHandler = actionHandler
@@ -164,12 +170,55 @@ final class HotKeyManager {
     }
 
     func registerAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut = .defaultAreaCapture) throws {
-        unregisterAreaCaptureShortcut()
+        unregisterHotKey(id: Self.areaCaptureHotKeyID)
         try installEventHandlerIfNeeded()
+        try registerHotKey(shortcut, id: Self.areaCaptureHotKeyID)
 
+        registeredShortcut = shortcut
+    }
+
+    func registerCommandShiftAreaCaptureShortcut() throws {
+        unregisterHotKey(id: Self.commandShiftAreaCaptureHotKeyID)
+
+        guard registeredShortcut != .commandShiftAreaCapture else {
+            registeredCommandShiftAreaShortcut = nil
+            return
+        }
+
+        try installEventHandlerIfNeeded()
+        try registerHotKey(.commandShiftAreaCapture, id: Self.commandShiftAreaCaptureHotKeyID)
+
+        registeredCommandShiftAreaShortcut = .commandShiftAreaCapture
+    }
+
+    func unregisterAreaCaptureShortcut() {
+        unregisterHotKey(id: Self.areaCaptureHotKeyID)
+        unregisterHotKey(id: Self.commandShiftAreaCaptureHotKeyID)
+        registeredShortcut = nil
+        registeredCommandShiftAreaShortcut = nil
+    }
+
+    func invalidate() {
+        unregisterAreaCaptureShortcut()
+
+        if let eventHandlerRef {
+            RemoveEventHandler(eventHandlerRef)
+            self.eventHandlerRef = nil
+        }
+    }
+
+    func handleHotKeyPressed(id: UInt32) {
+        guard id == Self.areaCaptureHotKeyID || id == Self.commandShiftAreaCaptureHotKeyID else {
+            return
+        }
+
+        actionHandler()
+    }
+
+    private func registerHotKey(_ shortcut: GlobalKeyboardShortcut, id: UInt32) throws {
         let hotKeyID = EventHotKeyID(
             signature: Self.hotKeySignature,
-            id: Self.areaCaptureHotKeyID
+            id: id
         )
         var newHotKeyRef: EventHotKeyRef?
         let status = RegisterEventHotKey(
@@ -185,34 +234,19 @@ final class HotKeyManager {
             throw HotKeyManagerError.hotKeyRegistrationFailed(status)
         }
 
-        hotKeyRef = newHotKeyRef
-        registeredShortcut = shortcut
+        hotKeyRefs[id] = newHotKeyRef
     }
 
-    func unregisterAreaCaptureShortcut() {
-        if let hotKeyRef {
+    private func unregisterHotKey(id: UInt32) {
+        if let hotKeyRef = hotKeyRefs.removeValue(forKey: id) {
             UnregisterEventHotKey(hotKeyRef)
-            self.hotKeyRef = nil
         }
 
-        registeredShortcut = nil
-    }
-
-    func invalidate() {
-        unregisterAreaCaptureShortcut()
-
-        if let eventHandlerRef {
-            RemoveEventHandler(eventHandlerRef)
-            self.eventHandlerRef = nil
+        if id == Self.areaCaptureHotKeyID {
+            registeredShortcut = nil
+        } else if id == Self.commandShiftAreaCaptureHotKeyID {
+            registeredCommandShiftAreaShortcut = nil
         }
-    }
-
-    func handleHotKeyPressed(id: UInt32) {
-        guard id == Self.areaCaptureHotKeyID else {
-            return
-        }
-
-        actionHandler()
     }
 
     private func installEventHandlerIfNeeded() throws {

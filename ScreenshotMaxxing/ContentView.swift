@@ -18,7 +18,7 @@ struct ContentView: View {
             Text("ScreenshotMaxxing")
                 .font(.title2.weight(.semibold))
 
-            Text("Use the menu bar or Control-Shift-5 to capture an area.")
+            Text("Use the menu bar or Command-Shift-4 to drag-select an area.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }

@@ -90,6 +90,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             presentError(error, title: "Shortcut Unavailable")
         }
+
+        registerCommandShiftAreaCaptureHotKey()
     }
 
     private func updateAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) -> Bool {
@@ -97,10 +99,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try hotKeyManager?.registerAreaCaptureShortcut(shortcut)
             try shortcutSettingsStore.saveAreaCaptureShortcut(shortcut)
             menuBarController?.updateAreaCaptureShortcut(shortcut)
+            registerCommandShiftAreaCaptureHotKey()
             return true
         } catch {
             presentError(error, title: "Shortcut Unavailable")
             return false
+        }
+    }
+
+    private func registerCommandShiftAreaCaptureHotKey() {
+        do {
+            try hotKeyManager?.registerCommandShiftAreaCaptureShortcut()
+        } catch {
+            presentError(error, title: "Command-Shift-4 Unavailable")
         }
     }
 

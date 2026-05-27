@@ -121,6 +121,14 @@ struct ScreenshotMaxxingTests {
         #expect(shortcut.displayString == "Control-Shift-5")
     }
 
+    @Test func commandShiftFourStartsAreaCaptureShortcut() {
+        let shortcut = GlobalKeyboardShortcut.commandShiftAreaCapture
+
+        #expect(shortcut.keyCode == UInt32(kVK_ANSI_4))
+        #expect(shortcut.carbonModifiers == UInt32(cmdKey | shiftKey))
+        #expect(shortcut.displayString == "Shift-Command-4")
+    }
+
     @MainActor
     @Test func menuBarMenuReflectsCustomAreaCaptureShortcut() {
         let shortcut = GlobalKeyboardShortcut(
@@ -133,7 +141,18 @@ struct ScreenshotMaxxingTests {
         }
 
         #expect(visibleTitles == MenuBarController.visibleMenuTitles(areaCaptureShortcut: shortcut))
-        #expect(visibleTitles.first == "Capture Area (Option-Command-A)")
+        #expect(visibleTitles.first == "Capture Area (Shift-Command-4 or Option-Command-A)")
+    }
+
+    @MainActor
+    @Test func menuBarMenuDoesNotRepeatCommandShiftFourWhenItIsCustomShortcut() {
+        let menu = MenuBarController.makeMenu(target: nil, areaCaptureShortcut: .commandShiftAreaCapture)
+        let visibleTitles = menu.items.compactMap { item in
+            item.isSeparatorItem ? nil : item.title
+        }
+
+        #expect(visibleTitles == MenuBarController.visibleMenuTitles(areaCaptureShortcut: .commandShiftAreaCapture))
+        #expect(visibleTitles.first == "Capture Area (Shift-Command-4)")
     }
 
     @Test func editorToolbarOnlyShowsImplementedTools() {
@@ -147,9 +166,10 @@ struct ScreenshotMaxxingTests {
         }
 
         manager.handleHotKeyPressed(id: HotKeyManager.areaCaptureHotKeyID)
+        manager.handleHotKeyPressed(id: HotKeyManager.commandShiftAreaCaptureHotKeyID)
         manager.handleHotKeyPressed(id: 999)
 
-        #expect(triggerCount == 1)
+        #expect(triggerCount == 2)
     }
 
     @MainActor
