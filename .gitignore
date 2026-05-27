@@ -1,0 +1,8 @@
+build/
+dist/
+releases/
+*.xcarchive
+*.dmg
+*.zip
+*.tar.gz
+*.aar
