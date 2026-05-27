@@ -11,6 +11,7 @@ import Foundation
 import SwiftData
 @testable import ScreenshotMaxxing
 
+@Suite(.serialized)
 struct ScreenshotMaxxingTests {
 
     @MainActor
@@ -216,6 +217,95 @@ struct ScreenshotMaxxingTests {
         )
 
         #expect(imageRect == CGRect(x: 50, y: 0, width: 100, height: 100))
+    }
+
+    @MainActor
+    @Test func imageRendererConvertsEditorRectToCoreImageRect() {
+        let renderer = ImageRenderer()
+
+        let coreImageRect = renderer.coreImageRect(
+            forImageRect: CGRect(x: 10, y: 20, width: 30, height: 40),
+            imageHeight: 100
+        )
+
+        #expect(coreImageRect == CGRect(x: 10, y: 40, width: 30, height: 40))
+    }
+
+    @MainActor
+    @Test func imageRendererBakesBlurAnnotationsIntoPNG() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        let originalPNGData = try makeVerticalSplitPNGData(width: 12, height: 8)
+        try originalPNGData.write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let uneditedPNGData = try renderer.renderPNG(imageURL: imageURL, annotations: [])
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [
+                Annotation(type: .blur, rect: CGRect(x: 4, y: 0, width: 4, height: 8))
+            ]
+        )
+        let changedPixels = try (4...7).contains { x in
+            let originalRed = try redChannel(in: uneditedPNGData, x: x, y: 4)
+            let renderedRed = try redChannel(in: renderedPNGData, x: x, y: 4)
+
+            return abs(renderedRed - originalRed) > 0.01
+        }
+
+        #expect(originalPNGData.count > 0)
+        #expect(renderedPNGData != uneditedPNGData)
+        #expect(changedPixels)
+    }
+
+    private func makeVerticalSplitPNGData(width: Int, height: Int) throws -> Data {
+        let imageRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+
+        guard let imageRep else {
+            throw ImageRendererError.renderFailed
+        }
+
+        let black = NSColor(deviceRed: 0, green: 0, blue: 0, alpha: 1)
+        let white = NSColor(deviceRed: 1, green: 1, blue: 1, alpha: 1)
+
+        for y in 0..<height {
+            for x in 0..<width {
+                imageRep.setColor(x < width / 2 ? black : white, atX: x, y: y)
+            }
+        }
+
+        guard let pngData = imageRep.representation(using: .png, properties: [:]) else {
+            throw ImageRendererError.renderFailed
+        }
+
+        return pngData
+    }
+
+    private func redChannel(in pngData: Data, x: Int, y: Int) throws -> CGFloat {
+        guard let imageRep = NSBitmapImageRep(data: pngData),
+              let color = imageRep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+            throw ImageRendererError.renderFailed
+        }
+
+        return color.redComponent
     }
 
 }
