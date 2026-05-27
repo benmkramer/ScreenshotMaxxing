@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKeyManager: HotKeyManager?
     private let captureController = CaptureController()
     private let metadataStore = CaptureMetadataStore()
+    private let shortcutSettingsStore = ShortcutSettingsStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -81,9 +82,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func registerDefaultHotKey() {
         do {
-            try hotKeyManager?.registerAreaCaptureShortcut()
+            try hotKeyManager?.registerAreaCaptureShortcut(shortcutSettingsStore.areaCaptureShortcut())
         } catch {
             presentCaptureError(error)
+        }
+    }
+
+    private func updateAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) -> Bool {
+        do {
+            try hotKeyManager?.registerAreaCaptureShortcut(shortcut)
+            try shortcutSettingsStore.saveAreaCaptureShortcut(shortcut)
+            return true
+        } catch {
+            presentCaptureError(error)
+            return false
         }
     }
 
@@ -130,9 +142,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             let preferences = try PreferencesData.current(
-                areaCaptureShortcut: hotKeyManager?.registeredShortcut ?? .defaultAreaCapture
+                areaCaptureShortcut: hotKeyManager?.registeredShortcut ?? shortcutSettingsStore.areaCaptureShortcut()
             )
-            let hostingController = NSHostingController(rootView: PreferencesView(preferences: preferences))
+            let rootView = PreferencesView(preferences: preferences) { [weak self] shortcut in
+                self?.updateAreaCaptureShortcut(shortcut) ?? false
+            }
+            let hostingController = NSHostingController(rootView: rootView)
             let window = NSWindow(contentViewController: hostingController)
             window.title = "ScreenshotMaxxing Preferences"
             window.setContentSize(NSSize(width: 560, height: 320))

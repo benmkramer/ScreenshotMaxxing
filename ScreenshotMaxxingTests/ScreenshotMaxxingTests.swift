@@ -7,6 +7,7 @@
 
 import Testing
 import AppKit
+import Carbon
 import Foundation
 import SwiftData
 @testable import ScreenshotMaxxing
@@ -154,6 +155,63 @@ struct ScreenshotMaxxingTests {
         #expect(URL(fileURLWithPath: preferences.editedFolderPath).deletingLastPathComponent().lastPathComponent == "Captures")
         #expect(fileManager.fileExists(atPath: preferences.originalsFolderPath))
         #expect(fileManager.fileExists(atPath: preferences.editedFolderPath))
+    }
+
+    @Test func shortcutSettingsStorePersistsAreaCaptureShortcut() throws {
+        let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+        let shortcut = GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_A),
+            carbonModifiers: UInt32(cmdKey | optionKey)
+        )
+
+        let store = ShortcutSettingsStore(userDefaults: userDefaults)
+        try store.saveAreaCaptureShortcut(shortcut)
+
+        let reloadedStore = ShortcutSettingsStore(userDefaults: userDefaults)
+
+        #expect(reloadedStore.areaCaptureShortcut() == shortcut)
+        #expect(reloadedStore.areaCaptureShortcut().displayString == "Option-Command-A")
+    }
+
+    @Test func shortcutCanBeRecordedFromModifiedKeyEvent() throws {
+        let event = try #require(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [.control, .shift],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "7",
+            charactersIgnoringModifiers: "7",
+            isARepeat: false,
+            keyCode: UInt16(kVK_ANSI_7)
+        ))
+
+        #expect(GlobalKeyboardShortcut(event: event) == GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_7),
+            carbonModifiers: UInt32(controlKey | shiftKey)
+        ))
+    }
+
+    @Test func shortcutRecordingRejectsUnmodifiedKeyEvent() throws {
+        let event = try #require(NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            characters: "7",
+            charactersIgnoringModifiers: "7",
+            isARepeat: false,
+            keyCode: UInt16(kVK_ANSI_7)
+        ))
+
+        #expect(GlobalKeyboardShortcut(event: event) == nil)
     }
 
     @MainActor

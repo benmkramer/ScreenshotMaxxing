@@ -8,15 +8,30 @@
 import SwiftUI
 
 struct PreferencesView: View {
-    let preferences: PreferencesData
+    @State private var preferences: PreferencesData
+    private let onShortcutChange: (GlobalKeyboardShortcut) -> Bool
+
+    init(
+        preferences: PreferencesData,
+        onShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true }
+    ) {
+        _preferences = State(initialValue: preferences)
+        self.onShortcutChange = onShortcutChange
+    }
 
     var body: some View {
         Form {
             Section("Capture") {
                 LabeledContent("Area capture shortcut") {
-                    Text(preferences.areaCaptureShortcut.displayString)
-                        .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
+                    ShortcutRecorderView(shortcut: preferences.areaCaptureShortcut) { shortcut in
+                        guard onShortcutChange(shortcut) else {
+                            return false
+                        }
+
+                        preferences = preferences.updatingAreaCaptureShortcut(shortcut)
+                        return true
+                    }
+                    .frame(width: 160)
                 }
             }
 

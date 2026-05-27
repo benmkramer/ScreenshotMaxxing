@@ -28,4 +28,12 @@ struct PreferencesData: Equatable {
             editedFolderPath: directories.edited.path()
         )
     }
+
+    func updatingAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) -> PreferencesData {
+        PreferencesData(
+            areaCaptureShortcut: shortcut,
+            originalsFolderPath: originalsFolderPath,
+            editedFolderPath: editedFolderPath
+        )
+    }
 }

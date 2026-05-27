@@ -17,6 +17,21 @@ struct GlobalKeyboardShortcut: Codable, Equatable {
         carbonModifiers: UInt32(controlKey | shiftKey)
     )
 
+    init(keyCode: UInt32, carbonModifiers: UInt32) {
+        self.keyCode = keyCode
+        self.carbonModifiers = carbonModifiers
+    }
+
+    init?(event: NSEvent) {
+        let carbonModifiers = Self.carbonModifiers(from: event.modifierFlags)
+
+        guard Self.hasActionModifier(carbonModifiers) else {
+            return nil
+        }
+
+        self.init(keyCode: UInt32(event.keyCode), carbonModifiers: carbonModifiers)
+    }
+
     var displayString: String {
         var parts: [String] = []
 
@@ -86,6 +101,33 @@ struct GlobalKeyboardShortcut: Codable, Equatable {
         case kVK_Delete: "Delete"
         default: "Key \(keyCode)"
         }
+    }
+
+    static func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {
+        let flags = flags.intersection(.deviceIndependentFlagsMask)
+        var carbonModifiers: UInt32 = 0
+
+        if flags.contains(.control) {
+            carbonModifiers |= UInt32(controlKey)
+        }
+
+        if flags.contains(.option) {
+            carbonModifiers |= UInt32(optionKey)
+        }
+
+        if flags.contains(.shift) {
+            carbonModifiers |= UInt32(shiftKey)
+        }
+
+        if flags.contains(.command) {
+            carbonModifiers |= UInt32(cmdKey)
+        }
+
+        return carbonModifiers
+    }
+
+    private static func hasActionModifier(_ carbonModifiers: UInt32) -> Bool {
+        carbonModifiers & UInt32(controlKey | optionKey | cmdKey) != 0
     }
 }
 
