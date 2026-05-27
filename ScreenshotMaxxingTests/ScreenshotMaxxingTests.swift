@@ -115,18 +115,25 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureMode.fullscreen.screencaptureArguments(outputURL: outputURL) == ["-x", "/tmp/screenshot.png"])
     }
 
-    @Test func defaultAreaCaptureShortcutUsesControlShiftFive() {
+    @Test func defaultAreaCaptureShortcutUsesControlShiftFour() {
         let shortcut = GlobalKeyboardShortcut.defaultAreaCapture
 
-        #expect(shortcut.displayString == "Control-Shift-5")
+        #expect(shortcut.displayString == "Control-Shift-4")
     }
 
-    @Test func commandShiftFourStartsAreaCaptureShortcut() {
-        let shortcut = GlobalKeyboardShortcut.commandShiftAreaCapture
+    @Test func commandShiftScreenshotShortcutsAreReservedForMacOS() {
+        let commandShiftFour = GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_4),
+            carbonModifiers: UInt32(cmdKey | shiftKey)
+        )
+        let commandShiftFive = GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_5),
+            carbonModifiers: UInt32(cmdKey | shiftKey)
+        )
 
-        #expect(shortcut.keyCode == UInt32(kVK_ANSI_4))
-        #expect(shortcut.carbonModifiers == UInt32(cmdKey | shiftKey))
-        #expect(shortcut.displayString == "Shift-Command-4")
+        #expect(commandShiftFour.isReservedSystemScreenshotShortcut)
+        #expect(commandShiftFive.isReservedSystemScreenshotShortcut)
+        #expect(!GlobalKeyboardShortcut.defaultAreaCapture.isReservedSystemScreenshotShortcut)
     }
 
     @MainActor
@@ -141,18 +148,7 @@ struct ScreenshotMaxxingTests {
         }
 
         #expect(visibleTitles == MenuBarController.visibleMenuTitles(areaCaptureShortcut: shortcut))
-        #expect(visibleTitles.first == "Capture Area (Shift-Command-4 or Option-Command-A)")
-    }
-
-    @MainActor
-    @Test func menuBarMenuDoesNotRepeatCommandShiftFourWhenItIsCustomShortcut() {
-        let menu = MenuBarController.makeMenu(target: nil, areaCaptureShortcut: .commandShiftAreaCapture)
-        let visibleTitles = menu.items.compactMap { item in
-            item.isSeparatorItem ? nil : item.title
-        }
-
-        #expect(visibleTitles == MenuBarController.visibleMenuTitles(areaCaptureShortcut: .commandShiftAreaCapture))
-        #expect(visibleTitles.first == "Capture Area (Shift-Command-4)")
+        #expect(visibleTitles.first == "Capture Area (Option-Command-A)")
     }
 
     @Test func editorToolbarOnlyShowsImplementedTools() {
@@ -166,10 +162,9 @@ struct ScreenshotMaxxingTests {
         }
 
         manager.handleHotKeyPressed(id: HotKeyManager.areaCaptureHotKeyID)
-        manager.handleHotKeyPressed(id: HotKeyManager.commandShiftAreaCaptureHotKeyID)
         manager.handleHotKeyPressed(id: 999)
 
-        #expect(triggerCount == 2)
+        #expect(triggerCount == 1)
     }
 
     @MainActor
@@ -187,7 +182,7 @@ struct ScreenshotMaxxingTests {
             fileManager: fileManager
         )
 
-        #expect(preferences.areaCaptureShortcut.displayString == "Control-Shift-5")
+        #expect(preferences.areaCaptureShortcut.displayString == "Control-Shift-4")
         #expect(URL(fileURLWithPath: preferences.originalsFolderPath).lastPathComponent == "originals")
         #expect(URL(fileURLWithPath: preferences.originalsFolderPath).deletingLastPathComponent().lastPathComponent == "Captures")
         #expect(URL(fileURLWithPath: preferences.editedFolderPath).lastPathComponent == "edited")

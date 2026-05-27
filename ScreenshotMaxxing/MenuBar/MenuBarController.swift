@@ -98,15 +98,7 @@ final class MenuBarController: NSObject {
     }
 
     private static func areaCaptureShortcutSummary(areaCaptureShortcut: GlobalKeyboardShortcut? = nil) -> String {
-        let areaCaptureShortcut = areaCaptureShortcut ?? GlobalKeyboardShortcut.defaultAreaCapture
-        guard areaCaptureShortcut != .commandShiftAreaCapture else {
-            return GlobalKeyboardShortcut.commandShiftAreaCapture.displayString
-        }
-
-        return [
-            GlobalKeyboardShortcut.commandShiftAreaCapture.displayString,
-            areaCaptureShortcut.displayString
-        ].joined(separator: " or ")
+        (areaCaptureShortcut ?? GlobalKeyboardShortcut.defaultAreaCapture).displayString
     }
 
     @objc private func captureArea() {

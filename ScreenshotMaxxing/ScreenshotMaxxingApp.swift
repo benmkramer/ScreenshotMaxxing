@@ -14,7 +14,11 @@ struct ScreenshotMaxxingApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(
+                captureArea: { appDelegate.captureArea() },
+                openHistory: { appDelegate.openHistoryWindow() },
+                openPreferences: { appDelegate.openPreferencesWindow() }
+            )
         }
         .modelContainer(PersistenceController.sharedModelContainer)
     }
