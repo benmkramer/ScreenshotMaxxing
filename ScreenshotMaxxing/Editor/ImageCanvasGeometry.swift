@@ -77,6 +77,22 @@ struct ImageCanvasGeometry: Equatable {
         return imageRect(forViewRect: viewRect)
     }
 
+    func imageTranslation(fromViewStart startPoint: CGPoint, toViewEnd endPoint: CGPoint) -> CGSize {
+        let rect = imageRect
+
+        guard imageSize.width > 0,
+              imageSize.height > 0,
+              rect.width > 0,
+              rect.height > 0 else {
+            return .zero
+        }
+
+        return CGSize(
+            width: ((endPoint.x - startPoint.x) / rect.width) * imageSize.width,
+            height: ((endPoint.y - startPoint.y) / rect.height) * imageSize.height
+        )
+    }
+
     func viewRect(forImageRect imageRect: CGRect) -> CGRect {
         let rect = self.imageRect
 
@@ -98,5 +114,15 @@ struct ImageCanvasGeometry: Equatable {
         )
 
         return CGRect(origin: origin, size: size)
+    }
+
+    func viewDistance(forImageDistance imageDistance: Double) -> CGFloat {
+        let rect = imageRect
+
+        guard imageSize.width > 0, rect.width > 0 else {
+            return 0
+        }
+
+        return CGFloat(imageDistance) * (rect.width / imageSize.width)
     }
 }

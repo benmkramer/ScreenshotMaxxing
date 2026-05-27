@@ -11,10 +11,12 @@ import ImageIO
 import UniformTypeIdentifiers
 
 struct ImageRenderer {
+    static let defaultBlurRadius: Double = 12
+
     private let context: CIContext
     private let blurRadius: Double
 
-    init(blurRadius: Double = 12) {
+    init(blurRadius: Double = Self.defaultBlurRadius) {
         self.context = CIContext()
         self.blurRadius = blurRadius
     }

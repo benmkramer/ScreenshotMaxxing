@@ -347,8 +347,111 @@ struct ScreenshotMaxxingTests {
 
         #expect(state.originalImageURL == imageURL)
         #expect(state.selectedTool == .blur)
+        #expect(state.selectedAnnotationID == annotationID)
         #expect(annotation == Annotation(id: annotationID, type: .blur, rect: CGRect(x: 20, y: 30, width: 40, height: 50)))
         #expect(state.annotations == [annotation])
+    }
+
+    @MainActor
+    @Test func editorStateSelectsTopmostBlurAnnotationAtImagePoint() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let firstAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000011")!
+        let secondAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000012")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        state.addBlurRect(CGRect(x: 0, y: 0, width: 20, height: 20), id: firstAnnotationID)
+        state.addBlurRect(CGRect(x: 10, y: 10, width: 20, height: 20), id: secondAnnotationID)
+
+        #expect(state.selectAnnotation(containing: CGPoint(x: 15, y: 15)) == secondAnnotationID)
+        #expect(state.selectedAnnotationID == secondAnnotationID)
+
+        #expect(state.selectAnnotation(containing: CGPoint(x: 40, y: 40)) == nil)
+        #expect(state.selectedAnnotationID == nil)
+    }
+
+    @MainActor
+    @Test func editorStateRemovesSelectedAnnotation() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let firstAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000013")!
+        let secondAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000014")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        state.addBlurRect(CGRect(x: 0, y: 0, width: 20, height: 20), id: firstAnnotationID)
+        state.addBlurRect(CGRect(x: 20, y: 20, width: 20, height: 20), id: secondAnnotationID)
+        state.selectAnnotation(id: firstAnnotationID)
+        state.removeSelectedAnnotation()
+
+        #expect(state.annotations.map(\.id) == [secondAnnotationID])
+        #expect(state.selectedAnnotationID == nil)
+    }
+
+    @MainActor
+    @Test func editorStateMovesAnnotationAndKeepsItInsideImageBounds() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000015")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+        let originalRect = CGRect(x: 20, y: 30, width: 40, height: 50)
+
+        state.addBlurRect(originalRect, id: annotationID)
+        state.moveAnnotation(
+            id: annotationID,
+            from: originalRect,
+            by: CGSize(width: 130, height: 90),
+            within: CGSize(width: 160, height: 120)
+        )
+
+        let movedAnnotation = try #require(state.annotation(id: annotationID))
+
+        #expect(movedAnnotation.rect == CGRect(x: 120, y: 70, width: 40, height: 50))
+        #expect(state.selectedAnnotationID == annotationID)
+    }
+
+    @MainActor
+    @Test func editorStateResizesAnnotationFromCornerHandle() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000016")!
+        let originalRect = CGRect(x: 20, y: 30, width: 40, height: 50)
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        state.addBlurRect(originalRect, id: annotationID)
+        state.resizeAnnotation(
+            id: annotationID,
+            from: originalRect,
+            handle: .topLeft,
+            by: CGSize(width: 10, height: -20),
+            within: CGSize(width: 120, height: 120)
+        )
+
+        let resizedAnnotation = try #require(state.annotation(id: annotationID))
+
+        #expect(resizedAnnotation.rect == CGRect(x: 30, y: 10, width: 30, height: 70))
+        #expect(state.selectedAnnotationID == annotationID)
+    }
+
+    @MainActor
+    @Test func editorStateResizesAnnotationWithMinimumSizeAndImageBounds() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000017")!
+        let originalRect = CGRect(x: 20, y: 30, width: 40, height: 50)
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        state.addBlurRect(originalRect, id: annotationID)
+        state.resizeAnnotation(
+            id: annotationID,
+            from: originalRect,
+            handle: .bottomRight,
+            by: CGSize(width: 200, height: -200),
+            within: CGSize(width: 100, height: 100)
+        )
+
+        let resizedAnnotation = try #require(state.annotation(id: annotationID))
+
+        #expect(resizedAnnotation.rect == CGRect(
+            x: 20,
+            y: 30,
+            width: 80,
+            height: ScreenshotEditorState.minimumAnnotationSideLength
+        ))
     }
 
     @Test func imageCanvasConvertsDragToImageRect() throws {
@@ -365,6 +468,29 @@ struct ScreenshotMaxxingTests {
         )
 
         #expect(imageRect == CGRect(x: 50, y: 0, width: 100, height: 100))
+    }
+
+    @Test func imageCanvasConvertsDragToImageTranslation() {
+        let geometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 100, height: 100)
+        )
+
+        let translation = geometry.imageTranslation(
+            fromViewStart: CGPoint(x: 25, y: 25),
+            toViewEnd: CGPoint(x: 75, y: 50)
+        )
+
+        #expect(translation == CGSize(width: 100, height: 50))
+    }
+
+    @Test func imageCanvasScalesImageDistanceIntoViewDistance() {
+        let geometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 100, height: 100)
+        )
+
+        #expect(geometry.viewDistance(forImageDistance: ImageRenderer.defaultBlurRadius) == 6)
     }
 
     @MainActor

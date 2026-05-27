@@ -49,4 +49,19 @@ enum EditorTool: String, CaseIterable, Identifiable {
             "textformat"
         }
     }
+
+    var helpText: String {
+        switch self {
+        case .select:
+            "Select a redaction"
+        case .blur:
+            "Draw a blur redaction"
+        case .rectangle:
+            "Draw a rectangle"
+        case .arrow:
+            "Draw an arrow"
+        case .text:
+            "Add text"
+        }
+    }
 }

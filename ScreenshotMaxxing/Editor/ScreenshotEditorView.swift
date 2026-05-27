@@ -28,7 +28,9 @@ struct ScreenshotEditorView: View {
                 VStack(spacing: 0) {
                     EditorToolbar(
                         selectedTool: $editorState.selectedTool,
+                        selectedAnnotationID: editorState.selectedAnnotationID,
                         statusMessage: statusMessage,
+                        deleteAction: removeSelectedAnnotation,
                         copyAction: copyEditedImage,
                         saveAction: saveEditedImage
                     )
@@ -98,12 +100,17 @@ struct ScreenshotEditorView: View {
             statusMessage = error.localizedDescription
         }
     }
+
+    private func removeSelectedAnnotation() {
+        editorState.removeSelectedAnnotation()
+    }
 }
 
 struct ScreenshotImageCanvas: View {
     let image: NSImage
     @Binding var editorState: ScreenshotEditorState
     @Binding var draftBlurRect: CGRect?
+    @State private var activeAnnotationDrag: AnnotationDrag?
 
     var body: some View {
         GeometryReader { proxy in
@@ -111,6 +118,7 @@ struct ScreenshotImageCanvas: View {
                 imageSize: image.pixelSize,
                 containerSize: proxy.size
             )
+            let previewBlurRadius = geometry.viewDistance(forImageDistance: ImageRenderer.defaultBlurRadius)
 
             ZStack(alignment: .topLeading) {
                 Color(nsColor: .underPageBackgroundColor)
@@ -124,22 +132,55 @@ struct ScreenshotImageCanvas: View {
 
                 ForEach(editorState.annotations) { annotation in
                     if annotation.type == .blur {
-                        BlurAnnotationOverlay(rect: geometry.viewRect(forImageRect: annotation.rect), isDraft: false)
+                        RedactionPreviewOverlay(
+                            image: image,
+                            imageFrame: geometry.imageRect,
+                            containerSize: proxy.size,
+                            rect: geometry.viewRect(forImageRect: annotation.rect),
+                            blurRadius: previewBlurRadius,
+                            isSelected: annotation.id == editorState.selectedAnnotationID,
+                            isDraft: false
+                        )
                     }
                 }
 
                 if let draftBlurRect {
-                    BlurAnnotationOverlay(rect: geometry.viewRect(forImageRect: draftBlurRect), isDraft: true)
+                    RedactionPreviewOverlay(
+                        image: image,
+                        imageFrame: geometry.imageRect,
+                        containerSize: proxy.size,
+                        rect: geometry.viewRect(forImageRect: draftBlurRect),
+                        blurRadius: previewBlurRadius,
+                        isSelected: false,
+                        isDraft: true
+                    )
                 }
             }
             .contentShape(Rectangle())
-            .gesture(blurDragGesture(geometry: geometry))
+            .gesture(canvasDragGesture(geometry: geometry))
+            .simultaneousGesture(selectTapGesture(geometry: geometry))
         }
     }
 
-    private func blurDragGesture(geometry: ImageCanvasGeometry) -> some Gesture {
+    private func canvasDragGesture(geometry: ImageCanvasGeometry) -> some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .local)
             .onChanged { value in
+                if activeAnnotationDrag == nil,
+                   let activeDrag = annotationDrag(startingAt: value.startLocation, geometry: geometry) {
+                    activeAnnotationDrag = activeDrag
+                    editorState.selectAnnotation(id: activeDrag.annotationID)
+                }
+
+                if let activeAnnotationDrag {
+                    let translation = geometry.imageTranslation(
+                        fromViewStart: value.startLocation,
+                        toViewEnd: value.location
+                    )
+                    updateActiveAnnotationDrag(activeAnnotationDrag, by: translation)
+                    draftBlurRect = nil
+                    return
+                }
+
                 guard editorState.selectedTool == .blur else {
                     draftBlurRect = nil
                     return
@@ -152,7 +193,12 @@ struct ScreenshotImageCanvas: View {
             }
             .onEnded { value in
                 defer {
+                    activeAnnotationDrag = nil
                     draftBlurRect = nil
+                }
+
+                guard activeAnnotationDrag == nil else {
+                    return
                 }
 
                 guard editorState.selectedTool == .blur,
@@ -166,45 +212,204 @@ struct ScreenshotImageCanvas: View {
                 editorState.addBlurRect(imageRect)
             }
     }
+
+    private func selectTapGesture(geometry: ImageCanvasGeometry) -> some Gesture {
+        SpatialTapGesture(coordinateSpace: .local)
+            .onEnded { value in
+                if resizeHandle(at: value.location, geometry: geometry) != nil {
+                    return
+                }
+
+                guard let imagePoint = geometry.imagePoint(forViewPoint: value.location) else {
+                    editorState.selectAnnotation(id: nil)
+                    return
+                }
+
+                editorState.selectAnnotation(containing: imagePoint)
+            }
+    }
+
+    private func annotationDrag(startingAt startLocation: CGPoint, geometry: ImageCanvasGeometry) -> AnnotationDrag? {
+        if let selectedAnnotationID = editorState.selectedAnnotationID,
+           let annotation = editorState.annotation(id: selectedAnnotationID),
+           let resizeHandle = resizeHandle(at: startLocation, geometry: geometry) {
+            return AnnotationDrag(
+                annotationID: selectedAnnotationID,
+                originalRect: annotation.rect,
+                resizeHandle: resizeHandle
+            )
+        }
+
+        guard let startImagePoint = geometry.imagePoint(forViewPoint: startLocation),
+              let annotationID = editorState.annotationID(containing: startImagePoint),
+              let annotation = editorState.annotation(id: annotationID) else {
+            return nil
+        }
+
+        return AnnotationDrag(annotationID: annotationID, originalRect: annotation.rect)
+    }
+
+    private func resizeHandle(at viewPoint: CGPoint, geometry: ImageCanvasGeometry) -> AnnotationResizeHandle? {
+        guard let selectedAnnotationID = editorState.selectedAnnotationID,
+              let annotation = editorState.annotation(id: selectedAnnotationID) else {
+            return nil
+        }
+
+        let viewRect = geometry.viewRect(forImageRect: annotation.rect)
+
+        return AnnotationResizeHandle.allCases.first { handle in
+            handle.hitRect(in: viewRect).contains(viewPoint)
+        }
+    }
+
+    private func updateActiveAnnotationDrag(_ annotationDrag: AnnotationDrag, by translation: CGSize) {
+        if let resizeHandle = annotationDrag.resizeHandle {
+            editorState.resizeAnnotation(
+                id: annotationDrag.annotationID,
+                from: annotationDrag.originalRect,
+                handle: resizeHandle,
+                by: translation,
+                within: image.pixelSize
+            )
+        } else {
+            editorState.moveAnnotation(
+                id: annotationDrag.annotationID,
+                from: annotationDrag.originalRect,
+                by: translation,
+                within: image.pixelSize
+            )
+        }
+    }
 }
 
-private struct BlurAnnotationOverlay: View {
+private struct AnnotationDrag: Equatable {
+    let annotationID: UUID
+    let originalRect: CGRect
+    var resizeHandle: AnnotationResizeHandle? = nil
+}
+
+private enum EditorCanvasMetrics {
+    static let resizeHandleVisualSize: CGFloat = 8
+    static let resizeHandleHitSize: CGFloat = 18
+}
+
+private extension AnnotationResizeHandle {
+    func viewPosition(in rect: CGRect) -> CGPoint {
+        switch self {
+        case .topLeft:
+            CGPoint(x: rect.minX, y: rect.minY)
+        case .top:
+            CGPoint(x: rect.midX, y: rect.minY)
+        case .topRight:
+            CGPoint(x: rect.maxX, y: rect.minY)
+        case .right:
+            CGPoint(x: rect.maxX, y: rect.midY)
+        case .bottomRight:
+            CGPoint(x: rect.maxX, y: rect.maxY)
+        case .bottom:
+            CGPoint(x: rect.midX, y: rect.maxY)
+        case .bottomLeft:
+            CGPoint(x: rect.minX, y: rect.maxY)
+        case .left:
+            CGPoint(x: rect.minX, y: rect.midY)
+        }
+    }
+
+    func hitRect(in rect: CGRect) -> CGRect {
+        let center = viewPosition(in: rect)
+        let hitSize = EditorCanvasMetrics.resizeHandleHitSize
+
+        return CGRect(
+            x: center.x - hitSize / 2,
+            y: center.y - hitSize / 2,
+            width: hitSize,
+            height: hitSize
+        )
+    }
+}
+
+private struct RedactionPreviewOverlay: View {
+    let image: NSImage
+    let imageFrame: CGRect
+    let containerSize: CGSize
     let rect: CGRect
+    let blurRadius: CGFloat
+    let isSelected: Bool
     let isDraft: Bool
 
     var body: some View {
-        Rectangle()
-            .fill(Color.accentColor.opacity(isDraft ? 0.14 : 0.18))
-            .overlay {
+        ZStack(alignment: .topLeading) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: imageFrame.width, height: imageFrame.height)
+                .position(x: imageFrame.midX, y: imageFrame.midY)
+                .blur(radius: blurRadius)
+        }
+        .frame(width: containerSize.width, height: containerSize.height, alignment: .topLeading)
+        .mask(alignment: .topLeading) {
+            Rectangle()
+                .frame(width: rect.width, height: rect.height)
+                .offset(x: rect.minX, y: rect.minY)
+        }
+        .overlay(alignment: .topLeading) {
+            if isSelected || isDraft {
                 Rectangle()
                     .strokeBorder(
                         Color.accentColor,
                         style: StrokeStyle(lineWidth: 2, dash: isDraft ? [6, 4] : [])
                     )
+                    .frame(width: rect.width, height: rect.height)
+                    .offset(x: rect.minX, y: rect.minY)
             }
-            .frame(width: rect.width, height: rect.height)
-            .position(x: rect.midX, y: rect.midY)
-            .allowsHitTesting(false)
+        }
+        .overlay(alignment: .topLeading) {
+            if isSelected && !isDraft {
+                ForEach(AnnotationResizeHandle.allCases, id: \.self) { handle in
+                    ResizeHandleView()
+                        .position(handle.viewPosition(in: rect))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct ResizeHandleView: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 2)
+            .fill(Color(nsColor: .windowBackgroundColor))
+            .overlay {
+                RoundedRectangle(cornerRadius: 2)
+                    .strokeBorder(Color.accentColor, lineWidth: 1.5)
+            }
+            .frame(
+                width: EditorCanvasMetrics.resizeHandleVisualSize,
+                height: EditorCanvasMetrics.resizeHandleVisualSize
+            )
     }
 }
 
 private struct EditorToolbar: View {
     @Binding var selectedTool: EditorTool
+    let selectedAnnotationID: UUID?
     let statusMessage: String?
+    let deleteAction: () -> Void
     let copyAction: () -> Void
     let saveAction: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
-            Picker("Tool", selection: $selectedTool) {
+            HStack(spacing: 4) {
                 ForEach(EditorTool.implementedTools) { tool in
-                    Image(systemName: tool.systemImageName)
-                        .help(tool.displayName)
-                        .tag(tool)
+                    ToolButton(
+                        tool: tool,
+                        isSelected: selectedTool == tool
+                    ) {
+                        selectedTool = tool
+                    }
                 }
             }
-            .pickerStyle(.segmented)
-            .frame(width: 96)
 
             Spacer()
 
@@ -214,23 +419,68 @@ private struct EditorToolbar: View {
                     .foregroundStyle(.secondary)
             }
 
-            Button(action: copyAction) {
-                Image(systemName: "doc.on.doc")
-                    .frame(width: 18, height: 18)
-            }
-            .buttonStyle(.bordered)
-            .help("Copy edited image")
+            ToolbarIconButton(
+                systemImageName: "trash",
+                helpText: selectedAnnotationID == nil ? "Select a redaction to remove it" : "Remove selected redaction",
+                action: deleteAction
+            )
+            .disabled(selectedAnnotationID == nil)
+            .keyboardShortcut(.delete, modifiers: [])
 
-            Button(action: saveAction) {
-                Image(systemName: "square.and.arrow.down")
-                    .frame(width: 18, height: 18)
-            }
-            .buttonStyle(.bordered)
-            .help("Save edited image")
+            ToolbarIconButton(
+                systemImageName: "doc.on.doc",
+                helpText: "Copy edited image",
+                action: copyAction
+            )
+
+            ToolbarIconButton(
+                systemImageName: "square.and.arrow.down",
+                helpText: "Save edited image",
+                action: saveAction
+            )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+}
+
+private struct ToolButton: View {
+    let tool: EditorTool
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: tool.systemImageName)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(width: 32, height: 32)
+        .background {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+        }
+        .foregroundStyle(isSelected ? Color.white : Color.primary)
+        .accessibilityLabel(tool.displayName)
+        .help(tool.helpText)
+    }
+}
+
+private struct ToolbarIconButton: View {
+    let systemImageName: String
+    let helpText: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImageName)
+                .frame(width: 18, height: 18)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityLabel(helpText)
+        .help(helpText)
     }
 }
 
