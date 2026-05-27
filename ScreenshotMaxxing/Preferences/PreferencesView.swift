@@ -10,17 +10,47 @@ import SwiftUI
 struct PreferencesView: View {
     @State private var preferences: PreferencesData
     private let onShortcutChange: (GlobalKeyboardShortcut) -> Bool
+    private let onLaunchAtLoginChange: (Bool) -> Bool
+    private let onMenuBarIconVisibleChange: (Bool) -> Bool
 
     init(
         preferences: PreferencesData,
-        onShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true }
+        onShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
+        onLaunchAtLoginChange: @escaping (Bool) -> Bool = { _ in true },
+        onMenuBarIconVisibleChange: @escaping (Bool) -> Bool = { _ in true }
     ) {
         _preferences = State(initialValue: preferences)
         self.onShortcutChange = onShortcutChange
+        self.onLaunchAtLoginChange = onLaunchAtLoginChange
+        self.onMenuBarIconVisibleChange = onMenuBarIconVisibleChange
     }
 
     var body: some View {
         Form {
+            Section("Startup") {
+                Toggle("Open at Login", isOn: Binding(
+                    get: { preferences.launchAtLoginEnabled },
+                    set: { isEnabled in
+                        guard onLaunchAtLoginChange(isEnabled) else {
+                            return
+                        }
+
+                        preferences = preferences.updatingLaunchAtLoginEnabled(isEnabled)
+                    }
+                ))
+
+                Toggle("Show in Menu Bar", isOn: Binding(
+                    get: { preferences.menuBarIconVisible },
+                    set: { isVisible in
+                        guard onMenuBarIconVisibleChange(isVisible) else {
+                            return
+                        }
+
+                        preferences = preferences.updatingMenuBarIconVisible(isVisible)
+                    }
+                ))
+            }
+
             Section("Capture") {
                 LabeledContent("Area capture shortcut") {
                     ShortcutRecorderView(shortcut: preferences.areaCaptureShortcut) { shortcut in
@@ -56,7 +86,7 @@ struct PreferencesView: View {
         }
         .formStyle(.grouped)
         .padding(20)
-        .frame(minWidth: 540, minHeight: 300)
+        .frame(minWidth: 540, minHeight: 360)
     }
 
     private func pathText(_ path: String) -> some View {
@@ -73,6 +103,8 @@ struct PreferencesView: View {
         preferences: PreferencesData(
             areaCaptureShortcut: .defaultAreaCapture,
             captureOptionsShortcut: .defaultCaptureOptions,
+            launchAtLoginEnabled: false,
+            menuBarIconVisible: true,
             originalsFolderPath: "/Users/example/Library/Application Support/ScreenshotMaxxing/Captures/originals",
             editedFolderPath: "/Users/example/Library/Application Support/ScreenshotMaxxing/Captures/edited"
         )

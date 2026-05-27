@@ -19,14 +19,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let captureController = CaptureController()
     private let metadataStore = CaptureMetadataStore()
     private let shortcutSettingsStore = ShortcutSettingsStore()
+    private let appSettingsStore = AppSettingsStore()
+    private let loginItemController = LoginItemController()
     private let screenCapturePermissionController = ScreenCapturePermissionController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureApplicationIcon()
         NSApp.setActivationPolicy(.regular)
         let areaCaptureShortcut = shortcutSettingsStore.areaCaptureShortcut()
-        menuBarController = MenuBarController(areaCaptureShortcut: areaCaptureShortcut) { [weak self] action in
-            self?.handleMenuBarAction(action)
+        if appSettingsStore.menuBarIconVisible() {
+            showMenuBarController(areaCaptureShortcut: areaCaptureShortcut)
         }
         hotKeyManager = HotKeyManager { [weak self] action in
             self?.handleHotKeyAction(action)
@@ -157,6 +159,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func showMenuBarController(areaCaptureShortcut: GlobalKeyboardShortcut? = nil) {
+        guard menuBarController == nil else {
+            return
+        }
+
+        menuBarController = MenuBarController(
+            areaCaptureShortcut: areaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut()
+        ) { [weak self] action in
+            self?.handleMenuBarAction(action)
+        }
+    }
+
+    private func hideMenuBarController() {
+        menuBarController?.removeFromStatusBar()
+        menuBarController = nil
+    }
+
+    private func updateLaunchAtLoginEnabled(_ isEnabled: Bool) -> Bool {
+        do {
+            try loginItemController.setLaunchAtLoginEnabled(isEnabled)
+            return true
+        } catch {
+            presentError(error, title: "Login Item Unavailable")
+            return false
+        }
+    }
+
+    private func updateMenuBarIconVisible(_ isVisible: Bool) -> Bool {
+        appSettingsStore.saveMenuBarIconVisible(isVisible)
+
+        if isVisible {
+            showMenuBarController()
+        } else {
+            hideMenuBarController()
+        }
+
+        return true
+    }
+
     private func openCaptureOptions() {
         if let window = captureOptionsWindowController?.window {
             window.makeKeyAndOrderFront(nil)
@@ -220,16 +261,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let preferences = try PreferencesData.current(
                 areaCaptureShortcut: hotKeyManager?.registeredAreaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut(),
-                captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut ?? .defaultCaptureOptions
+                captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut ?? .defaultCaptureOptions,
+                launchAtLoginEnabled: loginItemController.launchAtLoginEnabled,
+                menuBarIconVisible: appSettingsStore.menuBarIconVisible()
             )
             let rootView = PreferencesView(preferences: preferences) { [weak self] shortcut in
                 self?.updateAreaCaptureShortcut(shortcut) ?? false
+            } onLaunchAtLoginChange: { [weak self] isEnabled in
+                self?.updateLaunchAtLoginEnabled(isEnabled) ?? false
+            } onMenuBarIconVisibleChange: { [weak self] isVisible in
+                self?.updateMenuBarIconVisible(isVisible) ?? false
             }
             let hostingController = NSHostingController(rootView: rootView)
             let window = NSWindow(contentViewController: hostingController)
             window.title = "Preferences - ScreenshotMaxxing"
-            window.setContentSize(NSSize(width: 560, height: 320))
-            window.minSize = NSSize(width: 520, height: 300)
+            window.setContentSize(NSSize(width: 560, height: 380))
+            window.minSize = NSSize(width: 520, height: 360)
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             window.isReleasedWhenClosed = false
 
