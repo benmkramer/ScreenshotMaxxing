@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let shortcutSettingsStore = ShortcutSettingsStore()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        configureApplicationIcon()
         NSApp.setActivationPolicy(.regular)
         let areaCaptureShortcut = shortcutSettingsStore.areaCaptureShortcut()
         menuBarController = MenuBarController(areaCaptureShortcut: areaCaptureShortcut) { [weak self] action in
@@ -34,6 +35,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    private func configureApplicationIcon() {
+        guard let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+              let icon = NSImage(contentsOf: iconURL) else {
+            return
+        }
+
+        NSApp.applicationIconImage = icon
     }
 
     private func handleMenuBarAction(_ action: MenuBarAction) {
