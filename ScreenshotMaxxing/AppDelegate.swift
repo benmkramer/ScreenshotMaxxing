@@ -21,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let shortcutSettingsStore = ShortcutSettingsStore()
     private let appSettingsStore = AppSettingsStore()
     private let loginItemController = LoginItemController()
+    private let screenCapturePermissionController = ScreenCapturePermissionController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureApplicationIcon()
@@ -33,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleHotKeyAction(action)
         }
         registerCaptureHotKeys()
+        requestScreenCaptureAccessOnLaunch()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -46,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.applicationIconImage = icon
+    }
+
+    private func requestScreenCaptureAccessOnLaunch() {
+        screenCapturePermissionController.requestAccessIfNeeded()
     }
 
     private func handleMenuBarAction(_ action: MenuBarAction) {
