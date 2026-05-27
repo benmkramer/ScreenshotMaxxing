@@ -6,12 +6,16 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct ScreenshotMaxxingApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(PersistenceController.sharedModelContainer)
     }
 }

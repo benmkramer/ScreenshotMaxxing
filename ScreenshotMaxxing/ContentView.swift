@@ -12,16 +12,21 @@ struct ContentView: View {
         VStack(spacing: 12) {
             Image(systemName: "camera.viewfinder")
                 .font(.system(size: 44, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.secondary)
 
-            VStack(spacing: 4) {
-                Text("ScreenshotMaxxing")
-                    .font(.title2.weight(.semibold))
+            Text("ScreenshotMaxxing")
+                .font(.title2.weight(.semibold))
 
-                Text("No captures yet")
-                    .foregroundStyle(.secondary)
-            }
+            Text("Use the menu bar or Control-Shift-5 to capture an area.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .padding(32)
         .frame(minWidth: 420, minHeight: 280)
     }
+}
+
+#Preview {
+    ContentView()
 }
