@@ -69,12 +69,12 @@ struct CaptureController {
         let status = try await runScreencapture(mode.screencaptureArguments(outputURL: outputURL))
         let fileExists = fileManager.fileExists(atPath: outputURL.fileSystemPath)
 
-        guard status == 0 else {
-            if fileExists {
-                throw CaptureError.commandFailed(status: status)
-            }
-
+        if mode.usesInteractiveSelection && !fileExists {
             throw CaptureError.cancelled
+        }
+
+        guard status == 0 else {
+            throw CaptureError.commandFailed(status: status)
         }
 
         guard fileExists else {
