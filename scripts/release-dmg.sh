@@ -67,6 +67,8 @@ require_command xcodebuild
 require_command hdiutil
 require_command /usr/libexec/PlistBuddy
 require_command ditto
+require_command osascript
+require_command python3
 
 if [[ "$LOCAL_ONLY" == "1" && "$NOTARIZE" == "1" ]]; then
   die "LOCAL_ONLY=1 cannot be notarized. Install a Developer ID Application certificate and run without LOCAL_ONLY for notarized releases."
@@ -136,19 +138,89 @@ BUILD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIS
 DMG_NAME="$APP_NAME-$MARKETING_VERSION-$BUILD_VERSION.dmg"
 DMG_PATH="$DIST_DIR/$DMG_NAME"
 DMG_ROOT="$BUILD_DIR/dmg-root"
+DMG_TEMP_PATH="$BUILD_DIR/$APP_NAME-rw.dmg"
+DMG_MOUNT_DIR=""
+DMG_MOUNT_URL=""
+DMG_DEVICE=""
+DMG_BACKGROUND_NAME="dmg-background.png"
+DMG_WINDOW_WIDTH=480
+DMG_WINDOW_HEIGHT=320
+DMG_ICON_SIZE=128
+DMG_APP_ICON_X=132
+DMG_APPLICATIONS_ICON_X=348
+DMG_ICON_Y=154
+
+DMG_IS_MOUNTED=0
+
+cleanup_dmg_mount() {
+  if [[ "$DMG_IS_MOUNTED" == "1" && -n "$DMG_DEVICE" ]]; then
+    hdiutil detach "$DMG_DEVICE" -quiet || hdiutil detach "$DMG_DEVICE" -force -quiet || true
+  fi
+}
+
+trap cleanup_dmg_mount EXIT
 
 printf 'Creating %s...\n' "$DMG_PATH"
-rm -rf "$DMG_ROOT" "$DMG_PATH"
-mkdir -p "$DMG_ROOT"
+rm -rf "$DMG_ROOT" "$DMG_PATH" "$DMG_TEMP_PATH"
+mkdir -p "$DMG_ROOT/.background"
+python3 "$SCRIPT_DIR/render-dmg-background.py" "$DMG_ROOT/.background/$DMG_BACKGROUND_NAME"
 ditto "$APP_BUNDLE" "$DMG_ROOT/$APP_NAME.app"
 ln -s /Applications "$DMG_ROOT/Applications"
+chflags hidden "$DMG_ROOT/.background" || true
 
 hdiutil create \
   -volname "$APP_NAME" \
   -srcfolder "$DMG_ROOT" \
   -ov \
+  -format UDRW \
+  "$DMG_TEMP_PATH"
+
+DMG_ATTACH_OUTPUT="$(hdiutil attach "$DMG_TEMP_PATH" -nobrowse -noautoopen)"
+DMG_DEVICE="$(printf '%s\n' "$DMG_ATTACH_OUTPUT" | awk -F '\t' 'END {gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1}')"
+DMG_MOUNT_DIR="$(printf '%s\n' "$DMG_ATTACH_OUTPUT" | awk -F '\t' 'END {gsub(/^[[:space:]]+|[[:space:]]+$/, "", $NF); print $NF}')"
+[[ -n "$DMG_DEVICE" && -n "$DMG_MOUNT_DIR" && -d "$DMG_MOUNT_DIR" ]] || die "could not determine mounted DMG location"
+DMG_MOUNT_URL="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).as_uri() + "/")' "$DMG_MOUNT_DIR")"
+DMG_IS_MOUNTED=1
+chflags hidden "$DMG_MOUNT_DIR/.background" || true
+
+printf 'Styling DMG Finder window...\n'
+osascript <<APPLESCRIPT
+with timeout of 30 seconds
+  tell application "Finder"
+    set dmgDisk to first disk whose URL is "$DMG_MOUNT_URL"
+    tell dmgDisk
+      open
+      delay 0.5
+      set current view of container window to icon view
+      set toolbar visible of container window to false
+      set statusbar visible of container window to false
+      set bounds of container window to {200, 120, 200 + $DMG_WINDOW_WIDTH, 120 + $DMG_WINDOW_HEIGHT}
+
+      set viewOptions to icon view options of container window
+      set arrangement of viewOptions to not arranged
+      set icon size of viewOptions to $DMG_ICON_SIZE
+      set text size of viewOptions to 13
+      set background picture of viewOptions to file ".background:$DMG_BACKGROUND_NAME"
+
+      set position of item "$APP_NAME.app" of container window to {$DMG_APP_ICON_X, $DMG_ICON_Y}
+      set position of item "Applications" of container window to {$DMG_APPLICATIONS_ICON_X, $DMG_ICON_Y}
+      update without registering applications
+      delay 3
+      close
+    end tell
+  end tell
+end timeout
+APPLESCRIPT
+
+sync
+hdiutil detach "$DMG_DEVICE" -quiet
+DMG_IS_MOUNTED=0
+
+hdiutil convert "$DMG_TEMP_PATH" \
   -format UDZO \
-  "$DMG_PATH"
+  -imagekey zlib-level=9 \
+  -o "$DMG_PATH"
+rm -f "$DMG_TEMP_PATH"
 
 if [[ -n "$DMG_CODE_SIGN_IDENTITY" ]]; then
   printf 'Signing %s...\n' "$DMG_NAME"
