@@ -22,9 +22,13 @@ struct ScreenCapturePermissionController {
         self.requestAccess = requestAccess
     }
 
+    func hasAccess() -> Bool {
+        preflightAccess()
+    }
+
     @discardableResult
     func requestAccessIfNeeded() -> Bool {
-        if preflightAccess() {
+        if hasAccess() {
             return true
         }
 

@@ -372,6 +372,94 @@ struct ScreenshotMaxxingTests {
         #expect(requestCount == 1)
     }
 
+    @Test func appPermissionControllerReportsRequiredPermissionStates() {
+        let controller = AppPermissionController(
+            screenCapturePermissionController: ScreenCapturePermissionController {
+                true
+            } requestAccess: {
+                false
+            }
+        )
+
+        #expect(controller.permissionStates() == [
+            AppPermissionState(permission: .screenCapture, isGranted: true)
+        ])
+        #expect(controller.hasAllRequiredPermissions())
+    }
+
+    @Test func appPermissionControllerRequestsSelectedPermissionOnly() {
+        var screenCaptureRequestCount = 0
+        let controller = AppPermissionController(
+            screenCapturePermissionController: ScreenCapturePermissionController {
+                false
+            } requestAccess: {
+                screenCaptureRequestCount += 1
+                return true
+            }
+        )
+
+        let granted = controller.requestAccessIfNeeded(for: .screenCapture)
+
+        #expect(granted)
+        #expect(screenCaptureRequestCount == 1)
+    }
+
+    @MainActor
+    @Test func permissionOnboardingModelOpensSettingsAndOffersRelaunchWhenPermissionRemainsMissing() {
+        var requestCount = 0
+        var openedURLs: [URL] = []
+        var relaunchCount = 0
+        let controller = AppPermissionController(
+            screenCapturePermissionController: ScreenCapturePermissionController {
+                false
+            } requestAccess: {
+                requestCount += 1
+                return false
+            }
+        )
+        let model = PermissionOnboardingModel(permissionController: controller) { url in
+            openedURLs.append(url)
+        } relaunchApp: {
+            relaunchCount += 1
+        }
+
+        model.requestAccess(for: .screenCapture)
+        model.primaryAction()
+
+        #expect(requestCount == 1)
+        #expect(openedURLs.count == 1)
+        #expect(openedURLs.first == AppPermission.screenCapture.settingsURL)
+        #expect(model.needsRelaunch)
+        #expect(model.primaryActionTitle == "Relaunch")
+        #expect(relaunchCount == 1)
+        #expect(model.states == [
+            AppPermissionState(permission: .screenCapture, isGranted: false)
+        ])
+    }
+
+    @MainActor
+    @Test func permissionOnboardingModelCompletesWhenPermissionAlreadyGranted() {
+        var completionCount = 0
+        let controller = AppPermissionController(
+            screenCapturePermissionController: ScreenCapturePermissionController {
+                true
+            } requestAccess: {
+                false
+            }
+        )
+        let model = PermissionOnboardingModel(permissionController: controller)
+        model.onComplete = {
+            completionCount += 1
+        }
+
+        model.primaryAction()
+
+        #expect(model.allGranted)
+        #expect(!model.needsRelaunch)
+        #expect(model.primaryActionTitle == "Done")
+        #expect(completionCount == 1)
+    }
+
     @Test func shortcutSettingsStorePersistsCaptureShortcuts() throws {
         let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
