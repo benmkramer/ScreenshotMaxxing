@@ -32,6 +32,8 @@ The script uses [Config/ExportOptions-DeveloperID.plist](../Config/ExportOptions
 
 The default release path requires access to a `Developer ID Application` certificate. The script runs Xcode export with `-allowProvisioningUpdates` by default so Xcode can use cloud-managed Developer ID signing assets from your Apple Developer account.
 
+In CI, the workflow imports a local Developer ID certificate and sets `ARCHIVE_CODE_SIGN_IDENTITY="Developer ID Application"` so the archive keeps hardened runtime signing before Xcode exports the notarizable app. It also sets `DMG_CODE_SIGN_IDENTITY="Developer ID Application"` so the notarized DMG has a primary signature that Gatekeeper can verify.
+
 To check for a local keychain identity:
 
 ```sh
@@ -67,6 +69,8 @@ scripts/set-release-version.sh <marketing-version> [build-number]
 If no build number is provided, the script sets `CURRENT_PROJECT_VERSION` to the current maximum build number plus one. The workflow opens or updates a `release/v<version>` pull request with the Xcode project version changes.
 
 When that pull request merges to `main`, the `Release DMG` workflow checks whether `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` changed in `ScreenshotMaxxing.xcodeproj/project.pbxproj`. If either changed, it builds the app, exports the Developer ID-signed app, notarizes and staples the DMG, uploads the DMG as a workflow artifact, and creates or updates the matching GitHub Release tag.
+
+The `Release DMG` workflow can also be run as a dry run before merging release automation changes. Pushes to `codex-*` branches that touch the release workflow, export options, release script, or Xcode project build a signed and notarized DMG and upload it as a workflow artifact, but do not create or update a GitHub Release. The workflow can also be triggered manually with `publish_release` left disabled for the same dry-run behavior.
 
 Required GitHub repository secrets:
 
