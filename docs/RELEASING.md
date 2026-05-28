@@ -54,6 +54,46 @@ LOCAL_ONLY=1 scripts/release-dmg.sh
 
 That DMG is useful for your own machines or technical testers, but macOS Gatekeeper may warn or block it for friends and coworkers.
 
+## Release Automation
+
+The release flow is controlled by version changes instead of every merge to `main`.
+
+To prepare a release, run the `Prepare Release PR` workflow manually in GitHub Actions. Enter the new marketing version, for example `1.0.1`. The workflow runs:
+
+```sh
+scripts/set-release-version.sh <marketing-version> [build-number]
+```
+
+If no build number is provided, the script sets `CURRENT_PROJECT_VERSION` to the current maximum build number plus one. The workflow opens or updates a `release/v<version>` pull request with the Xcode project version changes.
+
+When that pull request merges to `main`, the `Release DMG` workflow checks whether `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` changed in `ScreenshotMaxxing.xcodeproj/project.pbxproj`. If either changed, it builds the app, exports the Developer ID-signed app, notarizes and staples the DMG, uploads the DMG as a workflow artifact, and creates or updates the matching GitHub Release tag.
+
+Required GitHub repository secrets:
+
+```text
+BUILD_CERTIFICATE_BASE64  Base64-encoded Developer ID Application .p12 certificate
+P12_PASSWORD              Password for the .p12 certificate
+KEYCHAIN_PASSWORD         Temporary CI keychain password
+ASC_API_KEY_BASE64        Base64-encoded App Store Connect API key .p8 file
+ASC_KEY_ID                App Store Connect API key ID
+ASC_ISSUER_ID             App Store Connect issuer ID
+```
+
+Optional secret for the PR-preparation workflow:
+
+```text
+RELEASE_PR_TOKEN          Fine-grained PAT with contents and pull request access
+```
+
+If `RELEASE_PR_TOKEN` is not configured, the workflow uses the default `GITHUB_TOKEN`. That is enough to create the release PR, but GitHub may suppress other workflows on the generated branch. Use `RELEASE_PR_TOKEN` if you want normal PR checks to run on release PRs.
+
+On macOS, encode the certificate and API key for GitHub Secrets with:
+
+```sh
+base64 -i DeveloperIDApplication.p12 | pbcopy
+base64 -i AuthKey_<key-id>.p8 | pbcopy
+```
+
 ## Auto Updates
 
 Use Sparkle 2. The release channel needs three things:
@@ -112,13 +152,14 @@ Upload the whole updates directory, including `appcast.xml`, DMGs, release notes
 
 ## Release Checklist
 
-1. Increment `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` in the Xcode project.
-2. Build, export, notarize, and staple:
+1. Run the `Prepare Release PR` workflow with the new marketing version, then merge the PR after CI passes.
+2. Confirm the `Release DMG` workflow builds, exports, notarizes, staples, and uploads the DMG.
+3. For manual local releases, build, export, notarize, and staple:
 
    ```sh
    NOTARIZE=1 NOTARY_PROFILE=screenshotmaxxing-notary scripts/release-dmg.sh
    ```
 
-3. Upload the updates directory to GitHub Pages.
-4. Optionally upload the same DMG to GitHub Releases for manual installs.
-5. Launch an older installed build and use `Check for Updates...` to verify the update path.
+4. Upload the updates directory to GitHub Pages.
+5. Optionally upload the same DMG to GitHub Releases for manual installs.
+6. Launch an older installed build and use `Check for Updates...` to verify the update path.

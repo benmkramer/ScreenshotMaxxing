@@ -1,0 +1,98 @@
+name: Prepare Release PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Marketing version to release, for example 1.0.1
+        required: true
+        type: string
+      build_number:
+        description: Optional build number. Defaults to current max + 1.
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare-release:
+    name: Open Version Bump PR
+    runs-on: macos-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PR_TOKEN || github.token }}
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create or update release PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PR_TOKEN || github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            echo "Invalid version: $RELEASE_VERSION" >&2
+            exit 1
+          fi
+
+          if [[ -n "$BUILD_NUMBER" && ! "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "Invalid build number: $BUILD_NUMBER" >&2
+            exit 1
+          fi
+
+          BRANCH="release/v${RELEASE_VERSION}"
+          BODY_PATH="$RUNNER_TEMP/release-pr-body.md"
+          BRANCH_EXISTS=0
+
+          git fetch origin main
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            BRANCH_EXISTS=1
+          fi
+
+          git switch -C "$BRANCH" origin/main
+          scripts/set-release-version.sh "$RELEASE_VERSION" "$BUILD_NUMBER"
+
+          git add ScreenshotMaxxing.xcodeproj/project.pbxproj
+          if git diff --cached --quiet; then
+            echo "No version changes to commit."
+            exit 0
+          else
+            git commit -m "chore: release v${RELEASE_VERSION}"
+          fi
+
+          if [[ "$BRANCH_EXISTS" == "1" ]]; then
+            git push --force-with-lease -u origin "$BRANCH"
+          else
+            git push -u origin "$BRANCH"
+          fi
+
+          {
+            printf 'Bumps ScreenshotMaxxing to version `%s`.\n\n' "$RELEASE_VERSION"
+            printf 'Merging this PR updates the Xcode project version settings on `main`, '
+            printf 'which triggers the notarized DMG release workflow.\n'
+          } > "$BODY_PATH"
+
+          PR_URL="$(gh pr list --head "$BRANCH" --base main --state open --json url --jq '.[0].url')"
+          if [[ -n "$PR_URL" ]]; then
+            gh pr edit "$PR_URL" \
+              --title "Release v${RELEASE_VERSION}" \
+              --body-file "$BODY_PATH"
+            echo "Updated release PR: $PR_URL"
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "Release v${RELEASE_VERSION}" \
+              --body-file "$BODY_PATH"
+          fi

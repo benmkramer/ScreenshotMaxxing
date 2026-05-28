@@ -1,0 +1,177 @@
+name: Release DMG
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ScreenshotMaxxing.xcodeproj/project.pbxproj
+
+permissions:
+  contents: write
+
+jobs:
+  detect-version-change:
+    name: Detect Version Change
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.detect.outputs.changed }}
+      version: ${{ steps.version.outputs.version }}
+      build: ${{ steps.version.outputs.build }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect version setting changes
+        id: detect
+        run: |
+          set -euo pipefail
+
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          if [[ "$BEFORE" =~ ^0+$ ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff "$BEFORE" "$AFTER" -- ScreenshotMaxxing.xcodeproj/project.pbxproj \
+            | grep -E '^[+-][[:space:]]*(MARKETING_VERSION|CURRENT_PROJECT_VERSION) = ' >/dev/null; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Read release version
+        id: version
+        run: |
+          ruby <<'RUBY'
+          project_file = "ScreenshotMaxxing.xcodeproj/project.pbxproj"
+          text = File.read(project_file)
+          version = text[/MARKETING_VERSION = ([^;]+);/, 1]
+          build = text[/CURRENT_PROJECT_VERSION = ([^;]+);/, 1]
+
+          abort "No MARKETING_VERSION found in #{project_file}" unless version
+          abort "No CURRENT_PROJECT_VERSION found in #{project_file}" unless build
+
+          File.open(ENV.fetch("GITHUB_OUTPUT"), "a") do |output|
+            output.puts "version=#{version}"
+            output.puts "build=#{build}"
+          end
+          RUBY
+
+  release:
+    name: Build, Notarize, and Publish
+    runs-on: macos-26
+    needs: detect-version-change
+    if: needs.detect-version-change.outputs.changed == 'true'
+    env:
+      RELEASE_VERSION: ${{ needs.detect-version-change.outputs.version }}
+      BUILD_NUMBER: ${{ needs.detect-version-change.outputs.build }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26.2
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+
+      - name: Show release version
+        run: |
+          echo "Releasing ScreenshotMaxxing ${RELEASE_VERSION} (${BUILD_NUMBER})"
+          xcodebuild -version
+
+      - name: Import Developer ID certificate
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          : "${BUILD_CERTIFICATE_BASE64:?Missing BUILD_CERTIFICATE_BASE64 secret}"
+          : "${P12_PASSWORD:?Missing P12_PASSWORD secret}"
+          : "${KEYCHAIN_PASSWORD:?Missing KEYCHAIN_PASSWORD secret}"
+
+          CERT_PATH="$RUNNER_TEMP/developer-id.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+
+          printf '%s' "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+      - name: Create notary profile
+        env:
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY_BASE64 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+
+          : "${ASC_API_KEY_BASE64:?Missing ASC_API_KEY_BASE64 secret}"
+          : "${ASC_KEY_ID:?Missing ASC_KEY_ID secret}"
+          : "${ASC_ISSUER_ID:?Missing ASC_ISSUER_ID secret}"
+
+          ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s' "$ASC_API_KEY_BASE64" | base64 --decode > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+
+          xcrun notarytool store-credentials screenshotmaxxing-notary \
+            --key "$ASC_KEY_PATH" \
+            --key-id "$ASC_KEY_ID" \
+            --issuer "$ASC_ISSUER_ID"
+
+      - name: Build, sign, notarize, and staple DMG
+        run: |
+          set -euo pipefail
+
+          rm -rf dist
+          ALLOW_PROVISIONING_UPDATES=0 \
+          NOTARIZE=1 \
+          NOTARY_PROFILE=screenshotmaxxing-notary \
+          BUILD_DIR="$RUNNER_TEMP/release-build" \
+          DERIVED_DATA_PATH="$RUNNER_TEMP/ScreenshotMaxxingDerivedData" \
+          DIST_DIR="$GITHUB_WORKSPACE/dist" \
+          scripts/release-dmg.sh
+
+      - name: Verify stapled DMG
+        run: |
+          set -euo pipefail
+
+          DMG_PATH="dist/ScreenshotMaxxing-${RELEASE_VERSION}-${BUILD_NUMBER}.dmg"
+          test -f "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+          spctl -a -vv -t open --context context:primary-signature "$DMG_PATH"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScreenshotMaxxing-${{ env.RELEASE_VERSION }}-${{ env.BUILD_NUMBER }}.dmg
+          path: dist/*.dmg
+          if-no-files-found: error
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TAG="v${RELEASE_VERSION}"
+          DMG_PATH="dist/ScreenshotMaxxing-${RELEASE_VERSION}-${BUILD_NUMBER}.dmg"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$DMG_PATH" --clobber
+          else
+            gh release create "$TAG" "$DMG_PATH" \
+              --title "ScreenshotMaxxing ${RELEASE_VERSION}" \
+              --notes "Notarized Developer ID DMG for build ${BUILD_NUMBER}."
+          fi
