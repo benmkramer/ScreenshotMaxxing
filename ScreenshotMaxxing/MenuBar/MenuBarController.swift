@@ -23,7 +23,7 @@ final class MenuBarController: NSObject {
     private let statusBar: NSStatusBar
     private let actionHandler: @MainActor (MenuBarAction) -> Void
     private var areaCaptureShortcut: GlobalKeyboardShortcut
-    private let captureOptionsShortcut: GlobalKeyboardShortcut
+    private var captureOptionsShortcut: GlobalKeyboardShortcut
     private var isRemovedFromStatusBar = false
 
     init(
@@ -59,15 +59,12 @@ final class MenuBarController: NSObject {
 
     func updateAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) {
         areaCaptureShortcut = shortcut
-        statusItem.button?.toolTip = Self.statusItemToolTip(
-            areaCaptureShortcut: shortcut,
-            captureOptionsShortcut: captureOptionsShortcut
-        )
-        statusItem.menu = MenuBarController.makeMenu(
-            target: self,
-            areaCaptureShortcut: shortcut,
-            captureOptionsShortcut: captureOptionsShortcut
-        )
+        refreshShortcutDisplay()
+    }
+
+    func updateCaptureOptionsShortcut(_ shortcut: GlobalKeyboardShortcut) {
+        captureOptionsShortcut = shortcut
+        refreshShortcutDisplay()
     }
 
     func removeFromStatusBar() {
@@ -91,6 +88,10 @@ final class MenuBarController: NSObject {
             accessibilityDescription: "ScreenshotMaxxing"
         )
         statusItem.button?.image?.isTemplate = true
+        refreshShortcutDisplay()
+    }
+
+    private func refreshShortcutDisplay() {
         statusItem.button?.toolTip = Self.statusItemToolTip(
             areaCaptureShortcut: areaCaptureShortcut,
             captureOptionsShortcut: captureOptionsShortcut

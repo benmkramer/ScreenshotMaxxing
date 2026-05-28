@@ -49,6 +49,17 @@ struct PreferencesData: Equatable {
         )
     }
 
+    func updatingCaptureOptionsShortcut(_ shortcut: GlobalKeyboardShortcut) -> PreferencesData {
+        PreferencesData(
+            areaCaptureShortcut: areaCaptureShortcut,
+            captureOptionsShortcut: shortcut,
+            launchAtLoginEnabled: launchAtLoginEnabled,
+            menuBarIconVisible: menuBarIconVisible,
+            originalsFolderPath: originalsFolderPath,
+            editedFolderPath: editedFolderPath
+        )
+    }
+
     func updatingLaunchAtLoginEnabled(_ isEnabled: Bool) -> PreferencesData {
         PreferencesData(
             areaCaptureShortcut: areaCaptureShortcut,

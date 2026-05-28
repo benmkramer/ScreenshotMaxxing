@@ -188,19 +188,30 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
-    @Test func menuBarMenuReflectsCustomAreaCaptureShortcut() {
-        let shortcut = GlobalKeyboardShortcut(
+    @Test func menuBarMenuReflectsCustomCaptureShortcuts() {
+        let areaCaptureShortcut = GlobalKeyboardShortcut(
             keyCode: UInt32(kVK_ANSI_A),
             carbonModifiers: UInt32(cmdKey | optionKey)
         )
-        let menu = MenuBarController.makeMenu(target: nil, areaCaptureShortcut: shortcut)
+        let captureOptionsShortcut = GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_B),
+            carbonModifiers: UInt32(controlKey | optionKey)
+        )
+        let menu = MenuBarController.makeMenu(
+            target: nil,
+            areaCaptureShortcut: areaCaptureShortcut,
+            captureOptionsShortcut: captureOptionsShortcut
+        )
         let visibleTitles = menu.items.compactMap { item in
             item.isSeparatorItem ? nil : item.title
         }
 
-        #expect(visibleTitles == MenuBarController.visibleMenuTitles(areaCaptureShortcut: shortcut))
+        #expect(visibleTitles == MenuBarController.visibleMenuTitles(
+            areaCaptureShortcut: areaCaptureShortcut,
+            captureOptionsShortcut: captureOptionsShortcut
+        ))
         #expect(visibleTitles.first == "Capture Area (Option-Command-A)")
-        #expect(visibleTitles[1] == "Capture Options (Control-Shift-5)")
+        #expect(visibleTitles[1] == "Capture Options (Control-Option-B)")
     }
 
     @Test func editorToolbarOnlyShowsImplementedTools() {
@@ -277,6 +288,34 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func preferencesDataUpdatesCaptureShortcuts() throws {
+        let preferences = PreferencesData(
+            areaCaptureShortcut: .defaultAreaCapture,
+            captureOptionsShortcut: .defaultCaptureOptions,
+            launchAtLoginEnabled: false,
+            menuBarIconVisible: true,
+            originalsFolderPath: "/tmp/originals",
+            editedFolderPath: "/tmp/edited"
+        )
+        let areaCaptureShortcut = GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_A),
+            carbonModifiers: UInt32(cmdKey | optionKey)
+        )
+        let captureOptionsShortcut = GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_B),
+            carbonModifiers: UInt32(controlKey | optionKey)
+        )
+
+        let updatedAreaCapture = preferences.updatingAreaCaptureShortcut(areaCaptureShortcut)
+        let updatedCaptureOptions = updatedAreaCapture.updatingCaptureOptionsShortcut(captureOptionsShortcut)
+
+        #expect(updatedAreaCapture.areaCaptureShortcut == areaCaptureShortcut)
+        #expect(updatedAreaCapture.captureOptionsShortcut == .defaultCaptureOptions)
+        #expect(updatedCaptureOptions.areaCaptureShortcut == areaCaptureShortcut)
+        #expect(updatedCaptureOptions.captureOptionsShortcut == captureOptionsShortcut)
+    }
+
+    @MainActor
     @Test func preferencesDataUpdatesStartupAndVisibilitySettings() throws {
         let fileManager = FileManager.default
         let baseDirectory = fileManager.temporaryDirectory
@@ -341,24 +380,31 @@ struct ScreenshotMaxxingTests {
         #expect(requestCount == 1)
     }
 
-    @Test func shortcutSettingsStorePersistsAreaCaptureShortcut() throws {
+    @Test func shortcutSettingsStorePersistsCaptureShortcuts() throws {
         let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
         defer {
             userDefaults.removePersistentDomain(forName: suiteName)
         }
-        let shortcut = GlobalKeyboardShortcut(
+        let areaCaptureShortcut = GlobalKeyboardShortcut(
             keyCode: UInt32(kVK_ANSI_A),
             carbonModifiers: UInt32(cmdKey | optionKey)
         )
+        let captureOptionsShortcut = GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_B),
+            carbonModifiers: UInt32(controlKey | optionKey)
+        )
 
         let store = ShortcutSettingsStore(userDefaults: userDefaults)
-        try store.saveAreaCaptureShortcut(shortcut)
+        try store.saveAreaCaptureShortcut(areaCaptureShortcut)
+        try store.saveCaptureOptionsShortcut(captureOptionsShortcut)
 
         let reloadedStore = ShortcutSettingsStore(userDefaults: userDefaults)
 
-        #expect(reloadedStore.areaCaptureShortcut() == shortcut)
+        #expect(reloadedStore.areaCaptureShortcut() == areaCaptureShortcut)
         #expect(reloadedStore.areaCaptureShortcut().displayString == "Option-Command-A")
+        #expect(reloadedStore.captureOptionsShortcut() == captureOptionsShortcut)
+        #expect(reloadedStore.captureOptionsShortcut().displayString == "Control-Option-B")
     }
 
     @Test func appSettingsStoreDefaultsToShowingMenuBarIconAndPersistsChoice() throws {
