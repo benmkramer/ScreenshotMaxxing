@@ -20,7 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let metadataStore = CaptureMetadataStore()
     private let shortcutSettingsStore = ShortcutSettingsStore()
     private let loginItemController = LoginItemController()
-    private let screenCapturePermissionController = ScreenCapturePermissionController()
+    private let permissionController = AppPermissionController()
+    private var permissionOnboardingWindowController: PermissionOnboardingWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureApplicationIcon()
@@ -35,7 +36,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleHotKeyAction(action)
         }
         registerCaptureHotKeys()
-        requestScreenCaptureAccessOnLaunch()
+        if !isRunningUnderTests {
+            DispatchQueue.main.async { [weak self] in
+                self?.showPermissionOnboardingIfNeeded()
+            }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -44,6 +49,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         false
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        permissionOnboardingWindowController?.refresh()
     }
 
     private func configureApplicationIcon() {
@@ -55,8 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.applicationIconImage = icon
     }
 
-    private func requestScreenCaptureAccessOnLaunch() {
-        screenCapturePermissionController.requestAccessIfNeeded()
+    private var isRunningUnderTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     }
 
     private func handleMenuBarAction(_ action: MenuBarAction) {
@@ -88,6 +97,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startCapture(_ mode: CaptureMode) {
+        guard hasRequiredPermissionsForCapture() else {
+            return
+        }
+
         Task {
             do {
                 let result: CaptureResult
@@ -109,6 +122,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 presentError(error, title: "Capture Failed")
             }
         }
+    }
+
+    private func hasRequiredPermissionsForCapture() -> Bool {
+        guard permissionController.hasAllRequiredPermissions() else {
+            openPermissionOnboarding()
+            return false
+        }
+
+        return true
     }
 
     private func presentError(_ error: Error, title: String) {
@@ -227,6 +249,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         captureOptionsWindowController = controller
+        controller.show()
+    }
+
+    private func showPermissionOnboardingIfNeeded() {
+        if !permissionController.hasAllRequiredPermissions() {
+            openPermissionOnboarding()
+        }
+    }
+
+    private func openPermissionOnboarding() {
+        if let window = permissionOnboardingWindowController?.window {
+            permissionOnboardingWindowController?.refresh()
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let controller = PermissionOnboardingWindowController(permissionController: permissionController)
+        controller.onClose = { [weak self] closedController in
+            if self?.permissionOnboardingWindowController === closedController {
+                self?.permissionOnboardingWindowController = nil
+            }
+        }
+        permissionOnboardingWindowController = controller
         controller.show()
     }
 
