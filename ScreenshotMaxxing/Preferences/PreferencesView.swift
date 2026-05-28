@@ -9,18 +9,21 @@ import SwiftUI
 
 struct PreferencesView: View {
     @State private var preferences: PreferencesData
-    private let onShortcutChange: (GlobalKeyboardShortcut) -> Bool
+    private let onAreaCaptureShortcutChange: (GlobalKeyboardShortcut) -> Bool
+    private let onCaptureOptionsShortcutChange: (GlobalKeyboardShortcut) -> Bool
     private let onLaunchAtLoginChange: (Bool) -> Bool
     private let onMenuBarIconVisibleChange: (Bool) -> Bool
 
     init(
         preferences: PreferencesData,
-        onShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
+        onAreaCaptureShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
+        onCaptureOptionsShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
         onLaunchAtLoginChange: @escaping (Bool) -> Bool = { _ in true },
         onMenuBarIconVisibleChange: @escaping (Bool) -> Bool = { _ in true }
     ) {
         _preferences = State(initialValue: preferences)
-        self.onShortcutChange = onShortcutChange
+        self.onAreaCaptureShortcutChange = onAreaCaptureShortcutChange
+        self.onCaptureOptionsShortcutChange = onCaptureOptionsShortcutChange
         self.onLaunchAtLoginChange = onLaunchAtLoginChange
         self.onMenuBarIconVisibleChange = onMenuBarIconVisibleChange
     }
@@ -54,7 +57,7 @@ struct PreferencesView: View {
             Section("Capture") {
                 LabeledContent("Area capture shortcut") {
                     ShortcutRecorderView(shortcut: preferences.areaCaptureShortcut) { shortcut in
-                        guard onShortcutChange(shortcut) else {
+                        guard onAreaCaptureShortcutChange(shortcut) else {
                             return false
                         }
 
@@ -65,8 +68,15 @@ struct PreferencesView: View {
                 }
 
                 LabeledContent("Capture options shortcut") {
-                    Text(preferences.captureOptionsShortcut.displayString)
-                        .foregroundStyle(.secondary)
+                    ShortcutRecorderView(shortcut: preferences.captureOptionsShortcut) { shortcut in
+                        guard onCaptureOptionsShortcutChange(shortcut) else {
+                            return false
+                        }
+
+                        preferences = preferences.updatingCaptureOptionsShortcut(shortcut)
+                        return true
+                    }
+                    .frame(width: 160)
                 }
 
                 Text("Command-Shift-3, Command-Shift-4, and Command-Shift-5 stay reserved for macOS screenshots unless changed in System Settings.")

@@ -27,8 +27,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureApplicationIcon()
         NSApp.setActivationPolicy(.regular)
         let areaCaptureShortcut = shortcutSettingsStore.areaCaptureShortcut()
+        let captureOptionsShortcut = shortcutSettingsStore.captureOptionsShortcut()
         if appSettingsStore.menuBarIconVisible() {
-            showMenuBarController(areaCaptureShortcut: areaCaptureShortcut)
+            showMenuBarController(
+                areaCaptureShortcut: areaCaptureShortcut,
+                captureOptionsShortcut: captureOptionsShortcut
+            )
         }
         hotKeyManager = HotKeyManager { [weak self] action in
             self?.handleHotKeyAction(action)
@@ -136,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func registerCaptureOptionsHotKey() {
         do {
-            try hotKeyManager?.registerCaptureOptionsShortcut()
+            try hotKeyManager?.registerCaptureOptionsShortcut(shortcutSettingsStore.captureOptionsShortcut())
         } catch {
             presentError(error, title: "Shortcut Unavailable")
         }
@@ -159,13 +163,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func showMenuBarController(areaCaptureShortcut: GlobalKeyboardShortcut? = nil) {
+    private func updateCaptureOptionsShortcut(_ shortcut: GlobalKeyboardShortcut) -> Bool {
+        do {
+            try hotKeyManager?.registerCaptureOptionsShortcut(shortcut)
+            try shortcutSettingsStore.saveCaptureOptionsShortcut(shortcut)
+            menuBarController?.updateCaptureOptionsShortcut(shortcut)
+            return true
+        } catch {
+            presentError(error, title: "Shortcut Unavailable")
+            return false
+        }
+    }
+
+    private func showMenuBarController(
+        areaCaptureShortcut: GlobalKeyboardShortcut? = nil,
+        captureOptionsShortcut: GlobalKeyboardShortcut? = nil
+    ) {
         guard menuBarController == nil else {
             return
         }
 
         menuBarController = MenuBarController(
-            areaCaptureShortcut: areaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut()
+            areaCaptureShortcut: areaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut(),
+            captureOptionsShortcut: captureOptionsShortcut ?? shortcutSettingsStore.captureOptionsShortcut()
         ) { [weak self] action in
             self?.handleMenuBarAction(action)
         }
@@ -261,17 +281,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             let preferences = try PreferencesData.current(
                 areaCaptureShortcut: hotKeyManager?.registeredAreaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut(),
-                captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut ?? .defaultCaptureOptions,
+                captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut ?? shortcutSettingsStore.captureOptionsShortcut(),
                 launchAtLoginEnabled: loginItemController.launchAtLoginEnabled,
                 menuBarIconVisible: appSettingsStore.menuBarIconVisible()
             )
-            let rootView = PreferencesView(preferences: preferences) { [weak self] shortcut in
-                self?.updateAreaCaptureShortcut(shortcut) ?? false
-            } onLaunchAtLoginChange: { [weak self] isEnabled in
-                self?.updateLaunchAtLoginEnabled(isEnabled) ?? false
-            } onMenuBarIconVisibleChange: { [weak self] isVisible in
-                self?.updateMenuBarIconVisible(isVisible) ?? false
-            }
+            let rootView = PreferencesView(
+                preferences: preferences,
+                onAreaCaptureShortcutChange: { [weak self] shortcut in
+                    self?.updateAreaCaptureShortcut(shortcut) ?? false
+                },
+                onCaptureOptionsShortcutChange: { [weak self] shortcut in
+                    self?.updateCaptureOptionsShortcut(shortcut) ?? false
+                },
+                onLaunchAtLoginChange: { [weak self] isEnabled in
+                    self?.updateLaunchAtLoginEnabled(isEnabled) ?? false
+                },
+                onMenuBarIconVisibleChange: { [weak self] isVisible in
+                    self?.updateMenuBarIconVisible(isVisible) ?? false
+                }
+            )
             let hostingController = NSHostingController(rootView: rootView)
             let window = NSWindow(contentViewController: hostingController)
             window.title = "Preferences - ScreenshotMaxxing"
