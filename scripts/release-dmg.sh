@@ -17,6 +17,8 @@ NOTARIZE="${NOTARIZE:-0}"
 NOTARY_PROFILE="${NOTARY_PROFILE:-}"
 LOCAL_ONLY="${LOCAL_ONLY:-0}"
 ALLOW_PROVISIONING_UPDATES="${ALLOW_PROVISIONING_UPDATES:-1}"
+ARCHIVE_CODE_SIGN_IDENTITY="${ARCHIVE_CODE_SIGN_IDENTITY:-}"
+DMG_CODE_SIGN_IDENTITY="${DMG_CODE_SIGN_IDENTITY:-}"
 SPARKLE_UPDATES_DIR="${SPARKLE_UPDATES_DIR:-}"
 SPARKLE_GENERATE_APPCAST="${SPARKLE_GENERATE_APPCAST:-}"
 DEFAULT_SPARKLE_GENERATE_APPCAST="$DERIVED_DATA_PATH/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast"
@@ -36,6 +38,10 @@ Environment:
                               This creates a DMG for local/internal testing, not a notarizable release.
   NOTARIZE=1                  Submit and staple the DMG with xcrun notarytool
   NOTARY_PROFILE=<profile>    Keychain profile created with xcrun notarytool store-credentials
+  ARCHIVE_CODE_SIGN_IDENTITY=<identity>
+                              Override archive signing, for example "Developer ID Application".
+  DMG_CODE_SIGN_IDENTITY=<identity>
+                              Sign the DMG before notarization, for example "Developer ID Application".
   SPARKLE_UPDATES_DIR=<dir>   Copy the DMG into a Sparkle updates directory
   SPARKLE_GENERATE_APPCAST=<path>
                               Run Sparkle's generate_appcast against SPARKLE_UPDATES_DIR.
@@ -66,6 +72,14 @@ if [[ "$LOCAL_ONLY" == "1" && "$NOTARIZE" == "1" ]]; then
   die "LOCAL_ONLY=1 cannot be notarized. Install a Developer ID Application certificate and run without LOCAL_ONLY for notarized releases."
 fi
 
+if [[ "$NOTARIZE" == "1" ]]; then
+  require_command ruby
+fi
+
+if [[ -n "$DMG_CODE_SIGN_IDENTITY" ]]; then
+  require_command codesign
+fi
+
 if [[ "$LOCAL_ONLY" != "1" && "$ALLOW_PROVISIONING_UPDATES" != "1" ]]; then
   if ! security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then
     die "No local Developer ID Application signing identity found. Either create one in Xcode, or run with ALLOW_PROVISIONING_UPDATES=1 so Xcode can use cloud-managed signing assets."
@@ -76,13 +90,22 @@ mkdir -p "$BUILD_DIR" "$DIST_DIR"
 rm -rf "$EXPORT_PATH"
 
 printf 'Archiving %s...\n' "$APP_NAME"
-xcodebuild \
-  -project "$REPO_ROOT/$APP_NAME.xcodeproj" \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  -archivePath "$ARCHIVE_PATH" \
-  archive
+archive_args=(
+  -project "$REPO_ROOT/$APP_NAME.xcodeproj"
+  -scheme "$SCHEME"
+  -configuration "$CONFIGURATION"
+  -derivedDataPath "$DERIVED_DATA_PATH"
+  -archivePath "$ARCHIVE_PATH"
+)
+
+if [[ "$LOCAL_ONLY" != "1" && -n "$ARCHIVE_CODE_SIGN_IDENTITY" ]]; then
+  archive_args+=(
+    CODE_SIGN_IDENTITY="$ARCHIVE_CODE_SIGN_IDENTITY"
+    CODE_SIGN_STYLE=Manual
+  )
+fi
+
+xcodebuild "${archive_args[@]}" archive
 
 if [[ "$LOCAL_ONLY" == "1" ]]; then
   printf 'Skipping Developer ID export because LOCAL_ONLY=1...\n'
@@ -127,10 +150,28 @@ hdiutil create \
   -format UDZO \
   "$DMG_PATH"
 
+if [[ -n "$DMG_CODE_SIGN_IDENTITY" ]]; then
+  printf 'Signing %s...\n' "$DMG_NAME"
+  codesign --force --sign "$DMG_CODE_SIGN_IDENTITY" --timestamp "$DMG_PATH"
+fi
+
 if [[ "$NOTARIZE" == "1" ]]; then
   [[ -n "$NOTARY_PROFILE" ]] || die "NOTARY_PROFILE is required when NOTARIZE=1"
   printf 'Submitting %s for notarization...\n' "$DMG_NAME"
-  xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait
+  NOTARY_OUTPUT="$BUILD_DIR/notary-submit.json"
+  xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json > "$NOTARY_OUTPUT"
+  cat "$NOTARY_OUTPUT"
+
+  NOTARY_STATUS="$(ruby -rjson -e 'puts JSON.parse(File.read(ARGV[0])).fetch("status", "")' "$NOTARY_OUTPUT")"
+  NOTARY_ID="$(ruby -rjson -e 'puts JSON.parse(File.read(ARGV[0])).fetch("id", "")' "$NOTARY_OUTPUT")"
+
+  if [[ "$NOTARY_STATUS" != "Accepted" ]]; then
+    if [[ -n "$NOTARY_ID" ]]; then
+      xcrun notarytool log "$NOTARY_ID" --keychain-profile "$NOTARY_PROFILE" || true
+    fi
+    die "notarization failed with status: ${NOTARY_STATUS:-unknown}"
+  fi
+
   printf 'Stapling notarization ticket...\n'
   xcrun stapler staple "$DMG_PATH"
 fi
