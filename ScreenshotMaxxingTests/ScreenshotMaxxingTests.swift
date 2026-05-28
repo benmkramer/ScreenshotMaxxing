@@ -270,7 +270,6 @@ struct ScreenshotMaxxingTests {
         let preferences = try PreferencesData.current(
             areaCaptureShortcut: .defaultAreaCapture,
             launchAtLoginEnabled: true,
-            menuBarIconVisible: false,
             baseDirectory: baseDirectory,
             fileManager: fileManager
         )
@@ -278,7 +277,6 @@ struct ScreenshotMaxxingTests {
         #expect(preferences.areaCaptureShortcut.displayString == "Control-Shift-4")
         #expect(preferences.captureOptionsShortcut.displayString == "Control-Shift-5")
         #expect(preferences.launchAtLoginEnabled)
-        #expect(!preferences.menuBarIconVisible)
         #expect(URL(fileURLWithPath: preferences.originalsFolderPath).lastPathComponent == "originals")
         #expect(URL(fileURLWithPath: preferences.originalsFolderPath).deletingLastPathComponent().lastPathComponent == "Captures")
         #expect(URL(fileURLWithPath: preferences.editedFolderPath).lastPathComponent == "edited")
@@ -293,7 +291,6 @@ struct ScreenshotMaxxingTests {
             areaCaptureShortcut: .defaultAreaCapture,
             captureOptionsShortcut: .defaultCaptureOptions,
             launchAtLoginEnabled: false,
-            menuBarIconVisible: true,
             originalsFolderPath: "/tmp/originals",
             editedFolderPath: "/tmp/edited"
         )
@@ -316,7 +313,7 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
-    @Test func preferencesDataUpdatesStartupAndVisibilitySettings() throws {
+    @Test func preferencesDataUpdatesLaunchAtLoginSetting() throws {
         let fileManager = FileManager.default
         let baseDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
@@ -330,14 +327,9 @@ struct ScreenshotMaxxingTests {
         )
 
         let launchAtLoginEnabled = preferences.updatingLaunchAtLoginEnabled(true)
-        let menuBarIconHidden = launchAtLoginEnabled.updatingMenuBarIconVisible(false)
 
         #expect(!preferences.launchAtLoginEnabled)
-        #expect(preferences.menuBarIconVisible)
         #expect(launchAtLoginEnabled.launchAtLoginEnabled)
-        #expect(launchAtLoginEnabled.menuBarIconVisible)
-        #expect(menuBarIconHidden.launchAtLoginEnabled)
-        #expect(!menuBarIconHidden.menuBarIconVisible)
     }
 
     @Test func captureOptionsOnlyIncludeStillImageCaptureModes() {
@@ -405,23 +397,6 @@ struct ScreenshotMaxxingTests {
         #expect(reloadedStore.areaCaptureShortcut().displayString == "Option-Command-A")
         #expect(reloadedStore.captureOptionsShortcut() == captureOptionsShortcut)
         #expect(reloadedStore.captureOptionsShortcut().displayString == "Control-Option-B")
-    }
-
-    @Test func appSettingsStoreDefaultsToShowingMenuBarIconAndPersistsChoice() throws {
-        let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
-        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
-        defer {
-            userDefaults.removePersistentDomain(forName: suiteName)
-        }
-
-        let store = AppSettingsStore(userDefaults: userDefaults)
-
-        #expect(store.menuBarIconVisible())
-
-        store.saveMenuBarIconVisible(false)
-        let reloadedStore = AppSettingsStore(userDefaults: userDefaults)
-
-        #expect(!reloadedStore.menuBarIconVisible())
     }
 
     @Test func shortcutCanBeRecordedFromModifiedKeyEvent() throws {

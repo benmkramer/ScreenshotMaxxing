@@ -11,7 +11,6 @@ struct PreferencesData: Equatable {
     let areaCaptureShortcut: GlobalKeyboardShortcut
     let captureOptionsShortcut: GlobalKeyboardShortcut
     let launchAtLoginEnabled: Bool
-    let menuBarIconVisible: Bool
     let originalsFolderPath: String
     let editedFolderPath: String
 
@@ -19,7 +18,6 @@ struct PreferencesData: Equatable {
         areaCaptureShortcut: GlobalKeyboardShortcut,
         captureOptionsShortcut: GlobalKeyboardShortcut = .defaultCaptureOptions,
         launchAtLoginEnabled: Bool = false,
-        menuBarIconVisible: Bool = true,
         baseDirectory: URL? = nil,
         fileManager: FileManager = .default
     ) throws -> PreferencesData {
@@ -32,7 +30,6 @@ struct PreferencesData: Equatable {
             areaCaptureShortcut: areaCaptureShortcut,
             captureOptionsShortcut: captureOptionsShortcut,
             launchAtLoginEnabled: launchAtLoginEnabled,
-            menuBarIconVisible: menuBarIconVisible,
             originalsFolderPath: directories.originals.fileSystemPath,
             editedFolderPath: directories.edited.fileSystemPath
         )
@@ -43,7 +40,6 @@ struct PreferencesData: Equatable {
             areaCaptureShortcut: shortcut,
             captureOptionsShortcut: captureOptionsShortcut,
             launchAtLoginEnabled: launchAtLoginEnabled,
-            menuBarIconVisible: menuBarIconVisible,
             originalsFolderPath: originalsFolderPath,
             editedFolderPath: editedFolderPath
         )
@@ -54,7 +50,6 @@ struct PreferencesData: Equatable {
             areaCaptureShortcut: areaCaptureShortcut,
             captureOptionsShortcut: shortcut,
             launchAtLoginEnabled: launchAtLoginEnabled,
-            menuBarIconVisible: menuBarIconVisible,
             originalsFolderPath: originalsFolderPath,
             editedFolderPath: editedFolderPath
         )
@@ -65,18 +60,6 @@ struct PreferencesData: Equatable {
             areaCaptureShortcut: areaCaptureShortcut,
             captureOptionsShortcut: captureOptionsShortcut,
             launchAtLoginEnabled: isEnabled,
-            menuBarIconVisible: menuBarIconVisible,
-            originalsFolderPath: originalsFolderPath,
-            editedFolderPath: editedFolderPath
-        )
-    }
-
-    func updatingMenuBarIconVisible(_ isVisible: Bool) -> PreferencesData {
-        PreferencesData(
-            areaCaptureShortcut: areaCaptureShortcut,
-            captureOptionsShortcut: captureOptionsShortcut,
-            launchAtLoginEnabled: launchAtLoginEnabled,
-            menuBarIconVisible: isVisible,
             originalsFolderPath: originalsFolderPath,
             editedFolderPath: editedFolderPath
         )
