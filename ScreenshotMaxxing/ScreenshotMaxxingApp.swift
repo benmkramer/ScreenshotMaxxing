@@ -6,20 +6,36 @@
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct ScreenshotMaxxingApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup {
-            ContentView(
-                captureArea: { appDelegate.captureArea() },
-                openHistory: { appDelegate.openHistoryWindow() },
-                openPreferences: { appDelegate.openPreferencesWindow() }
+        Settings {
+            PreferencesSettingsScene {
+                try appDelegate.makePreferencesView()
+            }
+        }
+    }
+}
+
+private struct PreferencesSettingsScene: View {
+    let makePreferencesView: () throws -> PreferencesView
+
+    var body: some View {
+        makeBody()
+    }
+
+    private func makeBody() -> AnyView {
+        do {
+            return AnyView(try makePreferencesView())
+        } catch {
+            return AnyView(
+                Text(error.localizedDescription)
+                    .padding(24)
+                    .frame(minWidth: 360, minHeight: 160)
             )
         }
-        .modelContainer(PersistenceController.sharedModelContainer)
     }
 }

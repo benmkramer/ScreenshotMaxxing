@@ -12,20 +12,17 @@ struct PreferencesView: View {
     private let onAreaCaptureShortcutChange: (GlobalKeyboardShortcut) -> Bool
     private let onCaptureOptionsShortcutChange: (GlobalKeyboardShortcut) -> Bool
     private let onLaunchAtLoginChange: (Bool) -> Bool
-    private let onMenuBarIconVisibleChange: (Bool) -> Bool
 
     init(
         preferences: PreferencesData,
         onAreaCaptureShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
         onCaptureOptionsShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
-        onLaunchAtLoginChange: @escaping (Bool) -> Bool = { _ in true },
-        onMenuBarIconVisibleChange: @escaping (Bool) -> Bool = { _ in true }
+        onLaunchAtLoginChange: @escaping (Bool) -> Bool = { _ in true }
     ) {
         _preferences = State(initialValue: preferences)
         self.onAreaCaptureShortcutChange = onAreaCaptureShortcutChange
         self.onCaptureOptionsShortcutChange = onCaptureOptionsShortcutChange
         self.onLaunchAtLoginChange = onLaunchAtLoginChange
-        self.onMenuBarIconVisibleChange = onMenuBarIconVisibleChange
     }
 
     var body: some View {
@@ -39,17 +36,6 @@ struct PreferencesView: View {
                         }
 
                         preferences = preferences.updatingLaunchAtLoginEnabled(isEnabled)
-                    }
-                ))
-
-                Toggle("Show in Menu Bar", isOn: Binding(
-                    get: { preferences.menuBarIconVisible },
-                    set: { isVisible in
-                        guard onMenuBarIconVisibleChange(isVisible) else {
-                            return
-                        }
-
-                        preferences = preferences.updatingMenuBarIconVisible(isVisible)
                     }
                 ))
             }
@@ -114,7 +100,6 @@ struct PreferencesView: View {
             areaCaptureShortcut: .defaultAreaCapture,
             captureOptionsShortcut: .defaultCaptureOptions,
             launchAtLoginEnabled: false,
-            menuBarIconVisible: true,
             originalsFolderPath: "/Users/example/Library/Application Support/ScreenshotMaxxing/Captures/originals",
             editedFolderPath: "/Users/example/Library/Application Support/ScreenshotMaxxing/Captures/edited"
         )

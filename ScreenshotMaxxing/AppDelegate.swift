@@ -19,21 +19,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let captureController = CaptureController()
     private let metadataStore = CaptureMetadataStore()
     private let shortcutSettingsStore = ShortcutSettingsStore()
-    private let appSettingsStore = AppSettingsStore()
     private let loginItemController = LoginItemController()
     private let screenCapturePermissionController = ScreenCapturePermissionController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureApplicationIcon()
-        NSApp.setActivationPolicy(.regular)
+        NSApp.setActivationPolicy(.accessory)
         let areaCaptureShortcut = shortcutSettingsStore.areaCaptureShortcut()
         let captureOptionsShortcut = shortcutSettingsStore.captureOptionsShortcut()
-        if appSettingsStore.menuBarIconVisible() {
-            showMenuBarController(
-                areaCaptureShortcut: areaCaptureShortcut,
-                captureOptionsShortcut: captureOptionsShortcut
-            )
-        }
+        showMenuBarController(
+            areaCaptureShortcut: areaCaptureShortcut,
+            captureOptionsShortcut: captureOptionsShortcut
+        )
         hotKeyManager = HotKeyManager { [weak self] action in
             self?.handleHotKeyAction(action)
         }
@@ -42,6 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         false
     }
 
@@ -84,18 +85,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .showCaptureOptions:
             openCaptureOptions()
         }
-    }
-
-    func captureArea() {
-        startCapture(.area)
-    }
-
-    func openHistoryWindow() {
-        openHistory()
-    }
-
-    func openPreferencesWindow() {
-        openPreferences()
     }
 
     private func startCapture(_ mode: CaptureMode) {
@@ -191,11 +180,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func hideMenuBarController() {
-        menuBarController?.removeFromStatusBar()
-        menuBarController = nil
-    }
-
     private func updateLaunchAtLoginEnabled(_ isEnabled: Bool) -> Bool {
         do {
             try loginItemController.setLaunchAtLoginEnabled(isEnabled)
@@ -206,16 +190,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func updateMenuBarIconVisible(_ isVisible: Bool) -> Bool {
-        appSettingsStore.saveMenuBarIconVisible(isVisible)
+    func makePreferencesView() throws -> PreferencesView {
+        let preferences = try PreferencesData.current(
+            areaCaptureShortcut: hotKeyManager?.registeredAreaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut(),
+            captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut ?? shortcutSettingsStore.captureOptionsShortcut(),
+            launchAtLoginEnabled: loginItemController.launchAtLoginEnabled
+        )
 
-        if isVisible {
-            showMenuBarController()
-        } else {
-            hideMenuBarController()
-        }
-
-        return true
+        return PreferencesView(
+            preferences: preferences,
+            onAreaCaptureShortcutChange: { [weak self] shortcut in
+                self?.updateAreaCaptureShortcut(shortcut) ?? false
+            },
+            onCaptureOptionsShortcutChange: { [weak self] shortcut in
+                self?.updateCaptureOptionsShortcut(shortcut) ?? false
+            },
+            onLaunchAtLoginChange: { [weak self] isEnabled in
+                self?.updateLaunchAtLoginEnabled(isEnabled) ?? false
+            }
+        )
     }
 
     private func openCaptureOptions() {
@@ -279,27 +272,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         do {
-            let preferences = try PreferencesData.current(
-                areaCaptureShortcut: hotKeyManager?.registeredAreaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut(),
-                captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut ?? shortcutSettingsStore.captureOptionsShortcut(),
-                launchAtLoginEnabled: loginItemController.launchAtLoginEnabled,
-                menuBarIconVisible: appSettingsStore.menuBarIconVisible()
-            )
-            let rootView = PreferencesView(
-                preferences: preferences,
-                onAreaCaptureShortcutChange: { [weak self] shortcut in
-                    self?.updateAreaCaptureShortcut(shortcut) ?? false
-                },
-                onCaptureOptionsShortcutChange: { [weak self] shortcut in
-                    self?.updateCaptureOptionsShortcut(shortcut) ?? false
-                },
-                onLaunchAtLoginChange: { [weak self] isEnabled in
-                    self?.updateLaunchAtLoginEnabled(isEnabled) ?? false
-                },
-                onMenuBarIconVisibleChange: { [weak self] isVisible in
-                    self?.updateMenuBarIconVisible(isVisible) ?? false
-                }
-            )
+            let rootView = try makePreferencesView()
             let hostingController = NSHostingController(rootView: rootView)
             let window = NSWindow(contentViewController: hostingController)
             window.title = "Preferences - ScreenshotMaxxing"
