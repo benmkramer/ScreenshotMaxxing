@@ -58,6 +58,7 @@ jobs:
           git fetch origin main
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
             BRANCH_EXISTS=1
+            git fetch origin "$BRANCH"
           fi
 
           git switch -C "$BRANCH" origin/main

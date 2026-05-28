@@ -85,7 +85,12 @@ Optional secret for the PR-preparation workflow:
 RELEASE_PR_TOKEN          Fine-grained PAT with contents and pull request access
 ```
 
-If `RELEASE_PR_TOKEN` is not configured, the workflow uses the default `GITHUB_TOKEN`. That is enough to create the release PR, but GitHub may suppress other workflows on the generated branch. Use `RELEASE_PR_TOKEN` if you want normal PR checks to run on release PRs.
+The `Prepare Release PR` workflow creates pull requests from GitHub Actions. To allow that, either:
+
+1. Enable `Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests`, or
+2. Configure `RELEASE_PR_TOKEN`.
+
+If `RELEASE_PR_TOKEN` is not configured, the workflow uses the default `GITHUB_TOKEN`. With the repository permission enabled, that is enough to create the release PR, but GitHub may suppress other workflows on the generated branch. Use `RELEASE_PR_TOKEN` if you want normal PR checks to run on release PRs.
 
 On macOS, encode the certificate and API key for GitHub Secrets with:
 
