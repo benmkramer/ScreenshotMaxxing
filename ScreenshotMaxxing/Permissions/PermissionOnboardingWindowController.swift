@@ -18,11 +18,15 @@ final class PermissionOnboardingWindowController: NSWindowController, NSWindowDe
         self.model = PermissionOnboardingModel(permissionController: permissionController)
 
         let hostingController = NSHostingController(rootView: PermissionOnboardingView(model: model))
+        if #available(macOS 13.0, *) {
+            hostingController.sizingOptions = []
+        }
+
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Set Up ScreenshotMaxxing"
-        window.setContentSize(NSSize(width: 560, height: 390))
-        window.minSize = NSSize(width: 520, height: 360)
-        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.setContentSize(NSSize(width: 560, height: 430))
+        window.contentMinSize = NSSize(width: 520, height: 390)
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
 
         super.init(window: window)

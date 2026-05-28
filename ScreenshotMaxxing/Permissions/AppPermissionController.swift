@@ -9,6 +9,7 @@ import Foundation
 
 enum AppPermission: CaseIterable, Equatable, Identifiable {
     case screenCapture
+    case directScreenAccess
 
     var id: Self {
         self
@@ -18,6 +19,8 @@ enum AppPermission: CaseIterable, Equatable, Identifiable {
         switch self {
         case .screenCapture:
             "Screen Recording"
+        case .directScreenAccess:
+            "First Capture Approval"
         }
     }
 
@@ -25,6 +28,8 @@ enum AppPermission: CaseIterable, Equatable, Identifiable {
         switch self {
         case .screenCapture:
             "Allows ScreenshotMaxxing to capture your screen."
+        case .directScreenAccess:
+            "Handles the macOS direct screen access approval before your first screenshot."
         }
     }
 
@@ -32,22 +37,26 @@ enum AppPermission: CaseIterable, Equatable, Identifiable {
         switch self {
         case .screenCapture:
             "display"
+        case .directScreenAccess:
+            "record.circle"
         }
     }
 
     var settingsURL: URL? {
-        let path = switch self {
+        switch self {
         case .screenCapture:
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+        case .directScreenAccess:
+            return nil
         }
-
-        return URL(string: path)
     }
 
     var requiresRelaunchAfterGrant: Bool {
         switch self {
         case .screenCapture:
             true
+        case .directScreenAccess:
+            false
         }
     }
 }
@@ -55,6 +64,7 @@ enum AppPermission: CaseIterable, Equatable, Identifiable {
 struct AppPermissionState: Equatable, Identifiable {
     let permission: AppPermission
     let isGranted: Bool
+    let isSetupEnabled: Bool
 
     var id: AppPermission {
         permission
@@ -63,17 +73,35 @@ struct AppPermissionState: Equatable, Identifiable {
 
 struct AppPermissionController {
     private let screenCapturePermissionController: ScreenCapturePermissionController
+    private let directScreenAccessController: DirectScreenAccessController
 
     init(
-        screenCapturePermissionController: ScreenCapturePermissionController = ScreenCapturePermissionController()
+        screenCapturePermissionController: ScreenCapturePermissionController = ScreenCapturePermissionController(),
+        directScreenAccessController: DirectScreenAccessController = DirectScreenAccessController()
     ) {
         self.screenCapturePermissionController = screenCapturePermissionController
+        self.directScreenAccessController = directScreenAccessController
     }
 
     func permissionStates() -> [AppPermissionState] {
-        AppPermission.allCases.map { permission in
-            AppPermissionState(permission: permission, isGranted: hasAccess(for: permission))
+        let screenCaptureGranted = screenCapturePermissionController.hasAccess()
+
+        if !screenCaptureGranted {
+            directScreenAccessController.clearApproval()
         }
+
+        return [
+            AppPermissionState(
+                permission: .screenCapture,
+                isGranted: screenCaptureGranted,
+                isSetupEnabled: true
+            ),
+            AppPermissionState(
+                permission: .directScreenAccess,
+                isGranted: screenCaptureGranted && directScreenAccessController.hasAccess(),
+                isSetupEnabled: screenCaptureGranted
+            )
+        ]
     }
 
     func hasAllRequiredPermissions() -> Bool {
@@ -84,14 +112,22 @@ struct AppPermissionController {
         switch permission {
         case .screenCapture:
             screenCapturePermissionController.hasAccess()
+        case .directScreenAccess:
+            screenCapturePermissionController.hasAccess() && directScreenAccessController.hasAccess()
         }
     }
 
     @discardableResult
-    func requestAccessIfNeeded(for permission: AppPermission) -> Bool {
+    func requestAccessIfNeeded(for permission: AppPermission) async -> Bool {
         switch permission {
         case .screenCapture:
-            screenCapturePermissionController.requestAccessIfNeeded()
+            return screenCapturePermissionController.requestAccessIfNeeded()
+        case .directScreenAccess:
+            guard screenCapturePermissionController.hasAccess() else {
+                return false
+            }
+
+            return await directScreenAccessController.requestAccessIfNeeded()
         }
     }
 }

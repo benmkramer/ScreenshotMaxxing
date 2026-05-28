@@ -372,40 +372,98 @@ struct ScreenshotMaxxingTests {
         #expect(requestCount == 1)
     }
 
+    @Test func directScreenAccessStoresSuccessfulApproval() async {
+        var approvalCompleted = false
+        var requestCount = 0
+        let controller = DirectScreenAccessController {
+            approvalCompleted
+        } requestApproval: {
+            requestCount += 1
+            return true
+        } markApprovalCompleted: {
+            approvalCompleted = true
+        }
+
+        let granted = await controller.requestAccessIfNeeded()
+
+        #expect(granted)
+        #expect(approvalCompleted)
+        #expect(requestCount == 1)
+        #expect(controller.hasAccess())
+    }
+
     @Test func appPermissionControllerReportsRequiredPermissionStates() {
         let controller = AppPermissionController(
             screenCapturePermissionController: ScreenCapturePermissionController {
                 true
             } requestAccess: {
                 false
+            },
+            directScreenAccessController: DirectScreenAccessController {
+                false
+            } requestApproval: {
+                true
             }
         )
 
         #expect(controller.permissionStates() == [
-            AppPermissionState(permission: .screenCapture, isGranted: true)
+            AppPermissionState(permission: .screenCapture, isGranted: true, isSetupEnabled: true),
+            AppPermissionState(permission: .directScreenAccess, isGranted: false, isSetupEnabled: true)
         ])
-        #expect(controller.hasAllRequiredPermissions())
+        #expect(!controller.hasAllRequiredPermissions())
     }
 
-    @Test func appPermissionControllerRequestsSelectedPermissionOnly() {
+    @Test func appPermissionControllerRequestsSelectedPermissionOnly() async {
         var screenCaptureRequestCount = 0
+        var directScreenAccessRequestCount = 0
         let controller = AppPermissionController(
             screenCapturePermissionController: ScreenCapturePermissionController {
                 false
             } requestAccess: {
                 screenCaptureRequestCount += 1
                 return true
+            },
+            directScreenAccessController: DirectScreenAccessController {
+                false
+            } requestApproval: {
+                directScreenAccessRequestCount += 1
+                return true
             }
         )
 
-        let granted = controller.requestAccessIfNeeded(for: .screenCapture)
+        let granted = await controller.requestAccessIfNeeded(for: .screenCapture)
 
         #expect(granted)
         #expect(screenCaptureRequestCount == 1)
+        #expect(directScreenAccessRequestCount == 0)
+    }
+
+    @Test func appPermissionControllerClearsDirectApprovalWhenScreenCaptureIsMissing() {
+        var clearApprovalCount = 0
+        let controller = AppPermissionController(
+            screenCapturePermissionController: ScreenCapturePermissionController {
+                false
+            } requestAccess: {
+                false
+            },
+            directScreenAccessController: DirectScreenAccessController {
+                true
+            } requestApproval: {
+                true
+            } clearStoredApproval: {
+                clearApprovalCount += 1
+            }
+        )
+
+        #expect(controller.permissionStates() == [
+            AppPermissionState(permission: .screenCapture, isGranted: false, isSetupEnabled: true),
+            AppPermissionState(permission: .directScreenAccess, isGranted: false, isSetupEnabled: false)
+        ])
+        #expect(clearApprovalCount == 1)
     }
 
     @MainActor
-    @Test func permissionOnboardingModelOpensSettingsAndOffersRelaunchWhenPermissionRemainsMissing() {
+    @Test func permissionOnboardingModelOpensSettingsAndOffersRelaunchWhenPermissionRemainsMissing() async {
         var requestCount = 0
         var openedURLs: [URL] = []
         var relaunchCount = 0
@@ -415,6 +473,11 @@ struct ScreenshotMaxxingTests {
             } requestAccess: {
                 requestCount += 1
                 return false
+            },
+            directScreenAccessController: DirectScreenAccessController {
+                false
+            } requestApproval: {
+                true
             }
         )
         let model = PermissionOnboardingModel(permissionController: controller) { url in
@@ -423,7 +486,7 @@ struct ScreenshotMaxxingTests {
             relaunchCount += 1
         }
 
-        model.requestAccess(for: .screenCapture)
+        await model.requestAccess(for: .screenCapture)
         model.primaryAction()
 
         #expect(requestCount == 1)
@@ -433,7 +496,39 @@ struct ScreenshotMaxxingTests {
         #expect(model.primaryActionTitle == "Relaunch")
         #expect(relaunchCount == 1)
         #expect(model.states == [
-            AppPermissionState(permission: .screenCapture, isGranted: false)
+            AppPermissionState(permission: .screenCapture, isGranted: false, isSetupEnabled: true),
+            AppPermissionState(permission: .directScreenAccess, isGranted: false, isSetupEnabled: false)
+        ])
+    }
+
+    @MainActor
+    @Test func permissionOnboardingModelRequestsDirectScreenAccessDuringSetup() async {
+        var approvalCompleted = false
+        var requestCount = 0
+        let controller = AppPermissionController(
+            screenCapturePermissionController: ScreenCapturePermissionController {
+                true
+            } requestAccess: {
+                false
+            },
+            directScreenAccessController: DirectScreenAccessController {
+                approvalCompleted
+            } requestApproval: {
+                requestCount += 1
+                return true
+            } markApprovalCompleted: {
+                approvalCompleted = true
+            }
+        )
+        let model = PermissionOnboardingModel(permissionController: controller)
+
+        await model.requestAccess(for: .directScreenAccess)
+
+        #expect(requestCount == 1)
+        #expect(model.allGranted)
+        #expect(model.states == [
+            AppPermissionState(permission: .screenCapture, isGranted: true, isSetupEnabled: true),
+            AppPermissionState(permission: .directScreenAccess, isGranted: true, isSetupEnabled: true)
         ])
     }
 
@@ -444,6 +539,11 @@ struct ScreenshotMaxxingTests {
             screenCapturePermissionController: ScreenCapturePermissionController {
                 true
             } requestAccess: {
+                false
+            },
+            directScreenAccessController: DirectScreenAccessController {
+                true
+            } requestApproval: {
                 false
             }
         )

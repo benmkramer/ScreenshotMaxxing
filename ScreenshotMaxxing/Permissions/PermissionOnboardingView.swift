@@ -52,7 +52,11 @@ final class PermissionOnboardingModel: ObservableObject {
             return "After enabling Screen Recording, relaunch ScreenshotMaxxing to apply the change."
         }
 
-        return "Enable Screen Recording in System Settings to finish setup."
+        if states.contains(where: { $0.permission == .directScreenAccess && !$0.isGranted && $0.isSetupEnabled }) {
+            return "Approve macOS direct screen access now so your first real screenshot can continue without another setup prompt."
+        }
+
+        return "Enable Screen Recording in System Settings, then relaunch ScreenshotMaxxing."
     }
 
     var primaryActionTitle: String {
@@ -67,9 +71,9 @@ final class PermissionOnboardingModel: ObservableObject {
         }
     }
 
-    func requestAccess(for permission: AppPermission) {
+    func requestAccess(for permission: AppPermission) async {
         setupStartedPermissions.insert(permission)
-        _ = permissionController.requestAccessIfNeeded(for: permission)
+        _ = await permissionController.requestAccessIfNeeded(for: permission)
         refresh()
 
         guard !permissionController.hasAccess(for: permission) else {
@@ -98,7 +102,11 @@ final class PermissionOnboardingModel: ObservableObject {
     }
 
     func actionTitle(for permission: AppPermission) -> String {
-        setupStartedPermissions.contains(permission) ? "Open Settings" : "Set Up"
+        if permission == .directScreenAccess && setupStartedPermissions.contains(permission) {
+            return "Try Again"
+        }
+
+        return setupStartedPermissions.contains(permission) ? "Open Settings" : "Set Up"
     }
 
     private static func relaunchCurrentApp() {
@@ -125,7 +133,9 @@ struct PermissionOnboardingView: View {
             VStack(spacing: 0) {
                 ForEach(model.states) { state in
                     PermissionOnboardingRow(state: state, actionTitle: model.actionTitle(for: state.permission)) {
-                        model.requestAccess(for: state.permission)
+                        Task {
+                            await model.requestAccess(for: state.permission)
+                        }
                     }
 
                     if state.id != model.states.last?.id {
@@ -173,10 +183,6 @@ struct PermissionOnboardingView: View {
 
             Spacer()
 
-            Button("Refresh") {
-                model.refresh()
-            }
-
             Button(model.primaryActionTitle) {
                 model.primaryAction()
             }
@@ -218,6 +224,7 @@ private struct PermissionOnboardingRow: View {
                     .padding(.vertical, 5)
             } else {
                 Button(actionTitle, action: requestAccess)
+                    .disabled(!state.isSetupEnabled)
             }
         }
         .padding(.horizontal, 14)
