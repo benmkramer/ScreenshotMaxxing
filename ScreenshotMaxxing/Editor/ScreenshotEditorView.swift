@@ -647,6 +647,14 @@ private struct EditorToolbar: View {
                         selectedTool = tool
                     }
                 }
+
+                ToolbarIconButton(
+                    systemImageName: "trash",
+                    helpText: selectedAnnotationID == nil ? "Select an annotation to delete" : "Delete selected annotation",
+                    action: deleteAction
+                )
+                .disabled(selectedAnnotationID == nil)
+                .keyboardShortcut(.delete, modifiers: [])
             }
 
             if showsStrokeControls {
@@ -667,30 +675,27 @@ private struct EditorToolbar: View {
                     .foregroundStyle(.secondary)
             }
 
-            ToolbarIconButton(
-                systemImageName: "trash",
-                helpText: selectedAnnotationID == nil ? "Select an annotation to remove it" : "Remove selected annotation",
-                action: deleteAction
-            )
-            .disabled(selectedAnnotationID == nil)
-            .keyboardShortcut(.delete, modifiers: [])
+            HStack(spacing: 6) {
+                ToolbarIconButton(
+                    systemImageName: "doc.on.doc",
+                    helpText: "Save edited image and copy it to the clipboard",
+                    action: copyAction
+                )
 
-            ToolbarIconButton(
-                systemImageName: "doc.on.doc",
-                helpText: "Save and copy edited image",
-                action: copyAction
-            )
+                ToolbarIconButton(
+                    systemImageName: "square.and.arrow.down",
+                    helpText: "Save edited image and copy the file path",
+                    action: saveAction
+                )
+            }
+
+            Divider()
+                .frame(height: 22)
 
             ToolbarIconButton(
                 systemImageName: "clipboard",
-                helpText: "Copy image, then delete capture from history and disk",
+                helpText: "Copy image to clipboard and delete it from history and disk",
                 action: copyAndDeleteAction
-            )
-
-            ToolbarIconButton(
-                systemImageName: "square.and.arrow.down",
-                helpText: "Save edited image",
-                action: saveAction
             )
         }
         .padding(.horizontal, 12)
