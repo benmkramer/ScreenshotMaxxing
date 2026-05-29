@@ -22,10 +22,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let loginItemController = LoginItemController()
     private let permissionController = AppPermissionController()
     private var permissionOnboardingWindowController: PermissionOnboardingWindowController?
+    private var accessoryPolicyRefreshWorkItem: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureApplicationIcon()
         NSApp.setActivationPolicy(.accessory)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowWillClose(_:)),
+            name: NSWindow.willCloseNotification,
+            object: nil
+        )
         let areaCaptureShortcut = shortcutSettingsStore.areaCaptureShortcut()
         let captureOptionsShortcut = shortcutSettingsStore.captureOptionsShortcut()
         showMenuBarController(
@@ -53,6 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidBecomeActive(_ notification: Notification) {
         permissionOnboardingWindowController?.refresh()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func configureApplicationIcon() {
@@ -202,6 +213,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private var userFacingWindows: [NSWindow] {
+        var windows = editorWindowControllers.compactMap { $0.window }
+
+        if let window = captureOptionsWindowController?.window {
+            windows.append(window)
+        }
+
+        if let window = historyWindowController?.window {
+            windows.append(window)
+        }
+
+        if let window = preferencesWindowController?.window {
+            windows.append(window)
+        }
+
+        if let window = permissionOnboardingWindowController?.window {
+            windows.append(window)
+        }
+
+        return windows
+    }
+
+    private var hasOpenUserFacingWindows: Bool {
+        userFacingWindows.contains { window in
+            window.isVisible || window.isMiniaturized
+        }
+    }
+
+    private func activateForUserFacingWindow(_ window: NSWindow) {
+        accessoryPolicyRefreshWorkItem?.cancel()
+        accessoryPolicyRefreshWorkItem = nil
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func activateForUserFacingWindowController(_ windowController: NSWindowController) {
+        guard let window = windowController.window else {
+            return
+        }
+
+        accessoryPolicyRefreshWorkItem?.cancel()
+        accessoryPolicyRefreshWorkItem = nil
+        NSApp.setActivationPolicy(.regular)
+        windowController.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func refreshAccessoryPolicyAfterWindowClose() {
+        accessoryPolicyRefreshWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.accessoryPolicyRefreshWorkItem = nil
+            if self?.hasOpenUserFacingWindows == false {
+                NSApp.setActivationPolicy(.accessory)
+            }
+        }
+
+        accessoryPolicyRefreshWorkItem = workItem
+        DispatchQueue.main.async(execute: workItem)
+    }
+
+    @objc private func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              userFacingWindows.contains(where: { $0 === window }) else {
+            return
+        }
+
+        refreshAccessoryPolicyAfterWindowClose()
+    }
+
     private func updateLaunchAtLoginEnabled(_ isEnabled: Bool) -> Bool {
         do {
             try loginItemController.setLaunchAtLoginEnabled(isEnabled)
@@ -235,8 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openCaptureOptions() {
         if let window = captureOptionsWindowController?.window {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            activateForUserFacingWindow(window)
             return
         }
 
@@ -247,8 +329,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self?.captureOptionsWindowController === closedController {
                 self?.captureOptionsWindowController = nil
             }
+            self?.refreshAccessoryPolicyAfterWindowClose()
         }
         captureOptionsWindowController = controller
+        NSApp.setActivationPolicy(.regular)
         controller.show()
     }
 
@@ -261,8 +345,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func openPermissionOnboarding() {
         if let window = permissionOnboardingWindowController?.window {
             permissionOnboardingWindowController?.refresh()
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            activateForUserFacingWindow(window)
             return
         }
 
@@ -271,8 +354,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self?.permissionOnboardingWindowController === closedController {
                 self?.permissionOnboardingWindowController = nil
             }
+            self?.refreshAccessoryPolicyAfterWindowClose()
         }
         permissionOnboardingWindowController = controller
+        NSApp.setActivationPolicy(.regular)
         controller.show()
     }
 
@@ -280,15 +365,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = ScreenshotEditorWindowController(imageURL: imageURL, capture: capture)
         controller.onClose = { [weak self] closedController in
             self?.editorWindowControllers.removeAll { $0 === closedController }
+            self?.refreshAccessoryPolicyAfterWindowClose()
         }
         editorWindowControllers.append(controller)
+        NSApp.setActivationPolicy(.regular)
         controller.show()
     }
 
     private func openHistory() {
         if let window = historyWindowController?.window {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            activateForUserFacingWindow(window)
             return
         }
 
@@ -306,14 +392,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let windowController = NSWindowController(window: window)
         historyWindowController = windowController
-        windowController.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        activateForUserFacingWindowController(windowController)
     }
 
     private func openPreferences() {
         if let window = preferencesWindowController?.window {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            activateForUserFacingWindow(window)
             return
         }
 
@@ -329,8 +413,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             let windowController = NSWindowController(window: window)
             preferencesWindowController = windowController
-            windowController.showWindow(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            activateForUserFacingWindowController(windowController)
         } catch {
             presentError(error, title: "Preferences Unavailable")
         }
