@@ -100,9 +100,15 @@ struct VideoEditState: Equatable {
         normalize()
     }
 
-    mutating func addRemovedRange(_ range: VideoTimeRange) {
-        removedRanges.append(range)
+    @discardableResult
+    mutating func addRemovedRange(_ range: VideoTimeRange) -> UUID? {
+        let normalizedRange = range.normalized
+        let midpoint = (normalizedRange.start + normalizedRange.end) / 2
+        removedRanges.append(normalizedRange)
+        selectedRemovedRangeID = normalizedRange.id
         normalize()
+        restoreSelection(containing: midpoint)
+        return selectedRemovedRangeID
     }
 
     mutating func removeSelectedRange() {
@@ -112,6 +118,61 @@ struct VideoEditState: Equatable {
 
         removedRanges.removeAll { $0.id == selectedRemovedRangeID }
         self.selectedRemovedRangeID = nil
+    }
+
+    mutating func selectRemovedRange(id: UUID?) {
+        guard let id else {
+            selectedRemovedRangeID = nil
+            return
+        }
+
+        selectedRemovedRangeID = removedRanges.contains { $0.id == id } ? id : nil
+    }
+
+    mutating func setRemovedRangeStart(id: UUID, _ value: Double, minimumDuration: Double = 0) {
+        guard let index = removedRanges.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        let end = removedRanges[index].end
+        let minimumDuration = max(minimumDuration, 0)
+        removedRanges[index].start = min(min(max(value, trimStart), trimEnd), end - minimumDuration)
+        selectedRemovedRangeID = id
+        normalize()
+        restoreSelection(containing: removedRanges.first(where: { $0.id == id })?.start ?? value)
+    }
+
+    mutating func setRemovedRangeEnd(id: UUID, _ value: Double, minimumDuration: Double = 0) {
+        guard let index = removedRanges.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        let start = removedRanges[index].start
+        let minimumDuration = max(minimumDuration, 0)
+        removedRanges[index].end = max(min(max(value, trimStart), trimEnd), start + minimumDuration)
+        selectedRemovedRangeID = id
+        normalize()
+        restoreSelection(containing: removedRanges.first(where: { $0.id == id })?.end ?? value)
+    }
+
+    mutating func moveRemovedRange(id: UUID, start: Double) {
+        guard let index = removedRanges.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        let duration = removedRanges[index].duration
+        guard duration > 0 else {
+            return
+        }
+
+        let lowerBound = trimStart
+        let upperBound = max(trimStart, trimEnd - duration)
+        let clampedStart = min(max(start, lowerBound), upperBound)
+        removedRanges[index].start = clampedStart
+        removedRanges[index].end = min(clampedStart + duration, trimEnd)
+        selectedRemovedRangeID = id
+        normalize()
+        restoreSelection(containing: clampedStart + duration / 2)
     }
 
     func removedRange(containing time: Double) -> VideoTimeRange? {
@@ -133,6 +194,16 @@ struct VideoEditState: Equatable {
            !removedRanges.contains(where: { $0.id == selectedRemovedRangeID }) {
             self.selectedRemovedRangeID = nil
         }
+    }
+
+    private mutating func restoreSelection(containing time: Double) {
+        guard selectedRemovedRangeID == nil else {
+            return
+        }
+
+        selectedRemovedRangeID = removedRanges.first { range in
+            time >= range.start && time <= range.end
+        }?.id
     }
 
     private func normalizedRemovedRanges() -> [VideoTimeRange] {

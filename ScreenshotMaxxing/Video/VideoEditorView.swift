@@ -45,7 +45,6 @@ struct VideoEditorView: View {
                 hasSelectedCut: editState.selectedRemovedRangeID != nil,
                 statusMessage: statusMessage,
                 playPauseAction: togglePlayback,
-                addCutAction: addCutAtCurrentTime,
                 removeCutAction: removeSelectedCut,
                 saveAction: saveEditedVideo
             )
@@ -69,6 +68,9 @@ struct VideoEditorView: View {
         }
         .frame(minWidth: 720, minHeight: 500)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onDeleteCommand {
+            removeSelectedCut()
+        }
         .onAppear {
             addPlaybackObserverIfNeeded()
             seek(to: editState.trimStart)
@@ -90,18 +92,6 @@ struct VideoEditorView: View {
             player.play()
             isPlaying = true
         }
-    }
-
-    private func addCutAtCurrentTime() {
-        let cutLength = min(1.0, max(editState.trimEnd - editState.trimStart, 0))
-        guard cutLength > 0 else {
-            return
-        }
-
-        let start = min(max(currentTime, editState.trimStart), max(editState.trimEnd - cutLength, editState.trimStart))
-        let range = VideoTimeRange(start: start, end: min(start + cutLength, editState.trimEnd))
-        editState.addRemovedRange(range)
-        editState.selectedRemovedRangeID = editState.removedRanges.first(where: { $0 == range })?.id
     }
 
     private func removeSelectedCut() {
@@ -222,7 +212,6 @@ private struct VideoEditorToolbar: View {
     let hasSelectedCut: Bool
     let statusMessage: String?
     let playPauseAction: () -> Void
-    let addCutAction: () -> Void
     let removeCutAction: () -> Void
     let saveAction: () -> Void
 
@@ -242,8 +231,6 @@ private struct VideoEditorToolbar: View {
 
             Divider()
                 .frame(height: 22)
-
-            ToolbarIconButton(systemImageName: "scissors", helpText: "Add cut", action: addCutAction)
 
             ToolbarIconButton(
                 systemImageName: "trash",
@@ -279,6 +266,15 @@ private struct VideoTimelineView: View {
     let currentTime: Double
     let seekAction: (Double) -> Void
 
+    @State private var draftCutStart: Double?
+    @State private var draftCutEnd: Double?
+    @State private var activeDrag: TimelineDrag?
+
+    private static let coordinateSpaceName = "video-timeline"
+    private static let cutEdgeHitWidth: CGFloat = 14
+    private static let minimumCutDragDistance: CGFloat = 4
+    private static let trimHandleHitWidth: CGFloat = 14
+
     var body: some View {
         GeometryReader { proxy in
             let metrics = VideoTimelineMetrics(size: proxy.size, duration: editState.durationSeconds)
@@ -296,16 +292,24 @@ private struct VideoTimelineView: View {
                         height: metrics.trackHeight
                     )
                     .offset(x: metrics.x(for: editState.trimStart), y: metrics.trackY)
+                    .contentShape(Rectangle())
+
+                if let draftCutRange = draftCutRange(metrics: metrics) {
+                    TimelineCutRangeShape(
+                        range: draftCutRange,
+                        metrics: metrics,
+                        isSelected: true,
+                        isDraft: true
+                    )
+                    .offset(x: metrics.x(for: draftCutRange.start), y: metrics.trackY)
+                }
 
                 ForEach(editState.removedRanges) { range in
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(range.id == editState.selectedRemovedRangeID ? Color.red : Color.red.opacity(0.58))
-                        .frame(width: max(metrics.width(for: range.duration), 4), height: metrics.trackHeight)
-                        .offset(x: metrics.x(for: range.start), y: metrics.trackY)
-                        .onTapGesture {
-                            editState.selectedRemovedRangeID = range.id
-                        }
-                        .help("Cut")
+                    TimelineCutRangeView(
+                        range: range,
+                        isSelected: range.id == editState.selectedRemovedRangeID,
+                        metrics: metrics
+                    )
                 }
 
                 Rectangle()
@@ -316,29 +320,13 @@ private struct VideoTimelineView: View {
 
                 TimelineHandle()
                     .offset(x: metrics.x(for: editState.trimStart) - 4, y: metrics.trackY - 7)
-                    .gesture(handleDrag(metrics: metrics) { value in
-                        editState.setTrimStart(value)
-                        seekAction(editState.trimStart)
-                    })
 
                 TimelineHandle()
                     .offset(x: metrics.x(for: editState.trimEnd) - 4, y: metrics.trackY - 7)
-                    .gesture(handleDrag(metrics: metrics) { value in
-                        editState.setTrimEnd(value)
-                        seekAction(editState.trimEnd)
-                    })
             }
+            .coordinateSpace(name: Self.coordinateSpaceName)
             .contentShape(Rectangle())
-            .simultaneousGesture(
-                SpatialTapGesture(coordinateSpace: .local)
-                    .onEnded { value in
-                        let time = metrics.time(for: value.location.x)
-                        if editState.removedRange(containing: time) == nil {
-                            seekAction(time)
-                            editState.selectedRemovedRangeID = nil
-                        }
-                    }
-            )
+            .gesture(timelineDrag(metrics: metrics))
             .overlay(alignment: .bottomLeading) {
                 HStack {
                     Text(timeText(editState.trimStart))
@@ -352,11 +340,249 @@ private struct VideoTimelineView: View {
         }
     }
 
-    private func handleDrag(metrics: VideoTimelineMetrics, update: @escaping (Double) -> Void) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+    private func timelineDrag(metrics: VideoTimelineMetrics) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.coordinateSpaceName))
             .onChanged { value in
-                update(metrics.time(for: value.location.x))
+                let drag = activeDrag ?? dragTarget(for: value.startLocation, metrics: metrics)
+                activeDrag = drag
+                update(drag, with: value, metrics: metrics)
             }
+            .onEnded { value in
+                let drag = activeDrag ?? dragTarget(for: value.startLocation, metrics: metrics)
+                defer {
+                    activeDrag = nil
+                    draftCutStart = nil
+                    draftCutEnd = nil
+                }
+
+                guard hasMeaningfulDrag(value) else {
+                    handleClick(for: drag, at: value.startLocation, metrics: metrics)
+                    return
+                }
+
+                if case .createCut(let startTime) = drag,
+                   let range = normalizedCutRange(
+                       start: startTime,
+                       end: metrics.time(
+                           for: value.location.x,
+                           lowerBound: editState.trimStart,
+                           upperBound: editState.trimEnd
+                       )
+                   ),
+                   range.duration >= minimumCutDuration(metrics: metrics) {
+                    editState.addRemovedRange(range)
+                    if currentTime >= range.start && currentTime < range.end {
+                        seekAction(range.end)
+                    }
+                }
+            }
+    }
+
+    private func dragTarget(for location: CGPoint, metrics: VideoTimelineMetrics) -> TimelineDrag {
+        let time = metrics.time(for: location.x)
+
+        if abs(location.x - metrics.x(for: editState.trimStart)) <= Self.trimHandleHitWidth {
+            return .trimStart
+        }
+
+        if abs(location.x - metrics.x(for: editState.trimEnd)) <= Self.trimHandleHitWidth {
+            return .trimEnd
+        }
+
+        for range in editState.removedRanges.reversed() {
+            if abs(location.x - metrics.x(for: range.start)) <= Self.cutEdgeHitWidth {
+                return .resizeCutStart(range.id)
+            }
+
+            if abs(location.x - metrics.x(for: range.end)) <= Self.cutEdgeHitWidth {
+                return .resizeCutEnd(range.id)
+            }
+        }
+
+        if let range = editState.removedRange(containing: time) {
+            return .moveCut(
+                id: range.id,
+                originalStart: range.start,
+                originalEnd: range.end,
+                startTime: time
+            )
+        }
+
+        if time >= editState.trimStart && time <= editState.trimEnd {
+            return .createCut(startTime: time)
+        }
+
+        return .seek
+    }
+
+    private func update(_ drag: TimelineDrag, with value: DragGesture.Value, metrics: VideoTimelineMetrics) {
+        let time = metrics.time(
+            for: value.location.x,
+            lowerBound: editState.trimStart,
+            upperBound: editState.trimEnd
+        )
+
+        switch drag {
+        case .trimStart:
+            editState.setTrimStart(metrics.time(for: value.location.x))
+            seekAction(editState.trimStart)
+        case .trimEnd:
+            editState.setTrimEnd(metrics.time(for: value.location.x))
+            seekAction(editState.trimEnd)
+        case .resizeCutStart(let id):
+            editState.setRemovedRangeStart(id: id, time, minimumDuration: minimumCutDuration(metrics: metrics))
+            if let selectedRange = editState.selectedRemovedRange {
+                seekAction(selectedRange.start)
+            }
+        case .resizeCutEnd(let id):
+            editState.setRemovedRangeEnd(id: id, time, minimumDuration: minimumCutDuration(metrics: metrics))
+            if let selectedRange = editState.selectedRemovedRange {
+                seekAction(selectedRange.end)
+            }
+        case .moveCut(let id, let originalStart, _, let startTime):
+            editState.moveRemovedRange(id: id, start: originalStart + time - startTime)
+            if let selectedRange = editState.selectedRemovedRange {
+                seekAction(selectedRange.start)
+            }
+        case .createCut(let startTime):
+            guard hasMeaningfulDrag(value) else {
+                return
+            }
+
+            draftCutStart = startTime
+            draftCutEnd = time
+            editState.selectRemovedRange(id: nil)
+        case .seek:
+            break
+        }
+    }
+
+    private func handleClick(for drag: TimelineDrag, at location: CGPoint, metrics: VideoTimelineMetrics) {
+        switch drag {
+        case .resizeCutStart(let id), .resizeCutEnd(let id), .moveCut(let id, _, _, _):
+            editState.selectRemovedRange(id: id)
+        default:
+            let time = metrics.time(for: location.x)
+            if let range = editState.removedRange(containing: time) {
+                editState.selectRemovedRange(id: range.id)
+            } else {
+                seekAction(time)
+                editState.selectRemovedRange(id: nil)
+            }
+        }
+    }
+
+    private func hasMeaningfulDrag(_ value: DragGesture.Value) -> Bool {
+        abs(value.translation.width) >= Self.minimumCutDragDistance
+    }
+
+    private func draftCutRange(metrics: VideoTimelineMetrics) -> VideoTimeRange? {
+        guard let draftCutStart, let draftCutEnd else {
+            return nil
+        }
+
+        return normalizedCutRange(start: draftCutStart, end: draftCutEnd)
+    }
+
+    private func normalizedCutRange(start: Double, end: Double) -> VideoTimeRange? {
+        let clampedStart = min(max(start, editState.trimStart), editState.trimEnd)
+        let clampedEnd = min(max(end, editState.trimStart), editState.trimEnd)
+        let range = VideoTimeRange(start: min(clampedStart, clampedEnd), end: max(clampedStart, clampedEnd))
+
+        return range.duration > 0 ? range : nil
+    }
+
+    private func minimumCutDuration(metrics: VideoTimelineMetrics) -> Double {
+        let trimDuration = max(editState.trimEnd - editState.trimStart, 0)
+        guard trimDuration > 0 else {
+            return 0
+        }
+
+        return min(max(0.05, metrics.duration(forWidth: 4)), trimDuration)
+    }
+
+    private enum TimelineDrag {
+        case trimStart
+        case trimEnd
+        case resizeCutStart(UUID)
+        case resizeCutEnd(UUID)
+        case moveCut(id: UUID, originalStart: Double, originalEnd: Double, startTime: Double)
+        case createCut(startTime: Double)
+        case seek
+    }
+}
+
+private struct TimelineCutRangeView: View {
+    let range: VideoTimeRange
+    let isSelected: Bool
+    let metrics: VideoTimelineMetrics
+
+    private static let handleWidth: CGFloat = 16
+
+    var body: some View {
+        let rangeWidth = max(metrics.width(for: range.duration), Self.handleWidth * 2)
+
+        ZStack(alignment: .topLeading) {
+            TimelineCutRangeShape(
+                range: range,
+                metrics: metrics,
+                isSelected: isSelected,
+                isDraft: false
+            )
+            .offset(y: 5)
+
+            TimelineCutResizeHandle(isSelected: isSelected)
+
+            TimelineCutResizeHandle(isSelected: isSelected)
+                .offset(x: rangeWidth - Self.handleWidth)
+        }
+        .frame(width: rangeWidth, height: metrics.trackHeight + 10, alignment: .topLeading)
+        .offset(x: metrics.x(for: range.start), y: metrics.trackY - 5)
+        .contentShape(Rectangle())
+        .help("Cut")
+    }
+}
+
+private struct TimelineCutRangeShape: View {
+    let range: VideoTimeRange
+    let metrics: VideoTimelineMetrics
+    let isSelected: Bool
+    let isDraft: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 3)
+            .fill(fillColor)
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(Color.accentColor, lineWidth: isDraft ? 1.5 : 2)
+                }
+            }
+            .frame(width: max(metrics.width(for: range.duration), 4), height: metrics.trackHeight)
+    }
+
+    private var fillColor: Color {
+        if isDraft {
+            return Color.gray.opacity(0.45)
+        }
+
+        return isSelected ? Color.gray.opacity(0.68) : Color.gray.opacity(0.5)
+    }
+}
+
+private struct TimelineCutResizeHandle: View {
+    let isSelected: Bool
+
+    var body: some View {
+        Rectangle()
+            .fill(Color.clear)
+            .frame(width: 16, height: 38)
+            .overlay {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(isSelected ? Color.accentColor : Color(nsColor: .secondaryLabelColor))
+                    .frame(width: 3, height: 32)
+            }
+            .contentShape(Rectangle())
     }
 }
 
@@ -395,6 +621,22 @@ private struct VideoTimelineMetrics {
         }
 
         return min(max(x / size.width, 0), 1) * duration
+    }
+
+    func time(for x: CGFloat, lowerBound: Double, upperBound: Double) -> Double {
+        let time = time(for: x)
+        let lowerBound = min(max(lowerBound, 0), duration)
+        let upperBound = min(max(upperBound, lowerBound), duration)
+
+        return min(max(time, lowerBound), upperBound)
+    }
+
+    func duration(forWidth width: CGFloat) -> Double {
+        guard duration > 0, size.width > 0 else {
+            return 0
+        }
+
+        return Double(max(width, 0) / size.width) * duration
     }
 }
 

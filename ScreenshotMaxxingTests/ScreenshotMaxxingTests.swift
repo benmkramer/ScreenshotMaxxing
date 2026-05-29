@@ -1613,6 +1613,90 @@ struct ScreenshotMaxxingTests {
         #expect(rangePairs(state.keptRanges) == [[3, 7]])
     }
 
+    @Test func videoEditStateSelectsAddedCut() {
+        var state = VideoEditState(durationSeconds: 10)
+
+        let selectedID = state.addRemovedRange(VideoTimeRange(start: 4, end: 5))
+        let selectedRange = state.selectedRemovedRange.map { [$0] } ?? []
+
+        #expect(state.selectedRemovedRangeID == selectedID)
+        #expect(rangePairs(selectedRange) == [[4, 5]])
+    }
+
+    @Test func videoEditStateDeletesSelectedCut() {
+        var state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [
+                VideoTimeRange(start: 2, end: 3),
+                VideoTimeRange(start: 6, end: 7)
+            ]
+        )
+        state.selectRemovedRange(id: state.removedRanges[0].id)
+
+        state.removeSelectedRange()
+
+        #expect(rangePairs(state.removedRanges) == [[6, 7]])
+        #expect(state.selectedRemovedRangeID == nil)
+    }
+
+    @Test func videoEditStateResizesSelectedCutEdges() {
+        var state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+        let cutID = state.removedRanges[0].id
+
+        state.setRemovedRangeStart(id: cutID, 3)
+        state.setRemovedRangeEnd(id: cutID, 6)
+
+        #expect(rangePairs(state.removedRanges) == [[3, 6]])
+        #expect(state.selectedRemovedRangeID == cutID)
+        #expect(rangePairs(state.keptRanges) == [[0, 3], [6, 10]])
+    }
+
+    @Test func videoEditStateMovesSelectedCutWithoutChangingDuration() {
+        var state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+        let cutID = state.removedRanges[0].id
+
+        state.moveRemovedRange(id: cutID, start: 6)
+
+        #expect(rangePairs(state.removedRanges) == [[6, 7]])
+        #expect(state.selectedRemovedRangeID == cutID)
+        #expect(rangePairs(state.keptRanges) == [[0, 6], [7, 10]])
+    }
+
+    @Test func videoEditStateClampsMovedCutToTrimBounds() {
+        var state = VideoEditState(
+            durationSeconds: 10,
+            trimStart: 2,
+            trimEnd: 8,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+        let cutID = state.removedRanges[0].id
+
+        state.moveRemovedRange(id: cutID, start: 9)
+        #expect(rangePairs(state.removedRanges) == [[7, 8]])
+
+        state.moveRemovedRange(id: cutID, start: 0)
+        #expect(rangePairs(state.removedRanges) == [[2, 3]])
+    }
+
+    @Test func videoEditStateKeepsMinimumDurationWhenResizingCut() {
+        var state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+        let cutID = state.removedRanges[0].id
+
+        state.setRemovedRangeStart(id: cutID, 4.9, minimumDuration: 0.5)
+        state.setRemovedRangeEnd(id: cutID, 4.75, minimumDuration: 0.5)
+
+        #expect(rangePairs(state.removedRanges) == [[4.5, 5]])
+    }
+
     @Test func videoExportPlannerComputesOutputDurationFromKeptRanges() {
         let state = VideoEditState(
             durationSeconds: 10,
