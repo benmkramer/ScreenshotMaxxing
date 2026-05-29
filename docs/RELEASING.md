@@ -56,6 +56,18 @@ LOCAL_ONLY=1 scripts/release-dmg.sh
 
 That DMG is useful for your own machines or technical testers, but macOS Gatekeeper may warn or block it for friends and coworkers.
 
+## Local Development Builds
+
+Debug builds use the bundle identifier `com.benmkramer.ScreenshotMaxxing.dev` and display as `ScreenshotMaxxing Dev` in macOS permission settings. Release builds keep `com.benmkramer.ScreenshotMaxxing`.
+
+Keeping Debug and Release identities separate avoids mixing Screen Recording grants between an installed notarized app and branch builds from Xcode.
+
+To reset both permission identities on a development machine, run:
+
+```sh
+scripts/reset-permissions.sh
+```
+
 ## Release Automation
 
 The release flow is controlled by version changes instead of every merge to `main`.
