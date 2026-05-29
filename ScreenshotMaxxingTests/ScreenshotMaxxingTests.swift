@@ -650,6 +650,42 @@ struct ScreenshotMaxxingTests {
         #expect(captures.count == 1)
     }
 
+    @MainActor
+    @Test func captureMetadataStoreDeletesCaptureHistoryAndLocalFiles() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let originalURL = baseDirectory.appendingPathComponent("original.png")
+        let editedURL = baseDirectory.appendingPathComponent("edited.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makePNGData(width: 2, height: 2).write(to: originalURL)
+        try makePNGData(width: 2, height: 2).write(to: editedURL)
+
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let capture = Capture(
+            fileName: originalURL.lastPathComponent,
+            captureMode: "area",
+            width: 2,
+            height: 2,
+            originalFilePath: originalURL.fileSystemPath,
+            editedFilePath: editedURL.fileSystemPath
+        )
+        modelContainer.mainContext.insert(capture)
+        try modelContainer.mainContext.save()
+
+        let store = CaptureMetadataStore(modelContainer: modelContainer)
+        try store.deleteCaptureFromHistoryAndDisk(capture, fileManager: fileManager)
+        let captures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+
+        #expect(captures.isEmpty)
+        #expect(!fileManager.fileExists(atPath: originalURL.fileSystemPath))
+        #expect(!fileManager.fileExists(atPath: editedURL.fileSystemPath))
+    }
+
     private func makePNGData(width: Int, height: Int) throws -> Data {
         let imageRep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
