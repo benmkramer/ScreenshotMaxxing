@@ -11,9 +11,9 @@ import SwiftUI
 
 @MainActor
 final class RecordingToolbarWindowController: NSWindowController {
-    static let windowSize = NSSize(width: 168, height: 44)
+    static let windowSize = NSSize(width: 214, height: 44)
 
-    init(stopAction: @escaping () -> Void) {
+    init(stopAction: @escaping () -> Void, restartAction: @escaping () -> Void) {
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: Self.windowSize),
             styleMask: [.borderless],
@@ -33,7 +33,11 @@ final class RecordingToolbarWindowController: NSWindowController {
         super.init(window: panel)
 
         panel.contentViewController = NSHostingController(
-            rootView: RecordingToolbarView(startDate: Date(), stopAction: stopAction)
+            rootView: RecordingToolbarView(
+                startDate: Date(),
+                stopAction: stopAction,
+                restartAction: restartAction
+            )
         )
     }
 
@@ -65,6 +69,7 @@ final class RecordingToolbarWindowController: NSWindowController {
 private struct RecordingToolbarView: View {
     let startDate: Date
     let stopAction: () -> Void
+    let restartAction: () -> Void
 
     @State private var now = Date()
 
@@ -79,13 +84,34 @@ private struct RecordingToolbarView: View {
                 .monospacedDigit()
                 .frame(width: 46, alignment: .leading)
 
-            Button(action: stopAction) {
-                Image(systemName: "stop.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 24, height: 24)
+            Button(action: restartAction) {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Color.primary.opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    )
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
+            .buttonStyle(.plain)
+            .help("Restart recording")
+            .accessibilityLabel("Restart recording")
+            .accessibilityIdentifier("recording-toolbar-restart")
+
+            Button(action: stopAction) {
+                ZStack {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 28, height: 28)
+
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
             .help("Stop recording")
             .accessibilityLabel("Stop recording")
             .accessibilityIdentifier("recording-toolbar-stop")

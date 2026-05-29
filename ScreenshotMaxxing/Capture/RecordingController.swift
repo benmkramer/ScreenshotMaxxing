@@ -63,6 +63,43 @@ final class RecordingController {
         }
     }
 
+    func restartActiveRecording() async {
+        guard let activeSession,
+              !activeSession.didRequestStop,
+              !activeSession.didRequestRestart else {
+            return
+        }
+
+        activeSession.didRequestRestart = true
+        activeSession.toolbar.close()
+
+        do {
+            try await stopCapture(activeSession.stream)
+            try? fileManager.removeItem(at: activeSession.outputURL)
+
+            let restartedSession = try await makeActiveSession(
+                options: activeSession.options,
+                target: activeSession.target,
+                baseDirectory: activeSession.thumbnailBaseDirectory
+            )
+
+            guard self.activeSession === activeSession else {
+                restartedSession.toolbar.close()
+                try? await stopCapture(restartedSession.stream)
+                try? fileManager.removeItem(at: restartedSession.outputURL)
+                return
+            }
+
+            self.activeSession = restartedSession
+            restartedSession.toolbar.show(on: restartedSession.target.screen)
+        } catch {
+            try? fileManager.removeItem(at: activeSession.outputURL)
+            if self.activeSession === activeSession {
+                completeWithError(error)
+            }
+        }
+    }
+
     private func beginRecording(options: RecordingOptions, baseDirectory: URL?) async throws {
         guard activeSession == nil else {
             throw RecordingError.alreadyRecording
@@ -72,6 +109,23 @@ final class RecordingController {
             try await requestMicrophoneAccessIfNeeded()
         }
 
+        let shareableContent = try await SCShareableContent.current
+        let target = try await recordingTarget(for: options.mode, in: shareableContent)
+        let activeSession = try await makeActiveSession(
+            options: options,
+            target: target,
+            baseDirectory: baseDirectory
+        )
+
+        self.activeSession = activeSession
+        activeSession.toolbar.show(on: target.screen)
+    }
+
+    private func makeActiveSession(
+        options: RecordingOptions,
+        target: RecordingTarget,
+        baseDirectory: URL?
+    ) async throws -> ActiveRecordingSession {
         let directories = try FileLocations.ensureCaptureDirectories(
             baseDirectory: baseDirectory,
             fileManager: fileManager
@@ -81,16 +135,14 @@ final class RecordingController {
             directories: directories,
             fileExtension: "mp4"
         )
-        let shareableContent = try await SCShareableContent.current
-        let target = try await recordingTarget(for: options.mode, in: shareableContent)
         let streamConfiguration = makeStreamConfiguration(target: target, microphoneEnabled: options.microphoneEnabled)
         let recordingConfiguration = try makeRecordingConfiguration(outputURL: outputURL)
         let delegate = RecordingOutputDelegate(
-            didFail: { [weak self] error in
-                self?.handleRecordingOutputFailure(error)
+            didFail: { [weak self] recordingOutput, error in
+                self?.handleRecordingOutputFailure(error, from: recordingOutput)
             },
-            didFinish: { [weak self] in
-                self?.completeRecording()
+            didFinish: { [weak self] recordingOutput in
+                self?.completeRecording(from: recordingOutput)
             }
         )
         let stream = SCStream(filter: target.filter, configuration: streamConfiguration, delegate: nil)
@@ -103,8 +155,15 @@ final class RecordingController {
             Task { @MainActor in
                 await self?.stopActiveRecording()
             }
+        } restartAction: { [weak self] in
+            Task { @MainActor in
+                await self?.restartActiveRecording()
+            }
         }
-        activeSession = ActiveRecordingSession(
+
+        return ActiveRecordingSession(
+            options: options,
+            target: target,
             stream: stream,
             recordingOutput: recordingOutput,
             recordingDelegate: delegate,
@@ -114,11 +173,15 @@ final class RecordingController {
             dimensions: target.dimensions,
             thumbnailBaseDirectory: baseDirectory
         )
-        toolbar.show(on: target.screen)
     }
 
-    private func completeRecording() {
-        guard let activeSession else {
+    private func completeRecording(from recordingOutput: SCRecordingOutput? = nil) {
+        guard let activeSession,
+              !activeSession.didRequestRestart else {
+            return
+        }
+
+        if let recordingOutput, activeSession.recordingOutput !== recordingOutput {
             return
         }
 
@@ -130,8 +193,13 @@ final class RecordingController {
         }
     }
 
-    private func handleRecordingOutputFailure(_ error: Error) {
-        guard let activeSession else {
+    private func handleRecordingOutputFailure(_ error: Error, from recordingOutput: SCRecordingOutput) {
+        guard let activeSession,
+              activeSession.recordingOutput === recordingOutput else {
+            return
+        }
+
+        guard !activeSession.didRequestRestart else {
             return
         }
 
@@ -151,7 +219,7 @@ final class RecordingController {
 
     private func recoverCompletedRecordingIfPossible() async -> Bool {
         for _ in 0..<20 {
-            guard let activeSession else {
+            guard let activeSession, !activeSession.didRequestRestart else {
                 return true
             }
 
@@ -392,6 +460,8 @@ final class RecordingController {
 }
 
 private final class ActiveRecordingSession {
+    let options: RecordingOptions
+    let target: RecordingTarget
     let stream: SCStream
     let recordingOutput: SCRecordingOutput
     let recordingDelegate: RecordingOutputDelegate
@@ -401,8 +471,11 @@ private final class ActiveRecordingSession {
     let dimensions: CGSize
     let thumbnailBaseDirectory: URL?
     var didRequestStop = false
+    var didRequestRestart = false
 
     init(
+        options: RecordingOptions,
+        target: RecordingTarget,
         stream: SCStream,
         recordingOutput: SCRecordingOutput,
         recordingDelegate: RecordingOutputDelegate,
@@ -412,6 +485,8 @@ private final class ActiveRecordingSession {
         dimensions: CGSize,
         thumbnailBaseDirectory: URL?
     ) {
+        self.options = options
+        self.target = target
         self.stream = stream
         self.recordingOutput = recordingOutput
         self.recordingDelegate = recordingDelegate
@@ -431,23 +506,26 @@ private struct RecordingTarget {
 }
 
 private final class RecordingOutputDelegate: NSObject, SCRecordingOutputDelegate {
-    private let didFail: @MainActor (Error) -> Void
-    private let didFinish: @MainActor () -> Void
+    private let didFail: @MainActor (SCRecordingOutput, Error) -> Void
+    private let didFinish: @MainActor (SCRecordingOutput) -> Void
 
-    init(didFail: @escaping @MainActor (Error) -> Void, didFinish: @escaping @MainActor () -> Void) {
+    init(
+        didFail: @escaping @MainActor (SCRecordingOutput, Error) -> Void,
+        didFinish: @escaping @MainActor (SCRecordingOutput) -> Void
+    ) {
         self.didFail = didFail
         self.didFinish = didFinish
     }
 
     nonisolated func recordingOutput(_ recordingOutput: SCRecordingOutput, didFailWithError error: Error) {
         Task { @MainActor in
-            didFail(error)
+            didFail(recordingOutput, error)
         }
     }
 
     nonisolated func recordingOutputDidFinishRecording(_ recordingOutput: SCRecordingOutput) {
         Task { @MainActor in
-            didFinish()
+            didFinish(recordingOutput)
         }
     }
 }
