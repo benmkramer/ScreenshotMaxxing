@@ -242,7 +242,7 @@ private final class RecordingWindowSelectionView: NSView {
 
     init(screen: NSScreen, windows: [SCWindow]) {
         self.screen = screen
-        self.windows = windows
+        self.windows = Self.visibleWindows(windows, on: screen)
         super.init(frame: .zero)
         wantsLayer = true
     }
@@ -270,7 +270,7 @@ private final class RecordingWindowSelectionView: NSView {
         NSColor.black.withAlphaComponent(0.22).setFill()
         bounds.fill()
 
-        for window in windows {
+        for window in windows.reversed() {
             let rect = rectInView(for: window)
             guard rect.intersects(bounds), rect.width > 16, rect.height > 16 else {
                 continue
@@ -336,7 +336,7 @@ private final class RecordingWindowSelectionView: NSView {
     }
 
     private func rectInView(for window: SCWindow) -> CGRect {
-        let screenRect = rectInScreenCoordinates(for: window)
+        let screenRect = Self.rectInScreenCoordinates(for: window, on: screen)
         let origin = CGPoint(
             x: screenRect.minX - screen.frame.minX,
             y: screenRect.minY - screen.frame.minY
@@ -345,6 +345,78 @@ private final class RecordingWindowSelectionView: NSView {
     }
 
     private func rectInScreenCoordinates(for window: SCWindow) -> CGRect {
+        Self.rectInScreenCoordinates(for: window, on: screen)
+    }
+
+    private static func visibleWindows(_ windows: [SCWindow], on screen: NSScreen) -> [SCWindow] {
+        let windowOrder = frontToBackWindowOrder()
+        let orderedWindows = windows
+            .filter { windowOrder[$0.windowID] != nil }
+            .sorted { lhs, rhs in
+                (windowOrder[lhs.windowID] ?? Int.max) < (windowOrder[rhs.windowID] ?? Int.max)
+            }
+
+        return orderedWindows.filter { candidate in
+            samplePoints(in: rectInScreenCoordinates(for: candidate, on: screen)).contains { point in
+                orderedWindows.first { window in
+                    rectInScreenCoordinates(for: window, on: screen).contains(point)
+                }?.windowID == candidate.windowID
+            }
+        }
+    }
+
+    private static func frontToBackWindowOrder() -> [CGWindowID: Int] {
+        guard let windowList = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else {
+            return [:]
+        }
+
+        var windowOrder: [CGWindowID: Int] = [:]
+
+        for windowInfo in windowList {
+            guard let windowID = (windowInfo[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
+                  let layer = (windowInfo[kCGWindowLayer as String] as? NSNumber)?.intValue,
+                  layer == 0,
+                  windowOrder[windowID] == nil else {
+                continue
+            }
+
+            windowOrder[windowID] = windowOrder.count
+        }
+
+        return windowOrder
+    }
+
+    private static func samplePoints(in rect: CGRect) -> [CGPoint] {
+        guard rect.width > 0, rect.height > 0 else {
+            return []
+        }
+
+        let insetX = min(max(rect.width * 0.18, 8), rect.width / 2)
+        let insetY = min(max(rect.height * 0.18, 8), rect.height / 2)
+        let minX = rect.minX + insetX
+        let midX = rect.midX
+        let maxX = rect.maxX - insetX
+        let minY = rect.minY + insetY
+        let midY = rect.midY
+        let maxY = rect.maxY - insetY
+
+        return [
+            CGPoint(x: midX, y: midY),
+            CGPoint(x: minX, y: minY),
+            CGPoint(x: midX, y: minY),
+            CGPoint(x: maxX, y: minY),
+            CGPoint(x: minX, y: midY),
+            CGPoint(x: maxX, y: midY),
+            CGPoint(x: minX, y: maxY),
+            CGPoint(x: midX, y: maxY),
+            CGPoint(x: maxX, y: maxY)
+        ]
+    }
+
+    private static func rectInScreenCoordinates(for window: SCWindow, on screen: NSScreen) -> CGRect {
         let frame = window.frame
 
         if screen.frame.intersects(frame) {
