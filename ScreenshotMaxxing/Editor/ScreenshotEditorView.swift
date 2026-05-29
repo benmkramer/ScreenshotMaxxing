@@ -61,6 +61,7 @@ struct ScreenshotEditorView: View {
                         statusMessage: statusMessage,
                         deleteAction: removeSelectedAnnotation,
                         copyAction: copyEditedImage,
+                        copyAndDeleteAction: copyEditedImageAndDeleteCapture,
                         saveAction: saveEditedImage
                     )
                     Divider()
@@ -109,6 +110,36 @@ struct ScreenshotEditorView: View {
                 closeAfterShowingSuccess()
             } else {
                 statusMessage = "Saved, but copy failed"
+            }
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    private func copyEditedImageAndDeleteCapture() {
+        do {
+            let pngData = try ImageRenderer().renderPNG(
+                imageURL: imageURL,
+                annotations: editorState.annotations
+            )
+
+            guard EditorClipboard.copyPNGData(pngData) else {
+                statusMessage = "Copy failed"
+                return
+            }
+
+            guard let capture else {
+                statusMessage = "Copied image to clipboard"
+                closeAfterShowingSuccess()
+                return
+            }
+
+            do {
+                try CaptureMetadataStore().deleteCaptureFromHistoryAndDisk(capture)
+                statusMessage = "Copied and deleted capture"
+                closeAfterShowingSuccess()
+            } catch {
+                statusMessage = "Copied, but delete failed: \(error.localizedDescription)"
             }
         } catch {
             statusMessage = error.localizedDescription
@@ -602,6 +633,7 @@ private struct EditorToolbar: View {
     let statusMessage: String?
     let deleteAction: () -> Void
     let copyAction: () -> Void
+    let copyAndDeleteAction: () -> Void
     let saveAction: () -> Void
 
     var body: some View {
@@ -645,8 +677,14 @@ private struct EditorToolbar: View {
 
             ToolbarIconButton(
                 systemImageName: "doc.on.doc",
-                helpText: "Copy edited image",
+                helpText: "Save and copy edited image",
                 action: copyAction
+            )
+
+            ToolbarIconButton(
+                systemImageName: "clipboard",
+                helpText: "Copy image, then delete capture from history and disk",
+                action: copyAndDeleteAction
             )
 
             ToolbarIconButton(
