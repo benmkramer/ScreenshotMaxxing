@@ -55,6 +55,15 @@ final class CaptureMetadataStore {
         return capture
     }
 
+    func deleteCaptureFromHistoryAndDisk(_ capture: Capture, fileManager: FileManager = .default) throws {
+        for filePath in uniqueFilePaths(for: capture) where fileManager.fileExists(atPath: filePath) {
+            try fileManager.removeItem(atPath: filePath)
+        }
+
+        modelContainer.mainContext.delete(capture)
+        try modelContainer.mainContext.save()
+    }
+
     private func imageDimensions(for url: URL) throws -> (width: Int, height: Int) {
         guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
@@ -64,6 +73,16 @@ final class CaptureMetadataStore {
         }
 
         return (width, height)
+    }
+
+    private func uniqueFilePaths(for capture: Capture) -> [String] {
+        var filePaths: [String] = []
+
+        for filePath in [capture.originalFilePath, capture.editedFilePath].compactMap({ $0 }) where !filePaths.contains(filePath) {
+            filePaths.append(filePath)
+        }
+
+        return filePaths
     }
 }
 

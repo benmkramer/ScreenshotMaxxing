@@ -5,6 +5,7 @@
 //  Created by Ben Kramer on 5/26/26.
 //
 
+import AppKit
 import SwiftUI
 
 struct PreferencesView: View {
@@ -12,17 +13,22 @@ struct PreferencesView: View {
     private let onAreaCaptureShortcutChange: (GlobalKeyboardShortcut) -> Bool
     private let onCaptureOptionsShortcutChange: (GlobalKeyboardShortcut) -> Bool
     private let onLaunchAtLoginChange: (Bool) -> Bool
+    private let onOpenStorageFolder: (String) -> Void
 
     init(
         preferences: PreferencesData,
         onAreaCaptureShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
         onCaptureOptionsShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
-        onLaunchAtLoginChange: @escaping (Bool) -> Bool = { _ in true }
+        onLaunchAtLoginChange: @escaping (Bool) -> Bool = { _ in true },
+        onOpenStorageFolder: @escaping (String) -> Void = { path in
+            NSWorkspace.shared.open(URL(fileURLWithPath: path, isDirectory: true))
+        }
     ) {
         _preferences = State(initialValue: preferences)
         self.onAreaCaptureShortcutChange = onAreaCaptureShortcutChange
         self.onCaptureOptionsShortcutChange = onCaptureOptionsShortcutChange
         self.onLaunchAtLoginChange = onLaunchAtLoginChange
+        self.onOpenStorageFolder = onOpenStorageFolder
     }
 
     var body: some View {
@@ -72,11 +78,11 @@ struct PreferencesView: View {
 
             Section("Storage") {
                 LabeledContent("Original screenshots") {
-                    pathText(preferences.originalsFolderPath)
+                    storageFolderRow(path: preferences.originalsFolderPath)
                 }
 
                 LabeledContent("Edited screenshots") {
-                    pathText(preferences.editedFolderPath)
+                    storageFolderRow(path: preferences.editedFolderPath)
                 }
             }
         }
@@ -85,13 +91,53 @@ struct PreferencesView: View {
         .frame(minWidth: 540, minHeight: 360)
     }
 
-    private func pathText(_ path: String) -> some View {
-        Text(path)
-            .font(.system(.body, design: .monospaced))
-            .lineLimit(2)
-            .textSelection(.enabled)
-            .foregroundStyle(.secondary)
+    private func storageFolderRow(path: String) -> some View {
+        StorageFolderRow(path: path, onOpen: onOpenStorageFolder)
     }
+}
+
+private struct StorageFolderRow: View {
+    let path: String
+    let onOpen: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(folderName)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .help(path)
+                .foregroundStyle(.secondary)
+
+            Button {
+                onOpen(path)
+            } label: {
+                Label("Open", systemImage: "folder")
+            }
+            .help("Open folder in Finder")
+            .accessibilityLabel("Open \(folderName) folder in Finder")
+        }
+    }
+
+    private var folderName: String {
+        let folderName = URL(fileURLWithPath: path, isDirectory: true).lastPathComponent
+
+        return folderName.isEmpty ? path : folderName
+    }
+}
+
+#Preview("Storage folder row") {
+    Form {
+        LabeledContent("Original screenshots") {
+            StorageFolderRow(
+                path: "/Users/example/Library/Application Support/ScreenshotMaxxing/Captures/originals",
+                onOpen: { _ in }
+            )
+        }
+    }
+    .formStyle(.grouped)
+    .padding()
+    .frame(width: 360)
 }
 
 #Preview {

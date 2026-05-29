@@ -336,18 +336,18 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureOptionsView.availableModes == [.area, .window, .fullscreen])
     }
 
-    @Test func screenCapturePermissionSkipsRequestWhenAlreadyGranted() {
+    @Test func screenCapturePermissionPreflightsGrantedAccess() {
         var preflightCount = 0
         var requestCount = 0
-        let controller = ScreenCapturePermissionController {
+        let controller = ScreenCapturePermissionController(preflightAccess: {
             preflightCount += 1
             return true
-        } requestAccess: {
+        }, requestAccess: {
             requestCount += 1
             return false
-        }
+        })
 
-        let granted = controller.requestAccessIfNeeded()
+        let granted = controller.hasAccess()
 
         #expect(granted)
         #expect(preflightCount == 1)
@@ -357,13 +357,13 @@ struct ScreenshotMaxxingTests {
     @Test func screenCapturePermissionRequestsAccessWhenMissing() {
         var preflightCount = 0
         var requestCount = 0
-        let controller = ScreenCapturePermissionController {
+        let controller = ScreenCapturePermissionController(preflightAccess: {
             preflightCount += 1
             return false
-        } requestAccess: {
+        }, requestAccess: {
             requestCount += 1
             return true
-        }
+        })
 
         let granted = controller.requestAccessIfNeeded()
 
@@ -394,11 +394,9 @@ struct ScreenshotMaxxingTests {
 
     @Test func appPermissionControllerReportsRequiredPermissionStates() {
         let controller = AppPermissionController(
-            screenCapturePermissionController: ScreenCapturePermissionController {
+            screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
                 true
-            } requestAccess: {
-                false
-            },
+            }),
             directScreenAccessController: DirectScreenAccessController {
                 false
             } requestApproval: {
@@ -417,12 +415,12 @@ struct ScreenshotMaxxingTests {
         var screenCaptureRequestCount = 0
         var directScreenAccessRequestCount = 0
         let controller = AppPermissionController(
-            screenCapturePermissionController: ScreenCapturePermissionController {
+            screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
                 false
-            } requestAccess: {
+            }, requestAccess: {
                 screenCaptureRequestCount += 1
                 return true
-            },
+            }),
             directScreenAccessController: DirectScreenAccessController {
                 false
             } requestApproval: {
@@ -441,11 +439,9 @@ struct ScreenshotMaxxingTests {
     @Test func appPermissionControllerClearsDirectApprovalWhenScreenCaptureIsMissing() {
         var clearApprovalCount = 0
         let controller = AppPermissionController(
-            screenCapturePermissionController: ScreenCapturePermissionController {
+            screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
                 false
-            } requestAccess: {
-                false
-            },
+            }),
             directScreenAccessController: DirectScreenAccessController {
                 true
             } requestApproval: {
@@ -468,12 +464,12 @@ struct ScreenshotMaxxingTests {
         var openedURLs: [URL] = []
         var relaunchCount = 0
         let controller = AppPermissionController(
-            screenCapturePermissionController: ScreenCapturePermissionController {
+            screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
                 false
-            } requestAccess: {
+            }, requestAccess: {
                 requestCount += 1
                 return false
-            },
+            }),
             directScreenAccessController: DirectScreenAccessController {
                 false
             } requestApproval: {
@@ -487,13 +483,21 @@ struct ScreenshotMaxxingTests {
         }
 
         await model.requestAccess(for: .screenCapture)
-        model.primaryAction()
+
+        #expect(requestCount == 1)
+        #expect(openedURLs.isEmpty)
+        #expect(model.needsRelaunch)
+        #expect(model.actionTitle(for: .screenCapture) == "Open Settings")
+        #expect(model.primaryActionTitle == "Relaunch")
+
+        await model.requestAccess(for: .screenCapture)
 
         #expect(requestCount == 1)
         #expect(openedURLs.count == 1)
         #expect(openedURLs.first == AppPermission.screenCapture.settingsURL)
+        model.primaryAction()
+
         #expect(model.needsRelaunch)
-        #expect(model.primaryActionTitle == "Relaunch")
         #expect(relaunchCount == 1)
         #expect(model.states == [
             AppPermissionState(permission: .screenCapture, isGranted: false, isSetupEnabled: true),
@@ -506,11 +510,9 @@ struct ScreenshotMaxxingTests {
         var approvalCompleted = false
         var requestCount = 0
         let controller = AppPermissionController(
-            screenCapturePermissionController: ScreenCapturePermissionController {
+            screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
                 true
-            } requestAccess: {
-                false
-            },
+            }),
             directScreenAccessController: DirectScreenAccessController {
                 approvalCompleted
             } requestApproval: {
@@ -536,11 +538,9 @@ struct ScreenshotMaxxingTests {
     @Test func permissionOnboardingModelCompletesWhenPermissionAlreadyGranted() {
         var completionCount = 0
         let controller = AppPermissionController(
-            screenCapturePermissionController: ScreenCapturePermissionController {
+            screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
                 true
-            } requestAccess: {
-                false
-            },
+            }),
             directScreenAccessController: DirectScreenAccessController {
                 true
             } requestApproval: {
@@ -648,6 +648,42 @@ struct ScreenshotMaxxingTests {
         #expect(capture.height == 3)
         #expect(capture.originalFilePath == imageURL.fileSystemPath)
         #expect(captures.count == 1)
+    }
+
+    @MainActor
+    @Test func captureMetadataStoreDeletesCaptureHistoryAndLocalFiles() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let originalURL = baseDirectory.appendingPathComponent("original.png")
+        let editedURL = baseDirectory.appendingPathComponent("edited.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makePNGData(width: 2, height: 2).write(to: originalURL)
+        try makePNGData(width: 2, height: 2).write(to: editedURL)
+
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let capture = Capture(
+            fileName: originalURL.lastPathComponent,
+            captureMode: "area",
+            width: 2,
+            height: 2,
+            originalFilePath: originalURL.fileSystemPath,
+            editedFilePath: editedURL.fileSystemPath
+        )
+        modelContainer.mainContext.insert(capture)
+        try modelContainer.mainContext.save()
+
+        let store = CaptureMetadataStore(modelContainer: modelContainer)
+        try store.deleteCaptureFromHistoryAndDisk(capture, fileManager: fileManager)
+        let captures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+
+        #expect(captures.isEmpty)
+        #expect(!fileManager.fileExists(atPath: originalURL.fileSystemPath))
+        #expect(!fileManager.fileExists(atPath: editedURL.fileSystemPath))
     }
 
     private func makePNGData(width: Int, height: Int) throws -> Data {

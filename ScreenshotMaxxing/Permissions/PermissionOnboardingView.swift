@@ -72,6 +72,11 @@ final class PermissionOnboardingModel: ObservableObject {
     }
 
     func requestAccess(for permission: AppPermission) async {
+        if permission == .screenCapture && setupStartedPermissions.contains(permission) {
+            openSettings(for: permission)
+            return
+        }
+
         setupStartedPermissions.insert(permission)
         _ = await permissionController.requestAccessIfNeeded(for: permission)
         refresh()
@@ -80,7 +85,9 @@ final class PermissionOnboardingModel: ObservableObject {
             return
         }
 
-        openSettings(for: permission)
+        if permission != .screenCapture {
+            openSettings(for: permission)
+        }
     }
 
     func openSettings(for permission: AppPermission) {
@@ -236,11 +243,11 @@ private struct PermissionOnboardingRow: View {
     PermissionOnboardingView(
         model: PermissionOnboardingModel(
             permissionController: AppPermissionController(
-                screenCapturePermissionController: ScreenCapturePermissionController {
+                screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
                     false
-                } requestAccess: {
+                }, requestAccess: {
                     false
-                }
+                })
             )
         )
     )

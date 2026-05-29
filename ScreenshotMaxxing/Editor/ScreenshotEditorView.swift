@@ -61,6 +61,7 @@ struct ScreenshotEditorView: View {
                         statusMessage: statusMessage,
                         deleteAction: removeSelectedAnnotation,
                         copyAction: copyEditedImage,
+                        copyAndDeleteAction: copyEditedImageAndDeleteCapture,
                         saveAction: saveEditedImage
                     )
                     Divider()
@@ -109,6 +110,36 @@ struct ScreenshotEditorView: View {
                 closeAfterShowingSuccess()
             } else {
                 statusMessage = "Saved, but copy failed"
+            }
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    private func copyEditedImageAndDeleteCapture() {
+        do {
+            let pngData = try ImageRenderer().renderPNG(
+                imageURL: imageURL,
+                annotations: editorState.annotations
+            )
+
+            guard EditorClipboard.copyPNGData(pngData) else {
+                statusMessage = "Copy failed"
+                return
+            }
+
+            guard let capture else {
+                statusMessage = "Copied image to clipboard"
+                closeAfterShowingSuccess()
+                return
+            }
+
+            do {
+                try CaptureMetadataStore().deleteCaptureFromHistoryAndDisk(capture)
+                statusMessage = "Copied and deleted capture"
+                closeAfterShowingSuccess()
+            } catch {
+                statusMessage = "Copied, but delete failed: \(error.localizedDescription)"
             }
         } catch {
             statusMessage = error.localizedDescription
@@ -602,6 +633,7 @@ private struct EditorToolbar: View {
     let statusMessage: String?
     let deleteAction: () -> Void
     let copyAction: () -> Void
+    let copyAndDeleteAction: () -> Void
     let saveAction: () -> Void
 
     var body: some View {
@@ -615,6 +647,14 @@ private struct EditorToolbar: View {
                         selectedTool = tool
                     }
                 }
+
+                ToolbarIconButton(
+                    systemImageName: "trash",
+                    helpText: selectedAnnotationID == nil ? "Select an annotation to delete" : "Delete selected annotation",
+                    action: deleteAction
+                )
+                .disabled(selectedAnnotationID == nil)
+                .keyboardShortcut(.delete, modifiers: [])
             }
 
             if showsStrokeControls {
@@ -635,24 +675,27 @@ private struct EditorToolbar: View {
                     .foregroundStyle(.secondary)
             }
 
-            ToolbarIconButton(
-                systemImageName: "trash",
-                helpText: selectedAnnotationID == nil ? "Select an annotation to remove it" : "Remove selected annotation",
-                action: deleteAction
-            )
-            .disabled(selectedAnnotationID == nil)
-            .keyboardShortcut(.delete, modifiers: [])
+            HStack(spacing: 6) {
+                ToolbarIconButton(
+                    systemImageName: "doc.on.doc",
+                    helpText: "Save edited image and copy it to the clipboard",
+                    action: copyAction
+                )
+
+                ToolbarIconButton(
+                    systemImageName: "square.and.arrow.down",
+                    helpText: "Save edited image and copy the file path",
+                    action: saveAction
+                )
+            }
+
+            Divider()
+                .frame(height: 22)
 
             ToolbarIconButton(
-                systemImageName: "doc.on.doc",
-                helpText: "Copy edited image",
-                action: copyAction
-            )
-
-            ToolbarIconButton(
-                systemImageName: "square.and.arrow.down",
-                helpText: "Save edited image",
-                action: saveAction
+                systemImageName: "clipboard",
+                helpText: "Copy image to clipboard and delete it from history and disk",
+                action: copyAndDeleteAction
             )
         }
         .padding(.horizontal, 12)
