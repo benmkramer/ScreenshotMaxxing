@@ -17,6 +17,7 @@ struct CaptureDirectories: Equatable {
     let root: URL
     let originals: URL
     let edited: URL
+    let thumbnails: URL
 }
 
 enum FileLocations {
@@ -40,7 +41,8 @@ enum FileLocations {
         return CaptureDirectories(
             root: root,
             originals: root.appendingPathComponent("originals", isDirectory: true),
-            edited: root.appendingPathComponent("edited", isDirectory: true)
+            edited: root.appendingPathComponent("edited", isDirectory: true),
+            thumbnails: root.appendingPathComponent("thumbnails", isDirectory: true)
         )
     }
 
@@ -51,7 +53,7 @@ enum FileLocations {
     ) throws -> CaptureDirectories {
         let directories = try captureDirectories(baseDirectory: baseDirectory, fileManager: fileManager)
 
-        try [directories.root, directories.originals, directories.edited].forEach { directory in
+        try [directories.root, directories.originals, directories.edited, directories.thumbnails].forEach { directory in
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         }
 
@@ -62,28 +64,39 @@ enum FileLocations {
         captureMode: String,
         directories: CaptureDirectories,
         date: Date = Date(),
-        uuid: UUID = UUID()
+        uuid: UUID = UUID(),
+        fileExtension: String = "png"
     ) -> URL {
-        let fileName = uniqueFileName(prefix: captureMode, date: date, uuid: uuid)
+        let fileName = uniqueFileName(prefix: captureMode, date: date, uuid: uuid, fileExtension: fileExtension)
         return directories.originals.appendingPathComponent(fileName, isDirectory: false)
     }
 
     static func uniqueEditedFileURL(
         originalFileName: String,
         directories: CaptureDirectories,
+        uuid: UUID = UUID(),
+        fileExtension: String = "png"
+    ) -> URL {
+        let baseName = URL(fileURLWithPath: originalFileName).deletingPathExtension().lastPathComponent
+        return directories.edited.appendingPathComponent("\(baseName)-edited-\(uuid.uuidString.prefix(8)).\(fileExtension)")
+    }
+
+    static func uniqueThumbnailFileURL(
+        originalFileName: String,
+        directories: CaptureDirectories,
         uuid: UUID = UUID()
     ) -> URL {
         let baseName = URL(fileURLWithPath: originalFileName).deletingPathExtension().lastPathComponent
-        return directories.edited.appendingPathComponent("\(baseName)-edited-\(uuid.uuidString.prefix(8)).png")
+        return directories.thumbnails.appendingPathComponent("\(baseName)-thumbnail-\(uuid.uuidString.prefix(8)).png")
     }
 
-    private static func uniqueFileName(prefix: String, date: Date, uuid: UUID) -> String {
+    private static func uniqueFileName(prefix: String, date: Date, uuid: UUID, fileExtension: String) -> String {
         let safePrefix = prefix
             .lowercased()
             .replacingOccurrences(of: " ", with: "-")
         let timestamp = utcTimestamp(from: date)
 
-        return "\(safePrefix)-\(timestamp)-\(uuid.uuidString.prefix(8)).png"
+        return "\(safePrefix)-\(timestamp)-\(uuid.uuidString.prefix(8)).\(fileExtension)"
     }
 
     private static func utcTimestamp(from date: Date) -> String {

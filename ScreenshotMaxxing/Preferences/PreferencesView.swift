@@ -77,11 +77,11 @@ struct PreferencesView: View {
             }
 
             Section("Storage") {
-                LabeledContent("Original screenshots") {
+                LabeledContent("Original captures") {
                     storageFolderRow(path: preferences.originalsFolderPath)
                 }
 
-                LabeledContent("Edited screenshots") {
+                LabeledContent("Edited captures") {
                     storageFolderRow(path: preferences.editedFolderPath)
                 }
             }
