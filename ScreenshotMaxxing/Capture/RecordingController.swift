@@ -51,6 +51,12 @@ final class RecordingController {
             try activeSession.stream.removeRecordingOutput(activeSession.recordingOutput)
             try await stopCapture(activeSession.stream)
         } catch {
+            try? await stopCapture(activeSession.stream)
+
+            if await recoverCompletedRecordingIfPossible() {
+                return
+            }
+
             completeWithError(error)
         }
     }
@@ -79,7 +85,7 @@ final class RecordingController {
         let recordingConfiguration = try makeRecordingConfiguration(outputURL: outputURL)
         let delegate = RecordingOutputDelegate(
             didFail: { [weak self] error in
-                self?.completeWithError(error)
+                self?.handleRecordingOutputFailure(error)
             },
             didFinish: { [weak self] in
                 self?.completeRecording()
@@ -115,27 +121,69 @@ final class RecordingController {
         }
 
         do {
-            let metadata = try VideoMetadataReader.metadata(for: activeSession.outputURL)
-            let thumbnailURL = try VideoThumbnailGenerator(fileManager: fileManager).writeThumbnail(
-                for: activeSession.outputURL,
-                originalFileName: activeSession.outputURL.lastPathComponent,
-                baseDirectory: activeSession.thumbnailBaseDirectory
-            )
-            let dimensions = metadata.dimensions.width > 0 && metadata.dimensions.height > 0
-                ? metadata.dimensions
-                : activeSession.dimensions
-            let result = RecordingResult(
-                mode: activeSession.mode,
-                fileURL: activeSession.outputURL,
-                durationSeconds: metadata.durationSeconds,
-                width: Int(dimensions.width.rounded()),
-                height: Int(dimensions.height.rounded()),
-                thumbnailURL: thumbnailURL
-            )
+            let result = try makeRecordingResult(for: activeSession)
             completeWithResult(result)
         } catch {
             completeWithError(error)
         }
+    }
+
+    private func handleRecordingOutputFailure(_ error: Error) {
+        guard let activeSession else {
+            return
+        }
+
+        guard activeSession.didRequestStop else {
+            completeWithError(error)
+            return
+        }
+
+        Task { @MainActor in
+            if await recoverCompletedRecordingIfPossible() {
+                return
+            }
+
+            completeWithError(error)
+        }
+    }
+
+    private func recoverCompletedRecordingIfPossible() async -> Bool {
+        for _ in 0..<6 {
+            guard let activeSession else {
+                return true
+            }
+
+            let fileExists = fileManager.fileExists(atPath: activeSession.outputURL.fileSystemPath)
+            if fileExists, let result = try? makeRecordingResult(for: activeSession) {
+                completeWithResult(result)
+                return true
+            }
+
+            try? await Task.sleep(nanoseconds: 150_000_000)
+        }
+
+        return false
+    }
+
+    private func makeRecordingResult(for activeSession: ActiveRecordingSession) throws -> RecordingResult {
+        let metadata = try VideoMetadataReader.metadata(for: activeSession.outputURL)
+        let thumbnailURL = try VideoThumbnailGenerator(fileManager: fileManager).writeThumbnail(
+            for: activeSession.outputURL,
+            originalFileName: activeSession.outputURL.lastPathComponent,
+            baseDirectory: activeSession.thumbnailBaseDirectory
+        )
+        let dimensions = metadata.dimensions.width > 0 && metadata.dimensions.height > 0
+            ? metadata.dimensions
+            : activeSession.dimensions
+
+        return RecordingResult(
+            mode: activeSession.mode,
+            fileURL: activeSession.outputURL,
+            durationSeconds: metadata.durationSeconds,
+            width: Int(dimensions.width.rounded()),
+            height: Int(dimensions.height.rounded()),
+            thumbnailURL: thumbnailURL
+        )
     }
 
     private func cancelActiveRecording() async {
