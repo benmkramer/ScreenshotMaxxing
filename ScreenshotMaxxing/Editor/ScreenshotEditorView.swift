@@ -650,7 +650,6 @@ private struct EditorToolbar: View {
 
                 ToolbarIconButton(
                     systemImageName: "trash",
-                    tooltipTitle: "Delete annotation",
                     helpText: selectedAnnotationID == nil ? "Select an annotation to delete" : "Delete selected annotation",
                     action: deleteAction
                 )
@@ -679,14 +678,12 @@ private struct EditorToolbar: View {
             HStack(spacing: 6) {
                 ToolbarIconButton(
                     systemImageName: "doc.on.doc",
-                    tooltipTitle: "Save and copy",
                     helpText: "Save edited image and copy it to the clipboard",
                     action: copyAction
                 )
 
                 ToolbarIconButton(
                     systemImageName: "square.and.arrow.down",
-                    tooltipTitle: "Save",
                     helpText: "Save edited image and copy the file path",
                     action: saveAction
                 )
@@ -697,7 +694,6 @@ private struct EditorToolbar: View {
 
             ToolbarIconButton(
                 systemImageName: "clipboard",
-                tooltipTitle: "Copy and delete",
                 helpText: "Copy image to clipboard and delete it from history and disk",
                 action: copyAndDeleteAction
             )
@@ -728,7 +724,6 @@ private struct ToolButton: View {
         .foregroundStyle(isSelected ? Color.white : Color.primary)
         .accessibilityLabel(tool.displayName)
         .help(tool.helpText)
-        .toolbarTooltip(tool.displayName)
     }
 }
 
@@ -805,7 +800,6 @@ private struct ColorSwatchButton: View {
 
 private struct ToolbarIconButton: View {
     let systemImageName: String
-    let tooltipTitle: String
     let helpText: String
     let action: () -> Void
 
@@ -817,46 +811,6 @@ private struct ToolbarIconButton: View {
         .buttonStyle(.bordered)
         .accessibilityLabel(helpText)
         .help(helpText)
-        .toolbarTooltip(tooltipTitle)
-    }
-}
-
-private struct ToolbarTooltipModifier: ViewModifier {
-    let title: String
-    @State private var isHovering = false
-
-    func body(content: Content) -> some View {
-        content
-            .onHover { isHovering = $0 }
-            .overlay(alignment: .bottom) {
-                if isHovering {
-                    Text(title)
-                        .font(.caption)
-                        .foregroundStyle(Color(nsColor: .labelColor))
-                        .lineLimit(1)
-                        .fixedSize()
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color(nsColor: .windowBackgroundColor))
-                                .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
-                        }
-                        .offset(y: 32)
-                        .allowsHitTesting(false)
-                }
-            }
-            .zIndex(isHovering ? 1 : 0)
-    }
-}
-
-private extension View {
-    func toolbarTooltip(_ title: String) -> some View {
-        modifier(ToolbarTooltipModifier(title: title))
     }
 }
 
