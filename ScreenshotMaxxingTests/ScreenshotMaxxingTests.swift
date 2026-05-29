@@ -1697,6 +1697,40 @@ struct ScreenshotMaxxingTests {
         #expect(rangePairs(state.removedRanges) == [[4.5, 5]])
     }
 
+    @Test func videoEditStatePlaybackSkipTargetAdvancesPastCut() throws {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+
+        #expect(state.playbackSkipTarget(for: 3.9, offset: 0.04) == nil)
+        #expect(try isApproximately(#require(state.playbackSkipTarget(for: 4.1, offset: 0.04)), 5.04))
+        #expect(state.playbackSkipTarget(for: 5, offset: 0.04) == nil)
+    }
+
+    @Test func videoEditStatePlaybackSkipTargetAdvancesThroughNextCutIfOffsetLandsInsideIt() throws {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [
+                VideoTimeRange(start: 4, end: 5),
+                VideoTimeRange(start: 5.02, end: 6)
+            ]
+        )
+
+        #expect(try isApproximately(#require(state.playbackSkipTarget(for: 4.5, offset: 0.04)), 6.04))
+    }
+
+    @Test func videoEditStatePlaybackSkipTargetClampsToTrimEnd() throws {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            trimStart: 2,
+            trimEnd: 8,
+            removedRanges: [VideoTimeRange(start: 7, end: 8)]
+        )
+
+        #expect(try isApproximately(#require(state.playbackSkipTarget(for: 7.5, offset: 0.04)), 8))
+    }
+
     @Test func videoExportPlannerComputesOutputDurationFromKeptRanges() {
         let state = VideoEditState(
             durationSeconds: 10,
@@ -1713,6 +1747,10 @@ struct ScreenshotMaxxingTests {
 
     private func rangePairs(_ ranges: [VideoTimeRange]) -> [[Double]] {
         ranges.map { [$0.start, $0.end] }
+    }
+
+    private func isApproximately(_ first: Double, _ second: Double, accuracy: Double = 0.000001) -> Bool {
+        abs(first - second) <= accuracy
     }
 
     private func makeVerticalSplitPNGData(width: Int, height: Int) throws -> Data {

@@ -181,6 +181,29 @@ struct VideoEditState: Equatable {
         }
     }
 
+    func playbackSkipTarget(for time: Double, offset: Double = 0) -> Double? {
+        guard trimEnd > trimStart,
+              removedRange(containing: time) != nil else {
+            return nil
+        }
+
+        let offset = max(offset, 0)
+        var target = min(max(time, trimStart), trimEnd)
+        var didSkip = false
+
+        while let removedRange = removedRange(containing: target), target < trimEnd {
+            let nextTarget = min(removedRange.end + offset, trimEnd)
+            guard nextTarget > target else {
+                break
+            }
+
+            target = nextTarget
+            didSkip = true
+        }
+
+        return didSkip ? target : nil
+    }
+
     private mutating func normalize() {
         if trimEnd < trimStart {
             swap(&trimStart, &trimEnd)

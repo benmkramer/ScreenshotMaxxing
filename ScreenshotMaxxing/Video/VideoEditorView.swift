@@ -21,7 +21,9 @@ struct VideoEditorView: View {
     @State private var isExporting = false
     @State private var statusMessage: String?
     @State private var playbackObserver: Any?
+    @State private var pendingPlaybackSkipTarget: Double?
 
+    private static let playbackSkipOffset: Double = 0.04
     private static let successfulActionCloseDelay: TimeInterval = 0.6
 
     init(videoURL: URL, capture: Capture? = nil, closeAction: @escaping () -> Void = {}) {
@@ -88,6 +90,11 @@ struct VideoEditorView: View {
         } else {
             if currentTime < editState.trimStart || currentTime >= editState.trimEnd {
                 seek(to: editState.trimStart)
+            } else if let skipTarget = editState.playbackSkipTarget(
+                for: currentTime,
+                offset: Self.playbackSkipOffset
+            ) {
+                seek(to: skipTarget)
             }
             player.play()
             isPlaying = true
@@ -156,6 +163,10 @@ struct VideoEditorView: View {
             forInterval: CMTime(seconds: 0.08, preferredTimescale: 600),
             queue: .main
         ) { time in
+            guard pendingPlaybackSkipTarget == nil else {
+                return
+            }
+
             currentTime = time.seconds.isFinite ? time.seconds : 0
             skipRemovedRangeIfNeeded(at: currentTime)
         }
@@ -169,8 +180,8 @@ struct VideoEditorView: View {
     }
 
     private func skipRemovedRangeIfNeeded(at time: Double) {
-        if let removedRange = editState.removedRange(containing: time) {
-            seek(to: removedRange.end)
+        if let skipTarget = editState.playbackSkipTarget(for: time, offset: Self.playbackSkipOffset) {
+            skipPlayback(to: skipTarget)
             return
         }
 
@@ -186,6 +197,7 @@ struct VideoEditorView: View {
     }
 
     private func seek(to seconds: Double) {
+        pendingPlaybackSkipTarget = nil
         let clamped = min(max(seconds, editState.trimStart), editState.trimEnd)
         currentTime = clamped
         player.seek(
@@ -193,6 +205,27 @@ struct VideoEditorView: View {
             toleranceBefore: .zero,
             toleranceAfter: .zero
         )
+    }
+
+    private func skipPlayback(to seconds: Double) {
+        let clamped = min(max(seconds, editState.trimStart), editState.trimEnd)
+        pendingPlaybackSkipTarget = clamped
+        currentTime = clamped
+        player.seek(
+            to: CMTime(seconds: clamped, preferredTimescale: 600),
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        ) { _ in
+            DispatchQueue.main.async {
+                if pendingPlaybackSkipTarget == clamped {
+                    pendingPlaybackSkipTarget = nil
+                }
+
+                if isPlaying {
+                    player.play()
+                }
+            }
+        }
     }
 
     private func closeAfterShowingSuccess() {
