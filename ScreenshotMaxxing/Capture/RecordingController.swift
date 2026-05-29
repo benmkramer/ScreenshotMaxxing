@@ -48,11 +48,8 @@ final class RecordingController {
         activeSession.toolbar.close()
 
         do {
-            try activeSession.stream.removeRecordingOutput(activeSession.recordingOutput)
             try await stopCapture(activeSession.stream)
         } catch {
-            try? await stopCapture(activeSession.stream)
-
             if await recoverCompletedRecordingIfPossible() {
                 return
             }
