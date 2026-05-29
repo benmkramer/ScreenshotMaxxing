@@ -412,8 +412,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = VideoEditorWindowController(videoURL: videoURL, capture: capture)
         controller.onClose = { [weak self] closedController in
             self?.videoEditorWindowControllers.removeAll { $0 === closedController }
+            self?.refreshAccessoryPolicyAfterWindowClose()
         }
         videoEditorWindowControllers.append(controller)
+        NSApp.setActivationPolicy(.regular)
         controller.show()
     }
 

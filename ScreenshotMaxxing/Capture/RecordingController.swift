@@ -49,6 +49,11 @@ final class RecordingController {
 
         do {
             try await stopCapture(activeSession.stream)
+            if await recoverCompletedRecordingIfPossible() {
+                return
+            }
+
+            completeRecording()
         } catch {
             if await recoverCompletedRecordingIfPossible() {
                 return
@@ -145,7 +150,7 @@ final class RecordingController {
     }
 
     private func recoverCompletedRecordingIfPossible() async -> Bool {
-        for _ in 0..<6 {
+        for _ in 0..<20 {
             guard let activeSession else {
                 return true
             }
@@ -156,7 +161,7 @@ final class RecordingController {
                 return true
             }
 
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            try? await Task.sleep(nanoseconds: 250_000_000)
         }
 
         return false
