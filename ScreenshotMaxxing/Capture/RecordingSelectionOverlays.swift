@@ -52,6 +52,7 @@ final class RecordingAreaSelectionWindowController: NSWindowController {
     func select() async throws -> RecordingAreaSelection {
         try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
+            NSApp.activate(ignoringOtherApps: true)
             showWindow(nil)
             window?.makeKeyAndOrderFront(nil)
             window?.makeFirstResponder(window?.contentView)
@@ -104,6 +105,7 @@ final class RecordingWindowSelectionWindowController: NSWindowController {
     func select() async throws -> SCWindow {
         try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
+            NSApp.activate(ignoringOtherApps: true)
             showWindow(nil)
             window?.makeKeyAndOrderFront(nil)
             window?.makeFirstResponder(window?.contentView)
@@ -128,7 +130,7 @@ final class RecordingWindowSelectionWindowController: NSWindowController {
 
 private enum RecordingSelectionWindowController {
     static func makeOverlayPanel(frame: CGRect) -> NSPanel {
-        let panel = NSPanel(
+        let panel = RecordingSelectionPanel(
             contentRect: frame,
             styleMask: [.borderless],
             backing: .buffered,
@@ -143,6 +145,16 @@ private enum RecordingSelectionWindowController {
         panel.isReleasedWhenClosed = false
         panel.sharingType = .none
         return panel
+    }
+}
+
+private final class RecordingSelectionPanel: NSPanel {
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        true
     }
 }
 

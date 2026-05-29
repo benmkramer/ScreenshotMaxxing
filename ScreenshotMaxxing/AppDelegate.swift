@@ -145,14 +145,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        accessoryPolicyRefreshWorkItem?.cancel()
+        accessoryPolicyRefreshWorkItem = nil
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
         Task {
             do {
                 let result = try await recordingController.record(options: options)
                 let capture = try metadataStore.saveCapture(result: result)
                 openVideoEditor(for: result.fileURL, capture: capture)
             } catch RecordingSelectionError.cancelled {
+                refreshAccessoryPolicyAfterWindowClose()
                 return
             } catch {
+                refreshAccessoryPolicyAfterWindowClose()
                 presentError(error, title: "Recording Failed")
             }
         }
