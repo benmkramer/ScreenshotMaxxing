@@ -8,14 +8,22 @@
 import Foundation
 import SwiftData
 
+enum CaptureMediaType: String, CaseIterable {
+    case image
+    case video
+}
+
 @Model
 final class Capture {
     var id: UUID
     var createdAt: Date
     var fileName: String
     var captureMode: String
+    var mediaType: String = CaptureMediaType.image.rawValue
     var width: Int
     var height: Int
+    var durationSeconds: Double?
+    var thumbnailFilePath: String?
     var originalFilePath: String
     var editedFilePath: String?
     var favorite: Bool
@@ -25,8 +33,11 @@ final class Capture {
         createdAt: Date = Date(),
         fileName: String,
         captureMode: String,
+        mediaType: String = CaptureMediaType.image.rawValue,
         width: Int,
         height: Int,
+        durationSeconds: Double? = nil,
+        thumbnailFilePath: String? = nil,
         originalFilePath: String,
         editedFilePath: String? = nil,
         favorite: Bool = false
@@ -35,8 +46,11 @@ final class Capture {
         self.createdAt = createdAt
         self.fileName = fileName
         self.captureMode = captureMode
+        self.mediaType = mediaType
         self.width = width
         self.height = height
+        self.durationSeconds = durationSeconds
+        self.thumbnailFilePath = thumbnailFilePath
         self.originalFilePath = originalFilePath
         self.editedFilePath = editedFilePath
         self.favorite = favorite

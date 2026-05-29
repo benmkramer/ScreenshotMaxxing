@@ -12,13 +12,16 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var editorWindowControllers: [ScreenshotEditorWindowController] = []
+    private var videoEditorWindowControllers: [VideoEditorWindowController] = []
     private var captureOptionsWindowController: CaptureOptionsWindowController?
     private var historyWindowController: NSWindowController?
     private var preferencesWindowController: NSWindowController?
     private var hotKeyManager: HotKeyManager?
     private let captureController = CaptureController()
+    private let recordingController = RecordingController()
     private let metadataStore = CaptureMetadataStore()
     private let shortcutSettingsStore = ShortcutSettingsStore()
+    private let recordingSettingsStore = RecordingSettingsStore()
     private let loginItemController = LoginItemController()
     private let permissionController = AppPermissionController()
     private var permissionOnboardingWindowController: PermissionOnboardingWindowController?
@@ -129,8 +132,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 openEditor(for: result.fileURL, capture: capture)
             } catch CaptureError.cancelled {
                 return
+            } catch RecordingSelectionError.cancelled {
+                return
             } catch {
                 presentError(error, title: "Capture Failed")
+            }
+        }
+    }
+
+    private func startRecording(_ options: RecordingOptions) {
+        guard hasRequiredPermissionsForCapture() else {
+            return
+        }
+
+        accessoryPolicyRefreshWorkItem?.cancel()
+        accessoryPolicyRefreshWorkItem = nil
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
+        Task {
+            do {
+                let result = try await recordingController.record(options: options)
+                let capture = try metadataStore.saveCapture(result: result)
+                openVideoEditor(for: result.fileURL, capture: capture)
+            } catch RecordingSelectionError.cancelled {
+                refreshAccessoryPolicyAfterWindowClose()
+                return
+            } catch {
+                refreshAccessoryPolicyAfterWindowClose()
+                presentError(error, title: "Recording Failed")
             }
         }
     }
@@ -322,9 +352,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let controller = CaptureOptionsWindowController { [weak self] mode in
-            self?.startCapture(mode)
-        }
+        let controller = CaptureOptionsWindowController(
+            microphoneEnabled: recordingSettingsStore.microphoneEnabled(),
+            onSelectCapture: { [weak self] mode in
+                self?.startCapture(mode)
+            },
+            onSelectRecording: { [weak self] options in
+                self?.startRecording(options)
+            },
+            onMicrophoneChange: { [weak self] isEnabled in
+                do {
+                    try self?.recordingSettingsStore.saveMicrophoneEnabled(isEnabled)
+                } catch {
+                    self?.presentError(error, title: "Recording Setting Failed")
+                }
+            }
+        )
         controller.onClose = { [weak self] closedController in
             if self?.captureOptionsWindowController === closedController {
                 self?.captureOptionsWindowController = nil
@@ -372,6 +415,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.show()
     }
 
+    private func openVideoEditor(for videoURL: URL, capture: Capture?) {
+        let controller = VideoEditorWindowController(videoURL: videoURL, capture: capture)
+        controller.onClose = { [weak self] closedController in
+            self?.videoEditorWindowControllers.removeAll { $0 === closedController }
+            self?.refreshAccessoryPolicyAfterWindowClose()
+        }
+        videoEditorWindowControllers.append(controller)
+        NSApp.setActivationPolicy(.regular)
+        controller.show()
+    }
+
     private func openHistory() {
         if let window = historyWindowController?.window {
             activateForUserFacingWindow(window)
@@ -379,7 +433,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let rootView = CaptureHistoryView { [weak self] capture in
-            self?.openEditor(for: CaptureHistoryData.previewFileURL(for: capture), capture: capture)
+            switch CaptureHistoryData.mediaType(for: capture) {
+            case .image:
+                self?.openEditor(for: CaptureHistoryData.contentFileURL(for: capture), capture: capture)
+            case .video:
+                self?.openVideoEditor(for: CaptureHistoryData.contentFileURL(for: capture), capture: capture)
+            }
         }
             .modelContainer(PersistenceController.sharedModelContainer)
         let hostingController = NSHostingController(rootView: rootView)

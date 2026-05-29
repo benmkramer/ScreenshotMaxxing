@@ -8,32 +8,77 @@
 import AppKit
 import SwiftUI
 
+private enum CaptureOptionsPane: String, CaseIterable {
+    case screenshot
+    case record
+
+    var displayName: String {
+        switch self {
+        case .screenshot:
+            "Screenshot"
+        case .record:
+            "Record"
+        }
+    }
+}
+
 struct CaptureOptionsView: View {
     static let availableModes = CaptureMode.allCases
+    static let availableRecordingModes = RecordingMode.allCases
 
-    let onSelect: (CaptureMode) -> Void
+    @State private var selectedPane: CaptureOptionsPane = .screenshot
+    @State private var microphoneEnabled: Bool
+
+    let onSelectCapture: (CaptureMode) -> Void
+    let onSelectRecording: (RecordingOptions) -> Void
+    let onMicrophoneChange: (Bool) -> Void
     let onDismiss: () -> Void
 
+    init(
+        microphoneEnabled: Bool = false,
+        onSelectCapture: @escaping (CaptureMode) -> Void,
+        onSelectRecording: @escaping (RecordingOptions) -> Void,
+        onMicrophoneChange: @escaping (Bool) -> Void = { _ in },
+        onDismiss: @escaping () -> Void
+    ) {
+        self._microphoneEnabled = State(initialValue: microphoneEnabled)
+        self.onSelectCapture = onSelectCapture
+        self.onSelectRecording = onSelectRecording
+        self.onMicrophoneChange = onMicrophoneChange
+        self.onDismiss = onDismiss
+    }
+
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(Self.availableModes, id: \.self) { mode in
-                CaptureOptionButton(mode: mode, onSelect: onSelect)
+        VStack(spacing: 10) {
+            Picker("Capture type", selection: $selectedPane) {
+                ForEach(CaptureOptionsPane.allCases, id: \.self) { pane in
+                    Text(pane.displayName)
+                        .tag(pane)
+                }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 240)
+            .accessibilityIdentifier("capture-options-tabs")
 
-            Divider()
-                .frame(height: 52)
-                .padding(.horizontal, 4)
+            HStack(spacing: 8) {
+                optionButtons
 
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 30, height: 30)
-                    .contentShape(Circle())
+                Divider()
+                    .frame(height: 52)
+                    .padding(.horizontal, 4)
+
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 30, height: 30)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                .help("Close")
+                .accessibilityIdentifier("capture-options-close")
             }
-            .buttonStyle(.plain)
-            .keyboardShortcut(.cancelAction)
-            .help("Close")
-            .accessibilityIdentifier("capture-options-close")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -45,24 +90,73 @@ struct CaptureOptionsView: View {
         .fixedSize()
         .onExitCommand(perform: onDismiss)
     }
+
+    @ViewBuilder
+    private var optionButtons: some View {
+        switch selectedPane {
+        case .screenshot:
+            ForEach(Self.availableModes, id: \.self) { mode in
+                CaptureOptionButton(
+                    title: mode.captureOptionsDisplayName,
+                    symbolName: mode.captureOptionsSymbolName,
+                    accessibilityIdentifier: mode.captureOptionsAccessibilityIdentifier
+                ) {
+                    onSelectCapture(mode)
+                }
+            }
+        case .record:
+            ForEach(Self.availableRecordingModes, id: \.self) { mode in
+                CaptureOptionButton(
+                    title: mode.captureOptionsDisplayName,
+                    symbolName: mode.captureOptionsSymbolName,
+                    accessibilityIdentifier: mode.captureOptionsAccessibilityIdentifier
+                ) {
+                    onSelectRecording(RecordingOptions(mode: mode, microphoneEnabled: microphoneEnabled))
+                }
+            }
+
+            Divider()
+                .frame(height: 52)
+                .padding(.horizontal, 4)
+
+            Toggle(isOn: Binding(
+                get: { microphoneEnabled },
+                set: { isEnabled in
+                    microphoneEnabled = isEnabled
+                    onMicrophoneChange(isEnabled)
+                }
+            )) {
+                Image(systemName: microphoneEnabled ? "mic.fill" : "mic.slash")
+                    .font(.system(size: 18, weight: .medium))
+                    .frame(width: 24, height: 22)
+            }
+            .toggleStyle(.switch)
+            .help("Microphone")
+            .accessibilityLabel("Microphone")
+            .accessibilityIdentifier("capture-options-record-microphone")
+            .frame(width: 84)
+        }
+    }
 }
 
 private struct CaptureOptionButton: View {
-    let mode: CaptureMode
-    let onSelect: (CaptureMode) -> Void
+    let title: String
+    let symbolName: String
+    let accessibilityIdentifier: String
+    let action: () -> Void
 
     @State private var isHovered = false
 
     var body: some View {
         Button {
-            onSelect(mode)
+            action()
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: mode.captureOptionsSymbolName)
+                Image(systemName: symbolName)
                     .font(.system(size: 20, weight: .medium))
                     .frame(width: 26, height: 22)
 
-                Text(mode.captureOptionsDisplayName)
+                Text(title)
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
             }
@@ -78,21 +172,30 @@ private struct CaptureOptionButton: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .help(mode.captureOptionsDisplayName)
-        .accessibilityIdentifier(mode.captureOptionsAccessibilityIdentifier)
+        .help(title)
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 }
 
 @MainActor
 final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate {
-    static let windowSize = NSSize(width: 388, height: 82)
+    static let windowSize = NSSize(width: 506, height: 132)
 
     var onClose: ((CaptureOptionsWindowController) -> Void)?
 
-    private let onSelect: (CaptureMode) -> Void
+    private let onSelectCapture: (CaptureMode) -> Void
+    private let onSelectRecording: (RecordingOptions) -> Void
+    private let onMicrophoneChange: (Bool) -> Void
 
-    init(onSelect: @escaping (CaptureMode) -> Void) {
-        self.onSelect = onSelect
+    init(
+        microphoneEnabled: Bool = false,
+        onSelectCapture: @escaping (CaptureMode) -> Void,
+        onSelectRecording: @escaping (RecordingOptions) -> Void,
+        onMicrophoneChange: @escaping (Bool) -> Void = { _ in }
+    ) {
+        self.onSelectCapture = onSelectCapture
+        self.onSelectRecording = onSelectRecording
+        self.onMicrophoneChange = onMicrophoneChange
 
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: Self.windowSize),
@@ -120,11 +223,29 @@ final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate
 
         panel.delegate = self
         panel.contentViewController = NSHostingController(
-            rootView: CaptureOptionsView { [weak self] mode in
-                self?.select(mode)
-            } onDismiss: { [weak self] in
-                self?.close()
-            }
+            rootView: CaptureOptionsView(
+                microphoneEnabled: microphoneEnabled,
+                onSelectCapture: { [weak self] mode in
+                    self?.selectCapture(mode)
+                },
+                onSelectRecording: { [weak self] options in
+                    self?.selectRecording(options)
+                },
+                onMicrophoneChange: { [weak self] isEnabled in
+                    self?.onMicrophoneChange(isEnabled)
+                },
+                onDismiss: { [weak self] in
+                    self?.close()
+                }
+            )
+        )
+    }
+
+    convenience init(onSelect: @escaping (CaptureMode) -> Void) {
+        self.init(
+            onSelectCapture: onSelect,
+            onSelectRecording: { _ in },
+            onMicrophoneChange: { _ in }
         )
     }
 
@@ -148,9 +269,14 @@ final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate
         onClose?(self)
     }
 
-    private func select(_ mode: CaptureMode) {
+    private func selectCapture(_ mode: CaptureMode) {
         close()
-        onSelect(mode)
+        onSelectCapture(mode)
+    }
+
+    private func selectRecording(_ options: RecordingOptions) {
+        close()
+        onSelectRecording(options)
     }
 
     private func position(_ window: NSWindow) {
@@ -193,5 +319,33 @@ private extension CaptureMode {
 
     var captureOptionsAccessibilityIdentifier: String {
         "capture-options-\(rawValue)"
+    }
+}
+
+private extension RecordingMode {
+    var captureOptionsDisplayName: String {
+        switch self {
+        case .area:
+            "Area"
+        case .window:
+            "Window"
+        case .fullscreen:
+            "Full Screen"
+        }
+    }
+
+    var captureOptionsSymbolName: String {
+        switch self {
+        case .area:
+            "record.circle"
+        case .window:
+            "macwindow.badge.plus"
+        case .fullscreen:
+            "display"
+        }
+    }
+
+    var captureOptionsAccessibilityIdentifier: String {
+        "capture-options-record-\(rawValue)"
     }
 }

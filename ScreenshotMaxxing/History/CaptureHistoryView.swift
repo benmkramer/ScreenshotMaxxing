@@ -308,8 +308,18 @@ private struct CapturePreviewView: View {
                     .scaledToFill()
                     .frame(width: 72, height: 52)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(alignment: .bottomTrailing) {
+                        if CaptureHistoryData.mediaType(for: capture) == .video {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(5)
+                                .background(.black.opacity(0.58), in: Circle())
+                                .padding(4)
+                        }
+                    }
             } else {
-                Image(systemName: fileExists ? "photo" : "questionmark.folder")
+                Image(systemName: placeholderSymbolName)
                     .font(.system(size: 22, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.secondary)
@@ -317,6 +327,14 @@ private struct CapturePreviewView: View {
         }
         .frame(width: 72, height: 52)
         .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var placeholderSymbolName: String {
+        if !fileExists {
+            return "questionmark.folder"
+        }
+
+        return CaptureHistoryData.mediaType(for: capture) == .video ? "play.rectangle" : "photo"
     }
 }
 

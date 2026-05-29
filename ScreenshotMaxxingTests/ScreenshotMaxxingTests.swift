@@ -47,11 +47,44 @@ struct ScreenshotMaxxingTests {
 
         #expect(fileManager.fileExists(atPath: directories.originals.fileSystemPath))
         #expect(fileManager.fileExists(atPath: directories.edited.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: directories.thumbnails.fileSystemPath))
         #expect(originalURL.deletingLastPathComponent() == directories.originals)
         #expect(originalURL.lastPathComponent == "capture-area-19700101-000000-00000000.png")
 
         try Data("png".utf8).write(to: originalURL)
         #expect(fileManager.fileExists(atPath: originalURL.fileSystemPath))
+    }
+
+    @MainActor
+    @Test func fileLocationsCreateMp4OriginalsAndVideoThumbnails() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        let directories = try FileLocations.ensureCaptureDirectories(
+            baseDirectory: baseDirectory,
+            fileManager: fileManager
+        )
+        let originalURL = FileLocations.uniqueOriginalFileURL(
+            captureMode: "recording area",
+            directories: directories,
+            date: Date(timeIntervalSince1970: 0),
+            uuid: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+            fileExtension: "mp4"
+        )
+        let thumbnailURL = FileLocations.uniqueThumbnailFileURL(
+            originalFileName: originalURL.lastPathComponent,
+            directories: directories,
+            uuid: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
+        )
+
+        #expect(originalURL.deletingLastPathComponent() == directories.originals)
+        #expect(originalURL.lastPathComponent == "recording-area-19700101-000000-00000000.mp4")
+        #expect(thumbnailURL.deletingLastPathComponent() == directories.thumbnails)
+        #expect(thumbnailURL.lastPathComponent == "recording-area-19700101-000000-00000000-thumbnail-00000000.png")
     }
 
     @MainActor
@@ -334,6 +367,7 @@ struct ScreenshotMaxxingTests {
 
     @Test func captureOptionsOnlyIncludeStillImageCaptureModes() {
         #expect(CaptureOptionsView.availableModes == [.area, .window, .fullscreen])
+        #expect(CaptureOptionsView.availableRecordingModes == [.area, .window, .fullscreen])
     }
 
     @Test func screenCapturePermissionPreflightsGrantedAccess() {
@@ -587,6 +621,20 @@ struct ScreenshotMaxxingTests {
         #expect(reloadedStore.captureOptionsShortcut().displayString == "Control-Option-B")
     }
 
+    @Test func recordingSettingsStorePersistsMicrophoneDefault() throws {
+        let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = RecordingSettingsStore(userDefaults: userDefaults)
+        try store.saveMicrophoneEnabled(true)
+        let reloadedStore = RecordingSettingsStore(userDefaults: userDefaults)
+
+        #expect(reloadedStore.microphoneEnabled())
+    }
+
     @Test func shortcutCanBeRecordedFromModifiedKeyEvent() throws {
         let event = try #require(NSEvent.keyEvent(
             with: .keyDown,
@@ -644,8 +692,11 @@ struct ScreenshotMaxxingTests {
 
         #expect(capture.fileName == "area.png")
         #expect(capture.captureMode == "area")
+        #expect(capture.mediaType == CaptureMediaType.image.rawValue)
         #expect(capture.width == 2)
         #expect(capture.height == 3)
+        #expect(capture.durationSeconds == nil)
+        #expect(capture.thumbnailFilePath == nil)
         #expect(capture.originalFilePath == imageURL.fileSystemPath)
         #expect(captures.count == 1)
     }
@@ -657,6 +708,7 @@ struct ScreenshotMaxxingTests {
             .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
         let originalURL = baseDirectory.appendingPathComponent("original.png")
         let editedURL = baseDirectory.appendingPathComponent("edited.png")
+        let thumbnailURL = baseDirectory.appendingPathComponent("thumbnail.png")
         defer {
             try? fileManager.removeItem(at: baseDirectory)
         }
@@ -664,6 +716,7 @@ struct ScreenshotMaxxingTests {
         try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
         try makePNGData(width: 2, height: 2).write(to: originalURL)
         try makePNGData(width: 2, height: 2).write(to: editedURL)
+        try makePNGData(width: 2, height: 2).write(to: thumbnailURL)
 
         let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
         let capture = Capture(
@@ -671,6 +724,7 @@ struct ScreenshotMaxxingTests {
             captureMode: "area",
             width: 2,
             height: 2,
+            thumbnailFilePath: thumbnailURL.fileSystemPath,
             originalFilePath: originalURL.fileSystemPath,
             editedFilePath: editedURL.fileSystemPath
         )
@@ -684,6 +738,47 @@ struct ScreenshotMaxxingTests {
         #expect(captures.isEmpty)
         #expect(!fileManager.fileExists(atPath: originalURL.fileSystemPath))
         #expect(!fileManager.fileExists(atPath: editedURL.fileSystemPath))
+        #expect(!fileManager.fileExists(atPath: thumbnailURL.fileSystemPath))
+    }
+
+    @Test func captureDefaultsKeepExistingCapturesAsImages() {
+        let capture = Capture(
+            fileName: "area.png",
+            captureMode: "area",
+            width: 2,
+            height: 3,
+            originalFilePath: "/tmp/area.png"
+        )
+
+        #expect(capture.mediaType == CaptureMediaType.image.rawValue)
+        #expect(capture.durationSeconds == nil)
+        #expect(capture.thumbnailFilePath == nil)
+    }
+
+    @MainActor
+    @Test func captureMetadataStorePersistsVideoDetails() throws {
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let store = CaptureMetadataStore(modelContainer: modelContainer)
+        let videoURL = URL(fileURLWithPath: "/tmp/recording-area.mp4")
+        let thumbnailURL = URL(fileURLWithPath: "/tmp/recording-area-thumbnail.png")
+
+        let capture = try store.saveCapture(result: RecordingResult(
+            mode: .area,
+            fileURL: videoURL,
+            durationSeconds: 12.5,
+            width: 1920,
+            height: 1080,
+            thumbnailURL: thumbnailURL
+        ))
+        let captures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+
+        #expect(capture.fileName == "recording-area.mp4")
+        #expect(capture.captureMode == "area")
+        #expect(capture.mediaType == CaptureMediaType.video.rawValue)
+        #expect(capture.durationSeconds == 12.5)
+        #expect(capture.thumbnailFilePath == thumbnailURL.fileSystemPath)
+        #expect(capture.originalFilePath == videoURL.fileSystemPath)
+        #expect(captures.count == 1)
     }
 
     private func makePNGData(width: Int, height: Int) throws -> Data {
@@ -1302,6 +1397,7 @@ struct ScreenshotMaxxingTests {
         #expect(captures.map(\.fileName) == ["newer.png", "older.png"])
         #expect(CaptureHistoryData.previewFilePath(for: newerCapture) == "/tmp/newer-edited.png")
         #expect(CaptureHistoryData.previewFileURL(for: newerCapture) == URL(fileURLWithPath: "/tmp/newer-edited.png"))
+        #expect(CaptureHistoryData.contentFileURL(for: newerCapture) == URL(fileURLWithPath: "/tmp/newer-edited.png"))
         #expect(CaptureHistoryData.detailText(for: newerCapture) == "Fullscreen - 40x30")
     }
 
@@ -1431,6 +1527,230 @@ struct ScreenshotMaxxingTests {
 
     private func canonicalFileSystemPath(for fileURL: URL) -> String {
         fileURL.resolvingSymlinksInPath().fileSystemPath
+    }
+
+    @Test func captureHistoryRoutesVideosToContentAndThumbnailPaths() {
+        let videoCapture = Capture(
+            fileName: "recording-window.mp4",
+            captureMode: "window",
+            mediaType: CaptureMediaType.video.rawValue,
+            width: 1920,
+            height: 1080,
+            durationSeconds: 75,
+            thumbnailFilePath: "/tmp/recording-window-thumb.png",
+            originalFilePath: "/tmp/recording-window.mp4",
+            editedFilePath: "/tmp/recording-window-edited.mp4"
+        )
+
+        #expect(CaptureHistoryData.mediaType(for: videoCapture) == .video)
+        #expect(CaptureHistoryData.previewFilePath(for: videoCapture) == "/tmp/recording-window-thumb.png")
+        #expect(CaptureHistoryData.contentFilePath(for: videoCapture) == "/tmp/recording-window-edited.mp4")
+        #expect(CaptureHistoryData.detailText(for: videoCapture) == "Window - 1920x1080 - 1:15")
+    }
+
+    @Test func videoEditStateKeepsTrimOnlyRange() {
+        let state = VideoEditState(durationSeconds: 10, trimStart: 2, trimEnd: 8)
+
+        #expect(rangePairs(state.keptRanges) == [[2, 8]])
+    }
+
+    @Test func videoEditStateRemovesMiddleCut() {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+
+        #expect(rangePairs(state.keptRanges) == [[0, 4], [5, 10]])
+    }
+
+    @Test func videoEditStateSortsMultipleCuts() {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [
+                VideoTimeRange(start: 6, end: 7),
+                VideoTimeRange(start: 2, end: 3)
+            ]
+        )
+
+        #expect(rangePairs(state.keptRanges) == [[0, 2], [3, 6], [7, 10]])
+    }
+
+    @Test func videoEditStateMergesOverlappingCuts() {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [
+                VideoTimeRange(start: 2, end: 5),
+                VideoTimeRange(start: 4, end: 8)
+            ]
+        )
+
+        #expect(rangePairs(state.keptRanges) == [[0, 2], [8, 10]])
+    }
+
+    @Test func videoEditStateIgnoresZeroLengthCuts() {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [
+                VideoTimeRange(start: 3, end: 3),
+                VideoTimeRange(start: 8, end: 7)
+            ]
+        )
+
+        #expect(rangePairs(state.keptRanges) == [[0, 7], [8, 10]])
+    }
+
+    @Test func videoEditStateClampsCutsTouchingTrimBoundaries() {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            trimStart: 2,
+            trimEnd: 8,
+            removedRanges: [
+                VideoTimeRange(start: 0, end: 3),
+                VideoTimeRange(start: 7, end: 10)
+            ]
+        )
+
+        #expect(rangePairs(state.keptRanges) == [[3, 7]])
+    }
+
+    @Test func videoEditStateSelectsAddedCut() {
+        var state = VideoEditState(durationSeconds: 10)
+
+        let selectedID = state.addRemovedRange(VideoTimeRange(start: 4, end: 5))
+        let selectedRange = state.selectedRemovedRange.map { [$0] } ?? []
+
+        #expect(state.selectedRemovedRangeID == selectedID)
+        #expect(rangePairs(selectedRange) == [[4, 5]])
+    }
+
+    @Test func videoEditStateDeletesSelectedCut() {
+        var state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [
+                VideoTimeRange(start: 2, end: 3),
+                VideoTimeRange(start: 6, end: 7)
+            ]
+        )
+        state.selectRemovedRange(id: state.removedRanges[0].id)
+
+        state.removeSelectedRange()
+
+        #expect(rangePairs(state.removedRanges) == [[6, 7]])
+        #expect(state.selectedRemovedRangeID == nil)
+    }
+
+    @Test func videoEditStateResizesSelectedCutEdges() {
+        var state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+        let cutID = state.removedRanges[0].id
+
+        state.setRemovedRangeStart(id: cutID, 3)
+        state.setRemovedRangeEnd(id: cutID, 6)
+
+        #expect(rangePairs(state.removedRanges) == [[3, 6]])
+        #expect(state.selectedRemovedRangeID == cutID)
+        #expect(rangePairs(state.keptRanges) == [[0, 3], [6, 10]])
+    }
+
+    @Test func videoEditStateMovesSelectedCutWithoutChangingDuration() {
+        var state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+        let cutID = state.removedRanges[0].id
+
+        state.moveRemovedRange(id: cutID, start: 6)
+
+        #expect(rangePairs(state.removedRanges) == [[6, 7]])
+        #expect(state.selectedRemovedRangeID == cutID)
+        #expect(rangePairs(state.keptRanges) == [[0, 6], [7, 10]])
+    }
+
+    @Test func videoEditStateClampsMovedCutToTrimBounds() {
+        var state = VideoEditState(
+            durationSeconds: 10,
+            trimStart: 2,
+            trimEnd: 8,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+        let cutID = state.removedRanges[0].id
+
+        state.moveRemovedRange(id: cutID, start: 9)
+        #expect(rangePairs(state.removedRanges) == [[7, 8]])
+
+        state.moveRemovedRange(id: cutID, start: 0)
+        #expect(rangePairs(state.removedRanges) == [[2, 3]])
+    }
+
+    @Test func videoEditStateKeepsMinimumDurationWhenResizingCut() {
+        var state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+        let cutID = state.removedRanges[0].id
+
+        state.setRemovedRangeStart(id: cutID, 4.9, minimumDuration: 0.5)
+        state.setRemovedRangeEnd(id: cutID, 4.75, minimumDuration: 0.5)
+
+        #expect(rangePairs(state.removedRanges) == [[4.5, 5]])
+    }
+
+    @Test func videoEditStatePlaybackSkipTargetAdvancesPastCut() throws {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [VideoTimeRange(start: 4, end: 5)]
+        )
+
+        #expect(state.playbackSkipTarget(for: 3.9, offset: 0.04) == nil)
+        #expect(try isApproximately(#require(state.playbackSkipTarget(for: 4.1, offset: 0.04)), 5.04))
+        #expect(state.playbackSkipTarget(for: 5, offset: 0.04) == nil)
+    }
+
+    @Test func videoEditStatePlaybackSkipTargetAdvancesThroughNextCutIfOffsetLandsInsideIt() throws {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [
+                VideoTimeRange(start: 4, end: 5),
+                VideoTimeRange(start: 5.02, end: 6)
+            ]
+        )
+
+        #expect(try isApproximately(#require(state.playbackSkipTarget(for: 4.5, offset: 0.04)), 6.04))
+    }
+
+    @Test func videoEditStatePlaybackSkipTargetClampsToTrimEnd() throws {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            trimStart: 2,
+            trimEnd: 8,
+            removedRanges: [VideoTimeRange(start: 7, end: 8)]
+        )
+
+        #expect(try isApproximately(#require(state.playbackSkipTarget(for: 7.5, offset: 0.04)), 8))
+    }
+
+    @Test func videoExportPlannerComputesOutputDurationFromKeptRanges() {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [
+                VideoTimeRange(start: 2, end: 3),
+                VideoTimeRange(start: 6, end: 8)
+            ]
+        )
+        let plan = VideoExportPlanner.plan(for: state)
+
+        #expect(rangePairs(plan.keptRanges) == [[0, 2], [3, 6], [8, 10]])
+        #expect(plan.outputDurationSeconds == 7)
+    }
+
+    private func rangePairs(_ ranges: [VideoTimeRange]) -> [[Double]] {
+        ranges.map { [$0.start, $0.end] }
+    }
+
+    private func isApproximately(_ first: Double, _ second: Double, accuracy: Double = 0.000001) -> Bool {
+        abs(first - second) <= accuracy
     }
 
     private func makeVerticalSplitPNGData(width: Int, height: Int) throws -> Data {

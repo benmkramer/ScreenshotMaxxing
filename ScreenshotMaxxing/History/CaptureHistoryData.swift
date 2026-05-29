@@ -18,6 +18,14 @@ enum CaptureHistoryData {
     }
 
     static func previewFilePath(for capture: Capture) -> String {
+        if mediaType(for: capture) == .video, let thumbnailFilePath = capture.thumbnailFilePath {
+            return thumbnailFilePath
+        }
+
+        return contentFilePath(for: capture)
+    }
+
+    static func contentFilePath(for capture: Capture) -> String {
         capture.editedFilePath ?? capture.originalFilePath
     }
 
@@ -25,8 +33,12 @@ enum CaptureHistoryData {
         URL(fileURLWithPath: previewFilePath(for: capture))
     }
 
+    static func contentFileURL(for capture: Capture) -> URL {
+        URL(fileURLWithPath: contentFilePath(for: capture))
+    }
+
     static func fileExists(for capture: Capture, fileManager: FileManager = .default) -> Bool {
-        fileManager.fileExists(atPath: previewFilePath(for: capture))
+        fileManager.fileExists(atPath: contentFilePath(for: capture))
     }
 
     static func filteredCaptures(
@@ -55,15 +67,41 @@ enum CaptureHistoryData {
     }
 
     static func detailText(for capture: Capture) -> String {
-        "\(displayMode(for: capture.captureMode)) - \(capture.width)x\(capture.height)"
+        let dimensions = "\(capture.width)x\(capture.height)"
+        guard mediaType(for: capture) == .video, let durationSeconds = capture.durationSeconds else {
+            return "\(displayMode(for: capture.captureMode)) - \(dimensions)"
+        }
+
+        return "\(displayMode(for: capture.captureMode)) - \(dimensions) - \(durationText(durationSeconds))"
+    }
+
+    static func mediaType(for capture: Capture) -> CaptureMediaType {
+        CaptureMediaType(rawValue: capture.mediaType) ?? .image
     }
 
     static func displayMode(for captureMode: String) -> String {
-        guard let mode = CaptureMode(rawValue: captureMode) else {
+        if let mode = CaptureMode(rawValue: captureMode) {
+            return mode.displayName
+        }
+
+        guard let mode = RecordingMode(rawValue: captureMode) else {
             return captureMode.capitalized
         }
 
         return mode.displayName
+    }
+
+    static func durationText(_ durationSeconds: Double) -> String {
+        let duration = max(Int(durationSeconds.rounded()), 0)
+        let hours = duration / 3600
+        let minutes = (duration % 3600) / 60
+        let seconds = duration % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+
+        return String(format: "%d:%02d", minutes, seconds)
     }
 
     @MainActor

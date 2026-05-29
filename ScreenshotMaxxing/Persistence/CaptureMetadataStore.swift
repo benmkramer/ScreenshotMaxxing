@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AVFoundation
 import ImageIO
 import SwiftData
 
@@ -29,6 +30,25 @@ final class CaptureMetadataStore {
             captureMode: result.mode.rawValue,
             width: dimensions.width,
             height: dimensions.height,
+            originalFilePath: result.fileURL.fileSystemPath
+        )
+
+        modelContainer.mainContext.insert(capture)
+        try modelContainer.mainContext.save()
+
+        return capture
+    }
+
+    @discardableResult
+    func saveCapture(result: RecordingResult) throws -> Capture {
+        let capture = Capture(
+            fileName: result.fileURL.lastPathComponent,
+            captureMode: result.mode.rawValue,
+            mediaType: CaptureMediaType.video.rawValue,
+            width: result.width,
+            height: result.height,
+            durationSeconds: result.durationSeconds,
+            thumbnailFilePath: result.thumbnailURL.fileSystemPath,
             originalFilePath: result.fileURL.fileSystemPath
         )
 
@@ -64,6 +84,31 @@ final class CaptureMetadataStore {
         try modelContainer.mainContext.save()
     }
 
+    @discardableResult
+    func saveEditedVideoCapture(
+        editedFileURL: URL,
+        thumbnailURL: URL,
+        sourceCapture: Capture?,
+        durationSeconds: Double,
+        dimensions: CGSize
+    ) throws -> Capture {
+        let capture = Capture(
+            fileName: editedFileURL.lastPathComponent,
+            captureMode: sourceCapture?.captureMode ?? "edited",
+            mediaType: CaptureMediaType.video.rawValue,
+            width: Int(dimensions.width.rounded()),
+            height: Int(dimensions.height.rounded()),
+            durationSeconds: durationSeconds,
+            thumbnailFilePath: thumbnailURL.fileSystemPath,
+            originalFilePath: editedFileURL.fileSystemPath
+        )
+
+        modelContainer.mainContext.insert(capture)
+        try modelContainer.mainContext.save()
+
+        return capture
+    }
+
     private func imageDimensions(for url: URL) throws -> (width: Int, height: Int) {
         guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
@@ -78,7 +123,13 @@ final class CaptureMetadataStore {
     private func uniqueFilePaths(for capture: Capture) -> [String] {
         var filePaths: [String] = []
 
-        for filePath in [capture.originalFilePath, capture.editedFilePath].compactMap({ $0 }) where !filePaths.contains(filePath) {
+        let possibleFilePaths = [
+            capture.originalFilePath,
+            capture.editedFilePath,
+            capture.thumbnailFilePath
+        ]
+
+        for filePath in possibleFilePaths.compactMap({ $0 }) where !filePaths.contains(filePath) {
             filePaths.append(filePath)
         }
 

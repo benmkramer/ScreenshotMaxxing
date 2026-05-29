@@ -1,0 +1,53 @@
+//
+//  VideoEditorWindowController.swift
+//  ScreenshotMaxxing
+//
+//  Created by Codex on 5/29/26.
+//
+
+import AppKit
+import SwiftUI
+
+@MainActor
+final class VideoEditorWindowController: NSObject, NSWindowDelegate {
+    private let videoURL: URL
+    private let capture: Capture?
+    private(set) var window: NSWindow?
+    var onClose: ((VideoEditorWindowController) -> Void)?
+
+    init(videoURL: URL, capture: Capture? = nil) {
+        self.videoURL = videoURL
+        self.capture = capture
+        super.init()
+        self.window = makeWindow(videoURL: videoURL, capture: capture)
+        self.window?.delegate = self
+    }
+
+    nonisolated static func windowTitle(for videoURL: URL) -> String {
+        "\(videoURL.lastPathComponent) - ScreenshotMaxxing"
+    }
+
+    func show() {
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        onClose?(self)
+        window = nil
+    }
+
+    private func makeWindow(videoURL: URL, capture: Capture?) -> NSWindow {
+        let rootView = VideoEditorView(videoURL: videoURL, capture: capture) { [weak self] in
+            self?.window?.close()
+        }
+        let hostingController = NSHostingController(rootView: rootView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = Self.windowTitle(for: videoURL)
+        window.setContentSize(NSSize(width: 980, height: 660))
+        window.minSize = NSSize(width: 720, height: 500)
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.isReleasedWhenClosed = false
+        return window
+    }
+}
