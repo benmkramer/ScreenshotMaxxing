@@ -1406,13 +1406,13 @@ struct ScreenshotMaxxingTests {
             for: capturesToDelete,
             allCaptures: allCaptures,
             fileManager: fileManager
-        ).map(\.fileSystemPath))
+        ).map { canonicalFileSystemPath(for: $0) })
 
         #expect(Set(capturesToDelete.map(\.fileName)) == [originalURL.lastPathComponent, editedURL.lastPathComponent])
-        #expect(filePathsToDelete.contains(originalURL.fileSystemPath))
-        #expect(filePathsToDelete.contains(editedURL.fileSystemPath))
-        #expect(filePathsToDelete.contains(diskOnlyEditedURL.fileSystemPath))
-        #expect(!filePathsToDelete.contains(unrelatedURL.fileSystemPath))
+        #expect(filePathsToDelete.contains(canonicalFileSystemPath(for: originalURL)))
+        #expect(filePathsToDelete.contains(canonicalFileSystemPath(for: editedURL)))
+        #expect(filePathsToDelete.contains(canonicalFileSystemPath(for: diskOnlyEditedURL)))
+        #expect(!filePathsToDelete.contains(canonicalFileSystemPath(for: unrelatedURL)))
 
         try CaptureHistoryData.deleteCaptures(
             capturesToDelete,
@@ -1427,6 +1427,10 @@ struct ScreenshotMaxxingTests {
         #expect(!fileManager.fileExists(atPath: editedURL.fileSystemPath))
         #expect(!fileManager.fileExists(atPath: diskOnlyEditedURL.fileSystemPath))
         #expect(fileManager.fileExists(atPath: unrelatedURL.fileSystemPath))
+    }
+
+    private func canonicalFileSystemPath(for fileURL: URL) -> String {
+        fileURL.resolvingSymlinksInPath().fileSystemPath
     }
 
     private func makeVerticalSplitPNGData(width: Int, height: Int) throws -> Data {

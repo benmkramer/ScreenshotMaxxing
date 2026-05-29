@@ -130,14 +130,14 @@ enum CaptureHistoryData {
         var fileURLs = Set<URL>()
 
         for capture in expandedCapturesToDelete {
-            fileURLs.insert(URL(fileURLWithPath: capture.originalFilePath))
+            fileURLs.insert(canonicalFileURL(URL(fileURLWithPath: capture.originalFilePath)))
 
             if let editedFilePath = capture.editedFilePath {
-                fileURLs.insert(URL(fileURLWithPath: editedFilePath))
+                fileURLs.insert(canonicalFileURL(URL(fileURLWithPath: editedFilePath)))
             }
 
             try editedVersionFileURLs(for: capture, fileManager: fileManager).forEach { editedFileURL in
-                fileURLs.insert(editedFileURL)
+                fileURLs.insert(canonicalFileURL(editedFileURL))
             }
         }
 
@@ -254,5 +254,9 @@ enum CaptureHistoryData {
         }
 
         return Array(Set(directories))
+    }
+
+    private static func canonicalFileURL(_ fileURL: URL) -> URL {
+        fileURL.resolvingSymlinksInPath()
     }
 }
