@@ -9,9 +9,15 @@ import SwiftData
 import SwiftUI
 
 struct CaptureHistoryView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Capture.createdAt, order: .reverse) private var captures: [Capture]
     private let fileManager: FileManager
     private let openCapture: (Capture) -> Void
+    @State private var searchText = ""
+    @State private var selectedCaptureIDs = Set<UUID>()
+    @State private var pendingDeletionIDs = Set<UUID>()
+    @State private var showingDeleteConfirmation = false
+    @State private var deleteErrorMessage: String?
 
     init(fileManager: FileManager = .default, openCapture: @escaping (Capture) -> Void = { _ in }) {
         self.fileManager = fileManager
@@ -23,23 +29,122 @@ struct CaptureHistoryView: View {
             if captures.isEmpty {
                 emptyState
             } else {
-                List(captures) { capture in
-                    let fileExists = CaptureHistoryData.fileExists(for: capture, fileManager: fileManager)
+                VStack(spacing: 0) {
+                    historyControls
 
-                    Button {
-                        openCapture(capture)
-                    } label: {
-                        CaptureHistoryRow(capture: capture, fileExists: fileExists)
+                    if filteredCaptures.isEmpty {
+                        noResultsState
+                    } else {
+                        historyList
                     }
-                    .buttonStyle(.plain)
-                    .disabled(!fileExists)
-                    .listRowSeparator(.visible)
                 }
-                .listStyle(.inset)
             }
         }
         .frame(minWidth: 520, minHeight: 420)
         .navigationTitle("History")
+        .confirmationDialog(
+            "Delete selected captures?",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(deleteConfirmationButtonTitle, role: .destructive) {
+                deletePendingCaptures()
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingDeletionIDs.removeAll()
+            }
+        } message: {
+            Text("Deleting from the history view removes the file and any edited versions from disk as well. This cannot be undone.")
+        }
+        .alert(
+            "Could not delete captures",
+            isPresented: Binding(
+                get: { deleteErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        deleteErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteErrorMessage ?? "")
+        }
+    }
+
+    private var filteredCaptures: [Capture] {
+        CaptureHistoryData.filteredCaptures(captures, searchText: searchText)
+    }
+
+    private var historyControls: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+
+                TextField("Search by date, file, or type", text: $searchText)
+                    .textFieldStyle(.plain)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(nsColor: .textBackgroundColor))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color(nsColor: .separatorColor))
+            }
+
+            Button {
+                toggleFilteredSelection()
+            } label: {
+                Label(selectAllButtonTitle, systemImage: selectAllSystemImage)
+            }
+            .disabled(filteredCaptures.isEmpty)
+
+            Button(role: .destructive) {
+                requestDelete(selectedCaptureIDs)
+            } label: {
+                Label(deleteButtonTitle, systemImage: "trash")
+            }
+            .disabled(selectedCaptureIDs.isEmpty)
+        }
+        .padding(16)
+    }
+
+    private var historyList: some View {
+        List(filteredCaptures) { capture in
+            let fileExists = CaptureHistoryData.fileExists(for: capture, fileManager: fileManager)
+
+            HStack(spacing: 10) {
+                Toggle(isOn: selectionBinding(for: capture)) {
+                    EmptyView()
+                }
+                .labelsHidden()
+                .toggleStyle(.checkbox)
+                .accessibilityLabel("Select \(capture.fileName)")
+
+                Button {
+                    openCapture(capture)
+                } label: {
+                    CaptureHistoryRow(capture: capture, fileExists: fileExists)
+                }
+                .buttonStyle(.plain)
+                .disabled(!fileExists)
+            }
+            .contextMenu {
+                Button(role: .destructive) {
+                    requestDelete([capture.id])
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+            .listRowSeparator(.visible)
+        }
+        .listStyle(.inset)
     }
 
     private var emptyState: some View {
@@ -57,6 +162,92 @@ struct CaptureHistoryView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(32)
+    }
+
+    private var noResultsState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 34, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+
+            Text("No matching captures")
+                .font(.headline)
+
+            Text("Try another file name, capture type, or date.")
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(32)
+    }
+
+    private var selectedFilteredCaptureIDs: Set<UUID> {
+        Set(filteredCaptures.map(\.id))
+    }
+
+    private var allFilteredCapturesSelected: Bool {
+        !selectedFilteredCaptureIDs.isEmpty && selectedFilteredCaptureIDs.isSubset(of: selectedCaptureIDs)
+    }
+
+    private var selectAllButtonTitle: String {
+        allFilteredCapturesSelected ? "Deselect All" : "Select All"
+    }
+
+    private var selectAllSystemImage: String {
+        allFilteredCapturesSelected ? "xmark.circle" : "checkmark.circle"
+    }
+
+    private var deleteButtonTitle: String {
+        selectedCaptureIDs.isEmpty ? "Delete" : "Delete \(selectedCaptureIDs.count)"
+    }
+
+    private var deleteConfirmationButtonTitle: String {
+        pendingDeletionIDs.count == 1 ? "Delete Capture" : "Delete \(pendingDeletionIDs.count) Captures"
+    }
+
+    private func selectionBinding(for capture: Capture) -> Binding<Bool> {
+        Binding {
+            selectedCaptureIDs.contains(capture.id)
+        } set: { isSelected in
+            if isSelected {
+                selectedCaptureIDs.insert(capture.id)
+            } else {
+                selectedCaptureIDs.remove(capture.id)
+            }
+        }
+    }
+
+    private func toggleFilteredSelection() {
+        if allFilteredCapturesSelected {
+            selectedCaptureIDs.subtract(selectedFilteredCaptureIDs)
+        } else {
+            selectedCaptureIDs.formUnion(selectedFilteredCaptureIDs)
+        }
+    }
+
+    private func requestDelete(_ captureIDs: Set<UUID>) {
+        pendingDeletionIDs = captureIDs
+        showingDeleteConfirmation = !captureIDs.isEmpty
+    }
+
+    private func deletePendingCaptures() {
+        let capturesToDelete = CaptureHistoryData.capturesToDelete(
+            from: captures,
+            selectedIDs: pendingDeletionIDs
+        )
+
+        do {
+            try CaptureHistoryData.deleteCaptures(
+                capturesToDelete,
+                from: modelContext,
+                allCaptures: captures,
+                fileManager: fileManager
+            )
+            selectedCaptureIDs.subtract(Set(capturesToDelete.map(\.id)))
+            pendingDeletionIDs.removeAll()
+        } catch {
+            deleteErrorMessage = error.localizedDescription
+        }
     }
 }
 

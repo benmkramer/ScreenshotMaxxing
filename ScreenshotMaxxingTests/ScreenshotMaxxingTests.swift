@@ -1269,6 +1269,130 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureHistoryData.detailText(for: newerCapture) == "Fullscreen - 40x30")
     }
 
+    @MainActor
+    @Test func captureHistorySearchMatchesDatesAndMetadata() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var mayComponents = DateComponents()
+        mayComponents.calendar = calendar
+        mayComponents.timeZone = calendar.timeZone
+        mayComponents.year = 2026
+        mayComponents.month = 5
+        mayComponents.day = 26
+        mayComponents.hour = 10
+        mayComponents.minute = 15
+        var juneComponents = mayComponents
+        juneComponents.month = 6
+        juneComponents.day = 1
+        juneComponents.hour = 11
+        let mayCapture = Capture(
+            createdAt: try #require(calendar.date(from: mayComponents)),
+            fileName: "may.png",
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: "/tmp/may.png"
+        )
+        let juneCapture = Capture(
+            createdAt: try #require(calendar.date(from: juneComponents)),
+            fileName: "june.png",
+            captureMode: "fullscreen",
+            width: 40,
+            height: 30,
+            originalFilePath: "/tmp/june.png"
+        )
+        let captures = [mayCapture, juneCapture]
+
+        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "2026-05-26", calendar: calendar).map(\.fileName) == ["may.png"])
+        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "May 26", calendar: calendar).map(\.fileName) == ["may.png"])
+        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "05/26/26", calendar: calendar).map(\.fileName) == ["may.png"])
+        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "10:15", calendar: calendar).map(\.fileName) == ["may.png"])
+        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "fullscreen", calendar: calendar).map(\.fileName) == ["june.png"])
+        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "missing", calendar: calendar).isEmpty)
+    }
+
+    @MainActor
+    @Test func captureHistoryDeletionRemovesSelectedCaptureAndEditedVersionsFromDiskAndStore() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        let directories = try FileLocations.ensureCaptureDirectories(
+            baseDirectory: baseDirectory,
+            fileManager: fileManager
+        )
+        let originalURL = directories.originals.appendingPathComponent("area-20260526-101500-aaaaaaaa.png")
+        let editedURL = directories.edited.appendingPathComponent("area-20260526-101500-aaaaaaaa-edited-bbbbbbbb.png")
+        let diskOnlyEditedURL = directories.edited.appendingPathComponent("area-20260526-101500-aaaaaaaa-edited-cccccccc.png")
+        let unrelatedURL = directories.edited.appendingPathComponent("window-20260526-101500-dddddddd-edited-eeeeeeee.png")
+
+        try [originalURL, editedURL, diskOnlyEditedURL, unrelatedURL].forEach { fileURL in
+            try Data("png".utf8).write(to: fileURL)
+        }
+
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let originalCapture = Capture(
+            fileName: originalURL.lastPathComponent,
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: originalURL.fileSystemPath
+        )
+        let editedCapture = Capture(
+            fileName: editedURL.lastPathComponent,
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: editedURL.fileSystemPath
+        )
+        let unrelatedCapture = Capture(
+            fileName: unrelatedURL.lastPathComponent,
+            captureMode: "window",
+            width: 40,
+            height: 30,
+            originalFilePath: unrelatedURL.fileSystemPath
+        )
+
+        modelContainer.mainContext.insert(originalCapture)
+        modelContainer.mainContext.insert(editedCapture)
+        modelContainer.mainContext.insert(unrelatedCapture)
+        try modelContainer.mainContext.save()
+
+        let allCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+        let capturesToDelete = CaptureHistoryData.capturesToDelete(
+            from: allCaptures,
+            selectedIDs: [originalCapture.id]
+        )
+        let filePathsToDelete = try Set(CaptureHistoryData.fileURLsToDelete(
+            for: capturesToDelete,
+            allCaptures: allCaptures,
+            fileManager: fileManager
+        ).map(\.fileSystemPath))
+
+        #expect(Set(capturesToDelete.map(\.fileName)) == [originalURL.lastPathComponent, editedURL.lastPathComponent])
+        #expect(filePathsToDelete.contains(originalURL.fileSystemPath))
+        #expect(filePathsToDelete.contains(editedURL.fileSystemPath))
+        #expect(filePathsToDelete.contains(diskOnlyEditedURL.fileSystemPath))
+        #expect(!filePathsToDelete.contains(unrelatedURL.fileSystemPath))
+
+        try CaptureHistoryData.deleteCaptures(
+            capturesToDelete,
+            from: modelContainer.mainContext,
+            allCaptures: allCaptures,
+            fileManager: fileManager
+        )
+        let remainingCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+
+        #expect(remainingCaptures.map(\.fileName) == [unrelatedURL.lastPathComponent])
+        #expect(!fileManager.fileExists(atPath: originalURL.fileSystemPath))
+        #expect(!fileManager.fileExists(atPath: editedURL.fileSystemPath))
+        #expect(!fileManager.fileExists(atPath: diskOnlyEditedURL.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: unrelatedURL.fileSystemPath))
+    }
+
     private func makeVerticalSplitPNGData(width: Int, height: Int) throws -> Data {
         let imageRep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
