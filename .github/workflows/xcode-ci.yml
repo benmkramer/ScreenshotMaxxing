@@ -1,7 +1,6 @@
 name: Xcode CI
 
 on:
-  pull_request:
   push:
     branches:
       - main
