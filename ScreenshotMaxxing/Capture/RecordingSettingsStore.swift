@@ -10,6 +10,7 @@ import Foundation
 struct RecordingSettingsStore {
     private enum Keys {
         static let microphoneEnabled = "recording.microphoneEnabled"
+        static let systemAudioEnabled = "recording.systemAudioEnabled"
     }
 
     private let userDefaults: UserDefaults
@@ -24,5 +25,13 @@ struct RecordingSettingsStore {
 
     func saveMicrophoneEnabled(_ isEnabled: Bool) throws {
         userDefaults.set(isEnabled, forKey: Keys.microphoneEnabled)
+    }
+
+    func systemAudioEnabled() -> Bool {
+        userDefaults.bool(forKey: Keys.systemAudioEnabled)
+    }
+
+    func saveSystemAudioEnabled(_ isEnabled: Bool) throws {
+        userDefaults.set(isEnabled, forKey: Keys.systemAudioEnabled)
     }
 }

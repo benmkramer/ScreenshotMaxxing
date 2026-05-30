@@ -135,7 +135,7 @@ final class RecordingController {
             directories: directories,
             fileExtension: "mp4"
         )
-        let streamConfiguration = makeStreamConfiguration(target: target, microphoneEnabled: options.microphoneEnabled)
+        let streamConfiguration = makeStreamConfiguration(target: target, options: options)
         let recordingConfiguration = try makeRecordingConfiguration(outputURL: outputURL)
         let delegate = RecordingOutputDelegate(
             didFail: { [weak self] recordingOutput, error in
@@ -333,7 +333,7 @@ final class RecordingController {
         }
     }
 
-    private func makeStreamConfiguration(target: RecordingTarget, microphoneEnabled: Bool) -> SCStreamConfiguration {
+    private func makeStreamConfiguration(target: RecordingTarget, options: RecordingOptions) -> SCStreamConfiguration {
         let configuration = SCStreamConfiguration()
         configuration.width = max(Int(target.dimensions.width.rounded()), 64)
         configuration.height = max(Int(target.dimensions.height.rounded()), 64)
@@ -341,9 +341,9 @@ final class RecordingController {
         configuration.queueDepth = 8
         configuration.showsCursor = true
         configuration.showMouseClicks = true
-        configuration.capturesAudio = false
+        configuration.capturesAudio = options.systemAudioEnabled
         configuration.excludesCurrentProcessAudio = true
-        configuration.captureMicrophone = microphoneEnabled
+        configuration.captureMicrophone = options.microphoneEnabled
 
         if let sourceRect = target.sourceRect {
             configuration.sourceRect = sourceRect

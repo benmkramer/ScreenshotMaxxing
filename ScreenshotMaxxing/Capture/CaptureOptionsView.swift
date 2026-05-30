@@ -28,23 +28,29 @@ struct CaptureOptionsView: View {
 
     @State private var selectedPane: CaptureOptionsPane = .screenshot
     @State private var microphoneEnabled: Bool
+    @State private var systemAudioEnabled: Bool
 
     let onSelectCapture: (CaptureMode) -> Void
     let onSelectRecording: (RecordingOptions) -> Void
     let onMicrophoneChange: (Bool) -> Void
+    let onSystemAudioChange: (Bool) -> Void
     let onDismiss: () -> Void
 
     init(
         microphoneEnabled: Bool = false,
+        systemAudioEnabled: Bool = false,
         onSelectCapture: @escaping (CaptureMode) -> Void,
         onSelectRecording: @escaping (RecordingOptions) -> Void,
         onMicrophoneChange: @escaping (Bool) -> Void = { _ in },
+        onSystemAudioChange: @escaping (Bool) -> Void = { _ in },
         onDismiss: @escaping () -> Void
     ) {
         self._microphoneEnabled = State(initialValue: microphoneEnabled)
+        self._systemAudioEnabled = State(initialValue: systemAudioEnabled)
         self.onSelectCapture = onSelectCapture
         self.onSelectRecording = onSelectRecording
         self.onMicrophoneChange = onMicrophoneChange
+        self.onSystemAudioChange = onSystemAudioChange
         self.onDismiss = onDismiss
     }
 
@@ -111,7 +117,11 @@ struct CaptureOptionsView: View {
                     symbolName: mode.captureOptionsSymbolName,
                     accessibilityIdentifier: mode.captureOptionsAccessibilityIdentifier
                 ) {
-                    onSelectRecording(RecordingOptions(mode: mode, microphoneEnabled: microphoneEnabled))
+                    onSelectRecording(RecordingOptions(
+                        mode: mode,
+                        microphoneEnabled: microphoneEnabled,
+                        systemAudioEnabled: systemAudioEnabled
+                    ))
                 }
             }
 
@@ -119,23 +129,56 @@ struct CaptureOptionsView: View {
                 .frame(height: 52)
                 .padding(.horizontal, 4)
 
-            Toggle(isOn: Binding(
-                get: { microphoneEnabled },
-                set: { isEnabled in
-                    microphoneEnabled = isEnabled
-                    onMicrophoneChange(isEnabled)
-                }
-            )) {
-                Image(systemName: microphoneEnabled ? "mic.fill" : "mic.slash")
-                    .font(.system(size: 18, weight: .medium))
-                    .frame(width: 24, height: 22)
-            }
-            .toggleStyle(.switch)
-            .help("Microphone")
-            .accessibilityLabel("Microphone")
-            .accessibilityIdentifier("capture-options-record-microphone")
-            .frame(width: 84)
+            RecordingAudioToggle(
+                isOn: Binding(
+                    get: { microphoneEnabled },
+                    set: { isEnabled in
+                        microphoneEnabled = isEnabled
+                        onMicrophoneChange(isEnabled)
+                    }
+                ),
+                enabledSymbolName: "mic.fill",
+                disabledSymbolName: "mic.slash",
+                label: "Microphone",
+                accessibilityIdentifier: "capture-options-record-microphone"
+            )
+
+            RecordingAudioToggle(
+                isOn: Binding(
+                    get: { systemAudioEnabled },
+                    set: { isEnabled in
+                        systemAudioEnabled = isEnabled
+                        onSystemAudioChange(isEnabled)
+                    }
+                ),
+                enabledSymbolName: "speaker.wave.2.fill",
+                disabledSymbolName: "speaker.slash.fill",
+                label: "System Audio",
+                accessibilityIdentifier: "capture-options-record-system-audio"
+            )
         }
+    }
+}
+
+private struct RecordingAudioToggle: View {
+    @Binding var isOn: Bool
+
+    let enabledSymbolName: String
+    let disabledSymbolName: String
+    let label: String
+    let accessibilityIdentifier: String
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            Image(systemName: isOn ? enabledSymbolName : disabledSymbolName)
+                .font(.system(size: 18, weight: .medium))
+                .frame(width: 24, height: 22)
+        }
+        .toggleStyle(.switch)
+        .help(label)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(accessibilityIdentifier)
+        .frame(width: 84)
     }
 }
 
@@ -179,23 +222,27 @@ private struct CaptureOptionButton: View {
 
 @MainActor
 final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate {
-    static let windowSize = NSSize(width: 506, height: 132)
+    static let windowSize = NSSize(width: 598, height: 132)
 
     var onClose: ((CaptureOptionsWindowController) -> Void)?
 
     private let onSelectCapture: (CaptureMode) -> Void
     private let onSelectRecording: (RecordingOptions) -> Void
     private let onMicrophoneChange: (Bool) -> Void
+    private let onSystemAudioChange: (Bool) -> Void
 
     init(
         microphoneEnabled: Bool = false,
+        systemAudioEnabled: Bool = false,
         onSelectCapture: @escaping (CaptureMode) -> Void,
         onSelectRecording: @escaping (RecordingOptions) -> Void,
-        onMicrophoneChange: @escaping (Bool) -> Void = { _ in }
+        onMicrophoneChange: @escaping (Bool) -> Void = { _ in },
+        onSystemAudioChange: @escaping (Bool) -> Void = { _ in }
     ) {
         self.onSelectCapture = onSelectCapture
         self.onSelectRecording = onSelectRecording
         self.onMicrophoneChange = onMicrophoneChange
+        self.onSystemAudioChange = onSystemAudioChange
 
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: Self.windowSize),
@@ -225,6 +272,7 @@ final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate
         panel.contentViewController = NSHostingController(
             rootView: CaptureOptionsView(
                 microphoneEnabled: microphoneEnabled,
+                systemAudioEnabled: systemAudioEnabled,
                 onSelectCapture: { [weak self] mode in
                     self?.selectCapture(mode)
                 },
@@ -233,6 +281,9 @@ final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate
                 },
                 onMicrophoneChange: { [weak self] isEnabled in
                     self?.onMicrophoneChange(isEnabled)
+                },
+                onSystemAudioChange: { [weak self] isEnabled in
+                    self?.onSystemAudioChange(isEnabled)
                 },
                 onDismiss: { [weak self] in
                     self?.close()
