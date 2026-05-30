@@ -16,6 +16,7 @@ struct ScreenshotEditorView: View {
     @State private var editorState: ScreenshotEditorState
     @State private var draftBlurRect: CGRect?
     @State private var draftStroke: AnnotationStroke?
+    @State private var draftArrow: AnnotationArrow?
     @State private var statusMessage: String?
     private static let successfulActionCloseDelay: TimeInterval = 0.6
 
@@ -69,7 +70,8 @@ struct ScreenshotEditorView: View {
                         image: image,
                         editorState: $editorState,
                         draftBlurRect: $draftBlurRect,
-                        draftStroke: $draftStroke
+                        draftStroke: $draftStroke,
+                        draftArrow: $draftArrow
                     )
                 }
             } else {
@@ -199,6 +201,7 @@ struct ScreenshotImageCanvas: View {
     @Binding var editorState: ScreenshotEditorState
     @Binding var draftBlurRect: CGRect?
     @Binding var draftStroke: AnnotationStroke?
+    @Binding var draftArrow: AnnotationArrow?
     @State private var activeAnnotationDrag: AnnotationDrag?
 
     var body: some View {
@@ -252,6 +255,16 @@ struct ScreenshotImageCanvas: View {
                         isDraft: true
                     )
                 }
+
+                if let draftArrow {
+                    ArrowPreviewOverlay(
+                        arrow: draftArrow,
+                        geometry: geometry,
+                        selectionRect: geometry.viewRect(forImageRect: draftArrow.visibleBounds),
+                        isSelected: false,
+                        isDraft: true
+                    )
+                }
             }
             .contentShape(Rectangle())
             .gesture(canvasDragGesture(geometry: geometry))
@@ -276,6 +289,7 @@ struct ScreenshotImageCanvas: View {
                     updateActiveAnnotationDrag(activeAnnotationDrag, by: translation)
                     draftBlurRect = nil
                     draftStroke = nil
+                    draftArrow = nil
                     return
                 }
 
@@ -288,10 +302,16 @@ struct ScreenshotImageCanvas: View {
                     )
                 case .pen, .highlighter:
                     draftBlurRect = nil
+                    draftArrow = nil
                     updateDraftStroke(with: value, geometry: geometry)
-                case .select, .rectangle, .arrow, .text:
+                case .arrow:
                     draftBlurRect = nil
                     draftStroke = nil
+                    updateDraftArrow(with: value, geometry: geometry)
+                case .select, .rectangle, .text:
+                    draftBlurRect = nil
+                    draftStroke = nil
+                    draftArrow = nil
                 }
             }
             .onEnded { value in
@@ -299,6 +319,7 @@ struct ScreenshotImageCanvas: View {
                     activeAnnotationDrag = nil
                     draftBlurRect = nil
                     draftStroke = nil
+                    draftArrow = nil
                 }
 
                 guard activeAnnotationDrag == nil else {
@@ -311,6 +332,21 @@ struct ScreenshotImageCanvas: View {
                         toViewEnd: value.location
                    ) {
                     editorState.addBlurRect(imageRect)
+                    return
+                }
+
+                if editorState.selectedTool == .arrow {
+                    let arrowStyle = editorState.strokeStyle(for: .pen)
+                    let arrowPoints = arrowPoints(from: value, geometry: geometry)
+                    if let startPoint = arrowPoints.first,
+                       let endPoint = arrowPoints.last {
+                        editorState.addArrow(
+                            from: startPoint,
+                            to: endPoint,
+                            color: arrowStyle.color,
+                            lineWidth: arrowStyle.lineWidth
+                        )
+                    }
                     return
                 }
 
@@ -354,6 +390,31 @@ struct ScreenshotImageCanvas: View {
             color: strokeStyle.color,
             lineWidth: strokeStyle.lineWidth
         )
+    }
+
+    private func updateDraftArrow(with value: DragGesture.Value, geometry: ImageCanvasGeometry) {
+        let points = arrowPoints(from: value, geometry: geometry)
+        guard let startPoint = points.first,
+              let endPoint = points.last else {
+            return
+        }
+
+        let arrowStyle = editorState.strokeStyle(for: .pen)
+        draftArrow = AnnotationArrow(
+            startPoint: startPoint,
+            endPoint: endPoint,
+            color: arrowStyle.color,
+            lineWidth: arrowStyle.lineWidth
+        )
+    }
+
+    private func arrowPoints(from value: DragGesture.Value, geometry: ImageCanvasGeometry) -> [CGPoint] {
+        guard let startImagePoint = geometry.imagePoint(forViewPoint: value.startLocation),
+              let endImagePoint = geometry.imagePoint(forViewPoint: value.location) else {
+            return []
+        }
+
+        return [startImagePoint, endImagePoint]
     }
 
     private func strokePoints(from value: DragGesture.Value, geometry: ImageCanvasGeometry) -> [CGPoint] {
@@ -509,9 +570,62 @@ private struct AnnotationPreviewOverlay: View {
                 isSelected: isSelected,
                 isDraft: false
             )
-        case .rectangle, .arrow, .text:
+        case .arrow(let arrow):
+            ArrowPreviewOverlay(
+                arrow: arrow,
+                geometry: geometry,
+                selectionRect: geometry.viewRect(forImageRect: annotation.rect),
+                isSelected: isSelected,
+                isDraft: false
+            )
+        case .rectangle, .text:
             EmptyView()
         }
+    }
+}
+
+private struct ArrowPreviewOverlay: View {
+    let arrow: AnnotationArrow
+    let geometry: ImageCanvasGeometry
+    let selectionRect: CGRect
+    let isSelected: Bool
+    let isDraft: Bool
+
+    var body: some View {
+        let lineWidth = max(geometry.viewDistance(forImageDistance: Double(arrow.lineWidth)), 1)
+
+        Path { path in
+            path.move(to: geometry.viewPoint(forImagePoint: arrow.startPoint))
+            path.addLine(to: geometry.viewPoint(forImagePoint: arrow.endPoint))
+            for (headStart, headEnd) in arrow.arrowHeadSegments {
+                path.move(to: geometry.viewPoint(forImagePoint: headStart))
+                path.addLine(to: geometry.viewPoint(forImagePoint: headEnd))
+            }
+        }
+        .stroke(
+            Color(annotationColor: arrow.color),
+            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round)
+        )
+        .overlay(alignment: .topLeading) {
+            if isSelected || isDraft {
+                Rectangle()
+                    .strokeBorder(
+                        Color.accentColor,
+                        style: StrokeStyle(lineWidth: 2, dash: isDraft ? [6, 4] : [])
+                    )
+                    .frame(width: selectionRect.width, height: selectionRect.height)
+                    .offset(x: selectionRect.minX, y: selectionRect.minY)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if isSelected && !isDraft {
+                ForEach(AnnotationResizeHandle.allCases, id: \.self) { handle in
+                    ResizeHandleView()
+                        .position(handle.viewPosition(in: selectionRect))
+                }
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

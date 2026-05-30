@@ -40,7 +40,9 @@ struct ImageRenderer {
                 renderBlur(on: currentImage, imageRect: annotation.rect)
             case .stroke(let stroke):
                 try renderStroke(stroke, over: currentImage)
-            case .rectangle, .arrow, .text:
+            case .arrow(let arrow):
+                try renderArrow(arrow, over: currentImage)
+            case .rectangle, .text:
                 currentImage
             }
         }
@@ -138,6 +140,38 @@ struct ImageRenderer {
         return CIImage(cgImage: renderedCGImage).cropped(to: image.extent)
     }
 
+    private func renderArrow(_ arrow: AnnotationArrow, over image: CIImage) throws -> CIImage {
+        guard arrow.hasVisibleLength else {
+            return image.cropped(to: image.extent)
+        }
+
+        let width = Int(image.extent.width.rounded(.up))
+        let height = Int(image.extent.height.rounded(.up))
+
+        guard width > 0, height > 0,
+              let cgImage = context.createCGImage(image, from: image.extent),
+              let bitmapContext = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
+            throw ImageRendererError.renderFailed
+        }
+
+        bitmapContext.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        draw(arrow, in: bitmapContext, imageHeight: CGFloat(height))
+
+        guard let renderedCGImage = bitmapContext.makeImage() else {
+            throw ImageRendererError.renderFailed
+        }
+
+        return CIImage(cgImage: renderedCGImage).cropped(to: image.extent)
+    }
+
     private func draw(_ stroke: AnnotationStroke, in context: CGContext, imageHeight: CGFloat) {
         guard let firstPoint = stroke.points.first else {
             return
@@ -156,6 +190,27 @@ struct ImageRenderer {
         context.move(to: firstPoint)
         for point in stroke.points.dropFirst() {
             context.addLine(to: point)
+        }
+        context.strokePath()
+        context.restoreGState()
+    }
+
+    private func draw(_ arrow: AnnotationArrow, in context: CGContext, imageHeight: CGFloat) {
+        context.saveGState()
+        context.translateBy(x: 0, y: imageHeight)
+        context.scaleBy(x: 1, y: -1)
+        context.setBlendMode(.normal)
+        context.setStrokeColor(arrow.color.cgColor(opacity: 1))
+        context.setLineWidth(arrow.lineWidth)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+
+        context.beginPath()
+        context.move(to: arrow.startPoint)
+        context.addLine(to: arrow.endPoint)
+        for (headStart, headEnd) in arrow.arrowHeadSegments {
+            context.move(to: headStart)
+            context.addLine(to: headEnd)
         }
         context.strokePath()
         context.restoreGState()

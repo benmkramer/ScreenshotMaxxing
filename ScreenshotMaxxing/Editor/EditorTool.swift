@@ -16,7 +16,7 @@ enum EditorTool: String, CaseIterable, Identifiable {
     case arrow
     case text
 
-    static let implementedTools: [EditorTool] = [.select, .blur, .pen, .highlighter]
+    static let implementedTools: [EditorTool] = [.select, .blur, .pen, .highlighter, .arrow]
 
     var id: String {
         rawValue
@@ -91,6 +91,6 @@ enum EditorTool: String, CaseIterable, Identifiable {
     }
 
     var showsStrokeControls: Bool {
-        strokeKind != nil
+        strokeKind != nil || self == .arrow
     }
 }

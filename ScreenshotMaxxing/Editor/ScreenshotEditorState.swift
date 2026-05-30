@@ -24,6 +24,7 @@ struct ScreenshotEditorState: Equatable {
     static let minimumStrokeLineWidth = AnnotationStrokeStyle.minimumLineWidth
     static let maximumStrokeLineWidth = AnnotationStrokeStyle.maximumLineWidth
     static let strokeSelectionHitPadding: CGFloat = 6
+    static let arrowSelectionHitPadding: CGFloat = 6
 
     let originalImageURL: URL
     var selectedTool: EditorTool
@@ -33,11 +34,16 @@ struct ScreenshotEditorState: Equatable {
 
     var selectedAnnotationUsesStrokeStyle: Bool {
         guard let selectedAnnotationID,
-              case .stroke = annotation(id: selectedAnnotationID)?.type else {
+              let annotation = annotation(id: selectedAnnotationID) else {
             return false
         }
 
-        return true
+        switch annotation.type {
+        case .stroke, .arrow:
+            return true
+        case .blur, .rectangle, .text:
+            return false
+        }
     }
 
     var selectedStrokeColor: AnnotationColor {
@@ -101,6 +107,32 @@ struct ScreenshotEditorState: Equatable {
         return annotation
     }
 
+    @discardableResult
+    mutating func addArrow(
+        from startPoint: CGPoint,
+        to endPoint: CGPoint,
+        color: AnnotationColor,
+        lineWidth: CGFloat,
+        id: UUID = UUID()
+    ) -> Annotation? {
+        let arrow = AnnotationArrow(
+            startPoint: startPoint,
+            endPoint: endPoint,
+            color: color,
+            lineWidth: AnnotationStrokeStyle.clampedLineWidth(lineWidth)
+        )
+
+        guard arrow.hasVisibleLength else {
+            return nil
+        }
+
+        let annotation = Annotation(id: id, type: .arrow(arrow), rect: arrow.visibleBounds)
+        annotations.append(annotation)
+        strokeToolSettings.update(arrow.style, for: .pen)
+        selectAnnotation(id: annotation.id)
+        return annotation
+    }
+
     mutating func removeAnnotation(id: UUID) {
         annotations.removeAll { $0.id == id }
         if selectedAnnotationID == id {
@@ -134,7 +166,9 @@ struct ScreenshotEditorState: Equatable {
                 annotation.rect.standardized.contains(imagePoint)
             case .stroke(let stroke):
                 stroke.contains(imagePoint, hitPadding: Self.strokeSelectionHitPadding)
-            case .rectangle, .arrow, .text:
+            case .arrow(let arrow):
+                arrow.contains(imagePoint, hitPadding: Self.arrowSelectionHitPadding)
+            case .rectangle, .text:
                 false
             }
         }?.id
@@ -207,6 +241,9 @@ struct ScreenshotEditorState: Equatable {
         updateSelectedStroke { stroke in
             stroke.color = color
         }
+        updateSelectedArrow { arrow in
+            arrow.color = color
+        }
     }
 
     mutating func updateSelectedStrokeLineWidth(_ lineWidth: CGFloat) {
@@ -217,6 +254,9 @@ struct ScreenshotEditorState: Equatable {
         strokeToolSettings.update(style, for: kind)
         updateSelectedStroke { stroke in
             stroke.lineWidth = clampedLineWidth
+        }
+        updateSelectedArrow { arrow in
+            arrow.lineWidth = clampedLineWidth
         }
     }
 
@@ -234,7 +274,11 @@ struct ScreenshotEditorState: Equatable {
             stroke.transformPoints(from: originalAnnotation.rect, to: rect)
             annotations[annotationIndex].type = .stroke(stroke)
             annotations[annotationIndex].rect = stroke.visibleBounds
-        case .blur, .rectangle, .arrow, .text:
+        case .arrow(var arrow):
+            arrow.transformPoints(from: originalAnnotation.rect, to: rect)
+            annotations[annotationIndex].type = .arrow(arrow)
+            annotations[annotationIndex].rect = arrow.visibleBounds
+        case .blur, .rectangle, .text:
             annotations[annotationIndex].rect = rect
         }
 
@@ -253,6 +297,18 @@ struct ScreenshotEditorState: Equatable {
         annotations[annotationIndex].rect = stroke.visibleBounds
     }
 
+    private mutating func updateSelectedArrow(_ update: (inout AnnotationArrow) -> Void) {
+        guard let selectedAnnotationID,
+              let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
+              case .arrow(var arrow) = annotations[annotationIndex].type else {
+            return
+        }
+
+        update(&arrow)
+        annotations[annotationIndex].type = .arrow(arrow)
+        annotations[annotationIndex].rect = arrow.visibleBounds
+    }
+
     private func selectedStrokeAnnotation() -> AnnotationStroke? {
         guard let selectedAnnotationID,
               case .stroke(let stroke) = annotation(id: selectedAnnotationID)?.type else {
@@ -262,11 +318,28 @@ struct ScreenshotEditorState: Equatable {
         return stroke
     }
 
+    private func selectedArrowAnnotation() -> AnnotationArrow? {
+        guard let selectedAnnotationID,
+              case .arrow(let arrow) = annotation(id: selectedAnnotationID)?.type else {
+            return nil
+        }
+
+        return arrow
+    }
+
     private var activeStrokeStyleKind: AnnotationStrokeKind? {
-        selectedStrokeAnnotation()?.kind ?? selectedTool.strokeKind
+        if selectedArrowAnnotation() != nil || selectedTool == .arrow {
+            return .pen
+        }
+
+        return selectedStrokeAnnotation()?.kind ?? selectedTool.strokeKind
     }
 
     private var selectedStrokeStyle: AnnotationStrokeStyle {
+        if let selectedArrow = selectedArrowAnnotation() {
+            return selectedArrow.style
+        }
+
         if let selectedStroke = selectedStrokeAnnotation() {
             return selectedStroke.style
         }

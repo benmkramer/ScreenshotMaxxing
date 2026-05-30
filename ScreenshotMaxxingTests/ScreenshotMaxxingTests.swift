@@ -332,7 +332,7 @@ struct ScreenshotMaxxingTests {
     }
 
     @Test func editorToolbarOnlyShowsImplementedTools() {
-        #expect(EditorTool.implementedTools == [.select, .blur, .pen, .highlighter])
+        #expect(EditorTool.implementedTools == [.select, .blur, .pen, .highlighter, .arrow])
     }
 
     @Test func editorStrokeToolSettingsUseSeparateDefaultSizes() {
@@ -1084,6 +1084,94 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func editorStateStoresArrowAnnotationsWithPenStyle() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000024")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        let addedAnnotation = state.addArrow(
+            from: CGPoint(x: 10, y: 20),
+            to: CGPoint(x: 50, y: 20),
+            color: .blue,
+            lineWidth: 10,
+            id: annotationID
+        )
+        let annotation = try #require(addedAnnotation)
+        let arrow = AnnotationArrow(
+            startPoint: CGPoint(x: 10, y: 20),
+            endPoint: CGPoint(x: 50, y: 20),
+            color: .blue,
+            lineWidth: 10
+        )
+
+        #expect(state.selectedAnnotationID == annotationID)
+        #expect(state.selectedStrokeColor == .blue)
+        #expect(state.selectedStrokeLineWidth == 10)
+        #expect(state.strokeStyle(for: .pen) == AnnotationStrokeStyle(color: .blue, lineWidth: 10))
+        #expect(annotation == Annotation(id: annotationID, type: .arrow(arrow), rect: arrow.visibleBounds))
+    }
+
+    @MainActor
+    @Test func editorStateSelectsTopmostArrowAtImagePointAndAppliesItsStyle() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let firstAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000025")!
+        let secondAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000026")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        state.addArrow(
+            from: CGPoint(x: 0, y: 10),
+            to: CGPoint(x: 100, y: 10),
+            color: .red,
+            lineWidth: 4,
+            id: firstAnnotationID
+        )
+        state.addArrow(
+            from: CGPoint(x: 0, y: 12),
+            to: CGPoint(x: 100, y: 12),
+            color: .green,
+            lineWidth: 12,
+            id: secondAnnotationID
+        )
+
+        #expect(state.selectAnnotation(containing: CGPoint(x: 50, y: 12)) == secondAnnotationID)
+        #expect(state.selectedAnnotationID == secondAnnotationID)
+        #expect(state.selectedStrokeColor == .green)
+        #expect(state.selectedStrokeLineWidth == 12)
+        #expect(state.selectedAnnotationUsesStrokeStyle)
+
+        #expect(state.selectAnnotation(containing: CGPoint(x: 50, y: 40)) == nil)
+        #expect(state.selectedAnnotationID == nil)
+    }
+
+    @MainActor
+    @Test func editorStateUpdatesSelectedArrowStyleAndBounds() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000027")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        state.addArrow(
+            from: CGPoint(x: 10, y: 10),
+            to: CGPoint(x: 20, y: 10),
+            color: .red,
+            lineWidth: 4,
+            id: annotationID
+        )
+        state.updateSelectedStrokeColor(.black)
+        state.updateSelectedStrokeLineWidth(14)
+
+        let annotation = try #require(state.annotation(id: annotationID))
+        guard case .arrow(let arrow) = annotation.type else {
+            Issue.record("Expected an arrow annotation")
+            return
+        }
+
+        #expect(arrow.color == .black)
+        #expect(arrow.lineWidth == 14)
+        #expect(state.strokeStyle(for: .pen) == AnnotationStrokeStyle(color: .black, lineWidth: 14))
+        #expect(annotation.rect == arrow.visibleBounds)
+    }
+
+    @MainActor
     @Test func editorStateSelectsTopmostBlurAnnotationAtImagePoint() throws {
         let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
         let firstAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000011")!
@@ -1204,6 +1292,75 @@ struct ScreenshotMaxxingTests {
 
         #expect(stroke.points == [CGPoint(x: 40, y: 30), CGPoint(x: 80, y: 30)])
         #expect(movedAnnotation.rect == CGRect(x: 36, y: 26, width: 48, height: 8))
+    }
+
+    @MainActor
+    @Test func editorStateMovesArrowAnnotationAndKeepsEndpointsInsideBounds() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000028")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+        let addedArrowAnnotation = state.addArrow(
+            from: CGPoint(x: 30, y: 30),
+            to: CGPoint(x: 70, y: 30),
+            color: .black,
+            lineWidth: 8,
+            id: annotationID
+        )
+        let addedAnnotation = try #require(addedArrowAnnotation)
+
+        state.moveAnnotation(
+            id: annotationID,
+            from: addedAnnotation,
+            by: CGSize(width: 60, height: 40),
+            within: CGSize(width: 160, height: 120)
+        )
+
+        let movedAnnotation = try #require(state.annotation(id: annotationID))
+        guard case .arrow(let arrow) = movedAnnotation.type else {
+            Issue.record("Expected an arrow annotation")
+            return
+        }
+
+        #expect(arrow.startPoint == CGPoint(x: 90, y: 70))
+        #expect(arrow.endPoint == CGPoint(x: 130, y: 70))
+        #expect(movedAnnotation.rect == arrow.visibleBounds)
+        #expect(state.selectedAnnotationID == annotationID)
+    }
+
+    @MainActor
+    @Test func editorStateResizesArrowAnnotationFromCornerHandle() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000029")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+        let addedArrowAnnotation = state.addArrow(
+            from: CGPoint(x: 30, y: 40),
+            to: CGPoint(x: 70, y: 40),
+            color: .black,
+            lineWidth: 8,
+            id: annotationID
+        )
+        let originalAnnotation = try #require(addedArrowAnnotation)
+
+        state.resizeAnnotation(
+            id: annotationID,
+            from: originalAnnotation,
+            handle: .bottomRight,
+            by: CGSize(width: 40, height: 20),
+            within: CGSize(width: 160, height: 120)
+        )
+
+        let resizedAnnotation = try #require(state.annotation(id: annotationID))
+        guard case .arrow(let arrow) = resizedAnnotation.type else {
+            Issue.record("Expected an arrow annotation")
+            return
+        }
+
+        #expect(abs(arrow.startPoint.x - 41.6666666667) < 0.001)
+        #expect(abs(arrow.endPoint.x - 98.3333333333) < 0.001)
+        #expect(abs(arrow.startPoint.y - 50) < 0.001)
+        #expect(abs(arrow.endPoint.y - 50) < 0.001)
+        #expect(resizedAnnotation.rect == arrow.visibleBounds)
+        #expect(state.selectedAnnotationID == annotationID)
     }
 
     @MainActor
@@ -1428,6 +1585,36 @@ struct ScreenshotMaxxingTests {
         #expect(renderedColor.redComponent > 0.15)
         #expect(renderedColor.redComponent < 0.8)
         #expect(renderedColor.greenComponent > 0.10)
+    }
+
+    @MainActor
+    @Test func imageRendererBakesArrowAnnotationsIntoPNG() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makeVerticalSplitPNGData(width: 12, height: 8).write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let arrow = AnnotationArrow(
+            startPoint: CGPoint(x: 1, y: 4),
+            endPoint: CGPoint(x: 10, y: 4),
+            color: .blue,
+            lineWidth: 4
+        )
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [Annotation(type: .arrow(arrow), rect: arrow.visibleBounds)]
+        )
+        let renderedColor = try color(in: renderedPNGData, x: 6, y: 4)
+
+        #expect(renderedColor.blueComponent > 0.5)
+        #expect(renderedColor.redComponent < 0.4)
     }
 
     @MainActor

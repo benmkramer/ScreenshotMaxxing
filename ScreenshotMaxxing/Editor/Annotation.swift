@@ -28,8 +28,101 @@ enum AnnotationType: Equatable {
     case blur
     case stroke(AnnotationStroke)
     case rectangle
-    case arrow
+    case arrow(AnnotationArrow)
     case text(String)
+}
+
+struct AnnotationArrow: Equatable {
+    var startPoint: CGPoint
+    var endPoint: CGPoint
+    var color: AnnotationColor
+    var lineWidth: CGFloat
+
+    var style: AnnotationStrokeStyle {
+        get {
+            AnnotationStrokeStyle(color: color, lineWidth: lineWidth)
+        }
+        set {
+            color = newValue.color
+            lineWidth = newValue.lineWidth
+        }
+    }
+
+    var visibleBounds: CGRect {
+        let pointBounds = CGRect(
+            x: min(startPoint.x, endPoint.x),
+            y: min(startPoint.y, endPoint.y),
+            width: abs(endPoint.x - startPoint.x),
+            height: abs(endPoint.y - startPoint.y)
+        )
+        let padding = arrowHeadLength + max(lineWidth, 1) / 2
+
+        return pointBounds.insetBy(dx: -padding, dy: -padding).standardized
+    }
+
+    var hasVisibleLength: Bool {
+        hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y) > 0.5
+    }
+
+    var arrowHeadLength: CGFloat {
+        max(lineWidth * 3, 12)
+    }
+
+    var arrowHeadAngle: CGFloat {
+        .pi / 6
+    }
+
+    mutating func transformPoints(from sourceRect: CGRect, to targetRect: CGRect) {
+        let sourceRect = sourceRect.standardized
+        let targetRect = targetRect.standardized
+
+        guard !sourceRect.isNull,
+              !targetRect.isNull,
+              sourceRect.width > 0,
+              sourceRect.height > 0 else {
+            let translation = CGSize(
+                width: targetRect.minX - sourceRect.minX,
+                height: targetRect.minY - sourceRect.minY
+            )
+            startPoint = CGPoint(x: startPoint.x + translation.width, y: startPoint.y + translation.height)
+            endPoint = CGPoint(x: endPoint.x + translation.width, y: endPoint.y + translation.height)
+            return
+        }
+
+        startPoint = startPoint.transformed(from: sourceRect, to: targetRect)
+        endPoint = endPoint.transformed(from: sourceRect, to: targetRect)
+    }
+
+    func contains(_ point: CGPoint, hitPadding: CGFloat) -> Bool {
+        guard visibleBounds.insetBy(dx: -hitPadding, dy: -hitPadding).contains(point) else {
+            return false
+        }
+
+        let threshold = lineWidth / 2 + hitPadding
+        if point.distance(toSegmentFrom: startPoint, to: endPoint) <= threshold {
+            return true
+        }
+
+        return arrowHeadSegments.contains { headStart, headEnd in
+            point.distance(toSegmentFrom: headStart, to: headEnd) <= threshold
+        }
+    }
+
+    var arrowHeadSegments: [(CGPoint, CGPoint)] {
+        let angle = atan2(endPoint.y - startPoint.y, endPoint.x - startPoint.x)
+
+        return [
+            arrowHeadPoint(at: angle + .pi - arrowHeadAngle),
+            arrowHeadPoint(at: angle + .pi + arrowHeadAngle)
+        ].map { (endPoint, $0) }
+    }
+
+    private func arrowHeadPoint(at angle: CGFloat) -> CGPoint {
+        CGPoint(
+            x: endPoint.x + cos(angle) * arrowHeadLength,
+            y: endPoint.y + sin(angle) * arrowHeadLength
+        )
+    }
 }
 
 struct AnnotationStroke: Equatable {
@@ -233,6 +326,13 @@ struct AnnotationColor: Codable, Equatable, Hashable {
 }
 
 private extension CGPoint {
+    func transformed(from sourceRect: CGRect, to targetRect: CGRect) -> CGPoint {
+        CGPoint(
+            x: targetRect.minX + (x - sourceRect.minX) * targetRect.width / sourceRect.width,
+            y: targetRect.minY + (y - sourceRect.minY) * targetRect.height / sourceRect.height
+        )
+    }
+
     func distance(toSegmentFrom startPoint: CGPoint, to endPoint: CGPoint) -> CGFloat {
         let segment = CGSize(width: endPoint.x - startPoint.x, height: endPoint.y - startPoint.y)
         let segmentLengthSquared = segment.width * segment.width + segment.height * segment.height
