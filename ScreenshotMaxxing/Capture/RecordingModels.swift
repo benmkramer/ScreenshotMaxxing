@@ -31,6 +31,13 @@ enum RecordingMode: String, CaseIterable {
 struct RecordingOptions: Equatable {
     let mode: RecordingMode
     let microphoneEnabled: Bool
+    let systemAudioEnabled: Bool
+
+    init(mode: RecordingMode, microphoneEnabled: Bool, systemAudioEnabled: Bool = false) {
+        self.mode = mode
+        self.microphoneEnabled = microphoneEnabled
+        self.systemAudioEnabled = systemAudioEnabled
+    }
 }
 
 struct RecordingResult: Equatable {

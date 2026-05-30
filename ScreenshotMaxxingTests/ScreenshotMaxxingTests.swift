@@ -743,7 +743,7 @@ struct ScreenshotMaxxingTests {
         #expect(reloadedStore.captureOptionsShortcut().displayString == "Control-Option-B")
     }
 
-    @Test func recordingSettingsStorePersistsMicrophoneDefault() throws {
+    @Test func recordingSettingsStorePersistsAudioDefaults() throws {
         let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
         let userDefaults = try #require(UserDefaults(suiteName: suiteName))
         defer {
@@ -752,9 +752,11 @@ struct ScreenshotMaxxingTests {
 
         let store = RecordingSettingsStore(userDefaults: userDefaults)
         try store.saveMicrophoneEnabled(true)
+        try store.saveSystemAudioEnabled(true)
         let reloadedStore = RecordingSettingsStore(userDefaults: userDefaults)
 
         #expect(reloadedStore.microphoneEnabled())
+        #expect(reloadedStore.systemAudioEnabled())
     }
 
     @Test func shortcutCanBeRecordedFromModifiedKeyEvent() throws {
