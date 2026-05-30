@@ -653,6 +653,44 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func permissionOnboardingModelShowsCheckingStateDuringDirectScreenAccessRequest() async {
+        var approvalCompleted = false
+        var approvalContinuation: CheckedContinuation<Bool, Never>?
+        let controller = AppPermissionController(
+            screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
+                true
+            }),
+            directScreenAccessController: DirectScreenAccessController {
+                approvalCompleted
+            } requestApproval: {
+                await withCheckedContinuation { continuation in
+                    approvalContinuation = continuation
+                }
+            } markApprovalCompleted: {
+                approvalCompleted = true
+            }
+        )
+        let model = PermissionOnboardingModel(permissionController: controller)
+
+        let requestTask = Task {
+            await model.requestAccess(for: .directScreenAccess)
+        }
+
+        while approvalContinuation == nil {
+            await Task.yield()
+        }
+
+        #expect(model.isCheckingAccess(for: .directScreenAccess))
+        #expect(model.actionTitle(for: .directScreenAccess) == "Try Again")
+
+        approvalContinuation?.resume(returning: true)
+        await requestTask.value
+
+        #expect(!model.isCheckingAccess(for: .directScreenAccess))
+        #expect(model.allGranted)
+    }
+
+    @MainActor
     @Test func permissionOnboardingModelCompletesWhenPermissionAlreadyGranted() {
         var completionCount = 0
         let controller = AppPermissionController(

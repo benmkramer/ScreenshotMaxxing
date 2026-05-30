@@ -13,6 +13,7 @@ import SwiftUI
 final class PermissionOnboardingModel: ObservableObject {
     @Published private(set) var states: [AppPermissionState]
     @Published private(set) var setupStartedPermissions: Set<AppPermission> = []
+    @Published private(set) var checkingPermissions: Set<AppPermission> = []
 
     var onComplete: () -> Void = {}
 
@@ -77,7 +78,12 @@ final class PermissionOnboardingModel: ObservableObject {
             return
         }
 
+        checkingPermissions.insert(permission)
         setupStartedPermissions.insert(permission)
+        defer {
+            checkingPermissions.remove(permission)
+        }
+
         _ = await permissionController.requestAccessIfNeeded(for: permission)
         refresh()
 
@@ -116,6 +122,10 @@ final class PermissionOnboardingModel: ObservableObject {
         return setupStartedPermissions.contains(permission) ? "Open Settings" : "Set Up"
     }
 
+    func isCheckingAccess(for permission: AppPermission) -> Bool {
+        checkingPermissions.contains(permission)
+    }
+
     private static func relaunchCurrentApp() {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -139,7 +149,11 @@ struct PermissionOnboardingView: View {
 
             VStack(spacing: 0) {
                 ForEach(model.states) { state in
-                    PermissionOnboardingRow(state: state, actionTitle: model.actionTitle(for: state.permission)) {
+                    PermissionOnboardingRow(
+                        state: state,
+                        actionTitle: model.actionTitle(for: state.permission),
+                        isCheckingAccess: model.isCheckingAccess(for: state.permission)
+                    ) {
                         Task {
                             await model.requestAccess(for: state.permission)
                         }
@@ -202,6 +216,7 @@ struct PermissionOnboardingView: View {
 private struct PermissionOnboardingRow: View {
     let state: AppPermissionState
     let actionTitle: String
+    let isCheckingAccess: Bool
     let requestAccess: () -> Void
 
     var body: some View {
@@ -230,8 +245,19 @@ private struct PermissionOnboardingRow: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
             } else {
-                Button(actionTitle, action: requestAccess)
-                    .disabled(!state.isSetupEnabled)
+                Button(action: requestAccess) {
+                    if isCheckingAccess {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+
+                            Text("Checking")
+                        }
+                    } else {
+                        Text(actionTitle)
+                    }
+                }
+                .disabled(!state.isSetupEnabled || isCheckingAccess)
             }
         }
         .padding(.horizontal, 14)
