@@ -12,6 +12,7 @@ import SwiftUI
 struct VideoEditorView: View {
     let videoURL: URL
     private let capture: Capture?
+    private let savedFilePresenter: SavedFilePresenter
     private let closeAction: () -> Void
 
     @State private var player: AVPlayer
@@ -22,13 +23,20 @@ struct VideoEditorView: View {
     @State private var statusMessage: String?
     @State private var playbackObserver: Any?
     @State private var pendingPlaybackSkipTarget: Double?
+    @State private var undoHistory = VideoEditUndoHistory()
 
     private static let playbackSkipOffset: Double = 0.04
     private static let successfulActionCloseDelay: TimeInterval = 0.6
 
-    init(videoURL: URL, capture: Capture? = nil, closeAction: @escaping () -> Void = {}) {
+    init(
+        videoURL: URL,
+        capture: Capture? = nil,
+        savedFilePresenter: SavedFilePresenter = SavedFilePresenter(),
+        closeAction: @escaping () -> Void = {}
+    ) {
         self.videoURL = videoURL
         self.capture = capture
+        self.savedFilePresenter = savedFilePresenter
         self.closeAction = closeAction
         let durationSeconds = (try? VideoMetadataReader.metadata(for: videoURL).durationSeconds)
             ?? capture?.durationSeconds
@@ -64,7 +72,8 @@ struct VideoEditorView: View {
             VideoTimelineView(
                 editState: $editState,
                 currentTime: currentTime,
-                seekAction: seekToTime
+                seekAction: seekToTime,
+                recordUndoAction: recordUndoSnapshot
             )
             .frame(height: 92)
             .padding(.horizontal, 18)
@@ -72,6 +81,9 @@ struct VideoEditorView: View {
         }
         .frame(minWidth: 720, minHeight: 500)
         .background(Color(nsColor: .windowBackgroundColor))
+        .overlay(alignment: .topLeading) {
+            undoCommandButton
+        }
         .onDeleteCommand {
             removeSelectedCut()
         }
@@ -83,6 +95,15 @@ struct VideoEditorView: View {
             removePlaybackObserver()
             player.pause()
         }
+    }
+
+    private var undoCommandButton: some View {
+        Button("Undo Video Edit", action: undoLastVideoEdit)
+            .keyboardShortcut("z", modifiers: .command)
+            .disabled(!undoHistory.canUndo)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
     }
 
     private func togglePlayback() {
@@ -104,7 +125,25 @@ struct VideoEditorView: View {
     }
 
     private func removeSelectedCut() {
+        guard editState.selectedRemovedRangeID != nil else {
+            return
+        }
+
+        recordUndoSnapshot()
         editState.removeSelectedRange()
+    }
+
+    private func recordUndoSnapshot() {
+        undoHistory.record(editState)
+    }
+
+    private func undoLastVideoEdit() {
+        guard let previousState = undoHistory.undo() else {
+            return
+        }
+
+        editState = previousState
+        seek(to: currentTime)
     }
 
     private func copyEditedVideo() {
@@ -198,12 +237,13 @@ struct VideoEditorView: View {
         Task {
             do {
                 let exportResult = try await saveEditedVideoToDisk()
+                savedFilePresenter.revealInFinder(exportResult.fileURL)
 
                 if EditorClipboard.copyString(exportResult.fileURL.fileSystemPath) {
-                    statusMessage = "Saved; path copied to clipboard"
+                    statusMessage = "Saved; opened in Finder and path copied"
                     closeAfterShowingSuccess()
                 } else {
-                    statusMessage = "Saved, but path copy failed"
+                    statusMessage = "Saved and opened in Finder, but path copy failed"
                 }
             } catch {
                 statusMessage = error.localizedDescription
@@ -416,7 +456,7 @@ private struct VideoEditorToolbar: View {
 
                 ToolbarIconButton(
                     systemImageName: "square.and.arrow.down",
-                    helpText: "Save edited video and copy the file path",
+                    helpText: "Save edited video, reveal it in Finder, and copy the file path",
                     action: saveAction
                 )
                 .disabled(isExporting)
@@ -442,6 +482,7 @@ private struct VideoTimelineView: View {
     @Binding var editState: VideoEditState
     let currentTime: Double
     let seekAction: (Double) -> Void
+    let recordUndoAction: () -> Void
 
     @State private var draftCutStart: Double?
     @State private var draftCutEnd: Double?
@@ -520,7 +561,16 @@ private struct VideoTimelineView: View {
     private func timelineDrag(metrics: VideoTimelineMetrics) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.coordinateSpaceName))
             .onChanged { value in
-                let drag = activeDrag ?? dragTarget(for: value.startLocation, metrics: metrics)
+                let drag: TimelineDrag
+                if let activeDrag {
+                    drag = activeDrag
+                } else {
+                    drag = dragTarget(for: value.startLocation, metrics: metrics)
+                    if drag.recordsUndoSnapshot {
+                        recordUndoAction()
+                    }
+                }
+
                 activeDrag = drag
                 update(drag, with: value, metrics: metrics)
             }
@@ -547,6 +597,7 @@ private struct VideoTimelineView: View {
                        )
                    ),
                    range.duration >= minimumCutDuration(metrics: metrics) {
+                    recordUndoAction()
                     editState.addRemovedRange(range)
                     if currentTime >= range.start && currentTime < range.end {
                         seekAction(range.end)
@@ -686,6 +737,15 @@ private struct VideoTimelineView: View {
         case moveCut(id: UUID, originalStart: Double, originalEnd: Double, startTime: Double)
         case createCut(startTime: Double)
         case seek
+
+        var recordsUndoSnapshot: Bool {
+            switch self {
+            case .trimStart, .trimEnd, .resizeCutStart, .resizeCutEnd, .moveCut:
+                true
+            case .createCut, .seek:
+                false
+            }
+        }
     }
 }
 
