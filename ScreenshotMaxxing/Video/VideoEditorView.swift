@@ -23,6 +23,7 @@ struct VideoEditorView: View {
     @State private var statusMessage: String?
     @State private var playbackObserver: Any?
     @State private var pendingPlaybackSkipTarget: Double?
+    @State private var undoHistory = VideoEditUndoHistory()
 
     private static let playbackSkipOffset: Double = 0.04
     private static let successfulActionCloseDelay: TimeInterval = 0.6
@@ -71,7 +72,8 @@ struct VideoEditorView: View {
             VideoTimelineView(
                 editState: $editState,
                 currentTime: currentTime,
-                seekAction: seekToTime
+                seekAction: seekToTime,
+                recordUndoAction: recordUndoSnapshot
             )
             .frame(height: 92)
             .padding(.horizontal, 18)
@@ -79,6 +81,9 @@ struct VideoEditorView: View {
         }
         .frame(minWidth: 720, minHeight: 500)
         .background(Color(nsColor: .windowBackgroundColor))
+        .overlay(alignment: .topLeading) {
+            undoCommandButton
+        }
         .onDeleteCommand {
             removeSelectedCut()
         }
@@ -90,6 +95,15 @@ struct VideoEditorView: View {
             removePlaybackObserver()
             player.pause()
         }
+    }
+
+    private var undoCommandButton: some View {
+        Button("Undo Video Edit", action: undoLastVideoEdit)
+            .keyboardShortcut("z", modifiers: .command)
+            .disabled(!undoHistory.canUndo)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
     }
 
     private func togglePlayback() {
@@ -111,7 +125,25 @@ struct VideoEditorView: View {
     }
 
     private func removeSelectedCut() {
+        guard editState.selectedRemovedRangeID != nil else {
+            return
+        }
+
+        recordUndoSnapshot()
         editState.removeSelectedRange()
+    }
+
+    private func recordUndoSnapshot() {
+        undoHistory.record(editState)
+    }
+
+    private func undoLastVideoEdit() {
+        guard let previousState = undoHistory.undo() else {
+            return
+        }
+
+        editState = previousState
+        seek(to: currentTime)
     }
 
     private func copyEditedVideo() {
@@ -450,6 +482,7 @@ private struct VideoTimelineView: View {
     @Binding var editState: VideoEditState
     let currentTime: Double
     let seekAction: (Double) -> Void
+    let recordUndoAction: () -> Void
 
     @State private var draftCutStart: Double?
     @State private var draftCutEnd: Double?
@@ -528,7 +561,16 @@ private struct VideoTimelineView: View {
     private func timelineDrag(metrics: VideoTimelineMetrics) -> some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.coordinateSpaceName))
             .onChanged { value in
-                let drag = activeDrag ?? dragTarget(for: value.startLocation, metrics: metrics)
+                let drag: TimelineDrag
+                if let activeDrag {
+                    drag = activeDrag
+                } else {
+                    drag = dragTarget(for: value.startLocation, metrics: metrics)
+                    if drag.recordsUndoSnapshot {
+                        recordUndoAction()
+                    }
+                }
+
                 activeDrag = drag
                 update(drag, with: value, metrics: metrics)
             }
@@ -555,6 +597,7 @@ private struct VideoTimelineView: View {
                        )
                    ),
                    range.duration >= minimumCutDuration(metrics: metrics) {
+                    recordUndoAction()
                     editState.addRemovedRange(range)
                     if currentTime >= range.start && currentTime < range.end {
                         seekAction(range.end)
@@ -694,6 +737,15 @@ private struct VideoTimelineView: View {
         case moveCut(id: UUID, originalStart: Double, originalEnd: Double, startTime: Double)
         case createCut(startTime: Double)
         case seek
+
+        var recordsUndoSnapshot: Bool {
+            switch self {
+            case .trimStart, .trimEnd, .resizeCutStart, .resizeCutEnd, .moveCut:
+                true
+            case .createCut, .seek:
+                false
+            }
+        }
     }
 }
 

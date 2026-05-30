@@ -1117,6 +1117,21 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func editorStateUndoesLastAnnotation() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let firstAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000022")!
+        let secondAnnotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000023")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        state.addBlurRect(CGRect(x: 0, y: 0, width: 20, height: 20), id: firstAnnotationID)
+        state.addBlurRect(CGRect(x: 20, y: 20, width: 20, height: 20), id: secondAnnotationID)
+        state.undoLastAnnotation()
+
+        #expect(state.annotations.map(\.id) == [firstAnnotationID])
+        #expect(state.selectedAnnotationID == nil)
+    }
+
+    @MainActor
     @Test func editorStateMovesAnnotationAndKeepsItInsideImageBounds() throws {
         let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
         let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000015")!
@@ -1800,6 +1815,29 @@ struct ScreenshotMaxxingTests {
 
         #expect(rangePairs(state.removedRanges) == [[6, 7]])
         #expect(state.selectedRemovedRangeID == nil)
+    }
+
+    @Test func videoEditUndoHistoryRestoresPreviousEditState() throws {
+        var history = VideoEditUndoHistory()
+        var state = VideoEditState(durationSeconds: 10)
+
+        history.record(state)
+        state.addRemovedRange(VideoTimeRange(start: 4, end: 5))
+
+        let undoState = history.undo()
+        let restoredState = try #require(undoState)
+        #expect(restoredState == VideoEditState(durationSeconds: 10))
+        #expect(!history.canUndo)
+    }
+
+    @Test func videoEditUndoHistoryIgnoresDuplicateSnapshots() {
+        var history = VideoEditUndoHistory()
+        let state = VideoEditState(durationSeconds: 10)
+
+        history.record(state)
+        history.record(state)
+
+        #expect(history.snapshots.count == 1)
     }
 
     @Test func videoEditStateResizesSelectedCutEdges() {
