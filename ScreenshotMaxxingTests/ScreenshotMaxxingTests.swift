@@ -193,6 +193,18 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureMode.fullscreen.screencaptureArguments(outputURL: outputURL) == ["-x", "/tmp/Application Support/screenshot.png"])
     }
 
+    @Test func recordingAreaFocusOverlayConvertsScreenRectToLocalCoordinates() {
+        let screenFrame = CGRect(x: -1440, y: 0, width: 1440, height: 900)
+        let recordingRect = CGRect(x: -1200, y: 120, width: 400, height: 300)
+
+        let localRect = RecordingAreaFocusOverlayGeometry.localClearRect(
+            for: recordingRect,
+            in: screenFrame
+        )
+
+        #expect(localRect == CGRect(x: 240, y: 120, width: 400, height: 300))
+    }
+
     @Test func recordingWindowSelectionConvertsCGWindowBoundsToAppKitCoordinates() {
         let display = RecordingDisplayCoordinateSpace(
             displayID: 1,

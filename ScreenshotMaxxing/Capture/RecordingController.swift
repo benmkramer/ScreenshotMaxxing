@@ -46,6 +46,7 @@ final class RecordingController {
 
         activeSession.didRequestStop = true
         activeSession.toolbar.close()
+        activeSession.focusOverlay?.close()
 
         do {
             try await stopCapture(activeSession.stream)
@@ -72,6 +73,7 @@ final class RecordingController {
 
         activeSession.didRequestRestart = true
         activeSession.toolbar.close()
+        activeSession.focusOverlay?.close()
 
         do {
             try await stopCapture(activeSession.stream)
@@ -85,13 +87,14 @@ final class RecordingController {
 
             guard self.activeSession === activeSession else {
                 restartedSession.toolbar.close()
+                restartedSession.focusOverlay?.close()
                 try? await stopCapture(restartedSession.stream)
                 try? fileManager.removeItem(at: restartedSession.outputURL)
                 return
             }
 
             self.activeSession = restartedSession
-            restartedSession.toolbar.show(on: restartedSession.target.screen)
+            restartedSession.showChrome()
         } catch {
             try? fileManager.removeItem(at: activeSession.outputURL)
             if self.activeSession === activeSession {
@@ -118,7 +121,7 @@ final class RecordingController {
         )
 
         self.activeSession = activeSession
-        activeSession.toolbar.show(on: target.screen)
+        activeSession.showChrome()
     }
 
     private func makeActiveSession(
@@ -160,6 +163,9 @@ final class RecordingController {
                 await self?.restartActiveRecording()
             }
         }
+        let focusOverlay = target.recordingRect.map {
+            RecordingAreaFocusWindowController(screen: target.screen, recordingRect: $0)
+        }
 
         return ActiveRecordingSession(
             options: options,
@@ -168,6 +174,7 @@ final class RecordingController {
             recordingOutput: recordingOutput,
             recordingDelegate: delegate,
             toolbar: toolbar,
+            focusOverlay: focusOverlay,
             outputURL: outputURL,
             mode: options.mode,
             dimensions: target.dimensions,
@@ -263,6 +270,7 @@ final class RecordingController {
         }
 
         activeSession.toolbar.close()
+        activeSession.focusOverlay?.close()
         try? await stopCapture(activeSession.stream)
         try? fileManager.removeItem(at: activeSession.outputURL)
         completeWithError(RecordingSelectionError.cancelled)
@@ -271,6 +279,7 @@ final class RecordingController {
     private func completeWithResult(_ result: RecordingResult) {
         let continuation = continuation
         activeSession?.toolbar.close()
+        activeSession?.focusOverlay?.close()
         activeSession = nil
         self.continuation = nil
         continuation?.resume(returning: result)
@@ -279,6 +288,7 @@ final class RecordingController {
     private func completeWithError(_ error: Error) {
         let continuation = continuation
         activeSession?.toolbar.close()
+        activeSession?.focusOverlay?.close()
         activeSession = nil
         self.continuation = nil
         continuation?.resume(throwing: error)
@@ -295,6 +305,7 @@ final class RecordingController {
             return RecordingTarget(
                 filter: filter,
                 sourceRect: nil,
+                recordingRect: nil,
                 dimensions: dimensions,
                 screen: screen
             )
@@ -306,6 +317,7 @@ final class RecordingController {
             return RecordingTarget(
                 filter: filter,
                 sourceRect: sourceRect(for: selection.rect, on: selection.screen),
+                recordingRect: selection.rect,
                 dimensions: dimensions(for: selection.rect.size, on: selection.screen),
                 screen: selection.screen
             )
@@ -327,6 +339,7 @@ final class RecordingController {
             return RecordingTarget(
                 filter: filter,
                 sourceRect: nil,
+                recordingRect: nil,
                 dimensions: dimensions(for: selectedWindow.frame.size, on: selectedScreen),
                 screen: selectedScreen
             )
@@ -482,6 +495,7 @@ private final class ActiveRecordingSession {
     let recordingOutput: SCRecordingOutput
     let recordingDelegate: RecordingOutputDelegate
     let toolbar: RecordingToolbarWindowController
+    let focusOverlay: RecordingAreaFocusWindowController?
     let outputURL: URL
     let mode: RecordingMode
     let dimensions: CGSize
@@ -496,6 +510,7 @@ private final class ActiveRecordingSession {
         recordingOutput: SCRecordingOutput,
         recordingDelegate: RecordingOutputDelegate,
         toolbar: RecordingToolbarWindowController,
+        focusOverlay: RecordingAreaFocusWindowController?,
         outputURL: URL,
         mode: RecordingMode,
         dimensions: CGSize,
@@ -507,16 +522,23 @@ private final class ActiveRecordingSession {
         self.recordingOutput = recordingOutput
         self.recordingDelegate = recordingDelegate
         self.toolbar = toolbar
+        self.focusOverlay = focusOverlay
         self.outputURL = outputURL
         self.mode = mode
         self.dimensions = dimensions
         self.thumbnailBaseDirectory = thumbnailBaseDirectory
+    }
+
+    func showChrome() {
+        focusOverlay?.show()
+        toolbar.show(on: target.screen)
     }
 }
 
 private struct RecordingTarget {
     let filter: SCContentFilter
     let sourceRect: CGRect?
+    let recordingRect: CGRect?
     let dimensions: CGSize
     let screen: NSScreen
 }

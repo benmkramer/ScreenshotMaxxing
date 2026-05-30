@@ -12,6 +12,12 @@ struct RecordingAreaSelection {
     let screen: NSScreen
 }
 
+enum RecordingAreaFocusOverlayGeometry {
+    static func localClearRect(for recordingRect: CGRect, in screenFrame: CGRect) -> CGRect {
+        recordingRect.offsetBy(dx: -screenFrame.minX, dy: -screenFrame.minY)
+    }
+}
+
 enum RecordingSelectionError: LocalizedError, Equatable {
     case cancelled
 
@@ -20,6 +26,51 @@ enum RecordingSelectionError: LocalizedError, Equatable {
         case .cancelled:
             "Recording selection canceled."
         }
+    }
+}
+
+@MainActor
+final class RecordingAreaFocusWindowController: NSWindowController {
+    init(screen: NSScreen, recordingRect: CGRect) {
+        let panel = RecordingAreaFocusWindowController.makeOverlayPanel(frame: screen.frame)
+        super.init(window: panel)
+
+        panel.contentView = RecordingAreaFocusView(
+            clearRect: RecordingAreaFocusOverlayGeometry.localClearRect(
+                for: recordingRect,
+                in: screen.frame
+            )
+        )
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func show() {
+        showWindow(nil)
+        window?.orderFrontRegardless()
+    }
+
+    private static func makeOverlayPanel(frame: CGRect) -> NSPanel {
+        let panel = RecordingFocusPanel(
+            contentRect: frame,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        panel.level = .statusBar
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = false
+        panel.ignoresMouseEvents = true
+        panel.isReleasedWhenClosed = false
+        panel.sharingType = .none
+        return panel
     }
 }
 
@@ -105,6 +156,16 @@ private final class RecordingSelectionPanel: NSPanel {
     }
 }
 
+private final class RecordingFocusPanel: NSPanel {
+    override var canBecomeKey: Bool {
+        false
+    }
+
+    override var canBecomeMain: Bool {
+        false
+    }
+}
+
 private final class RecordingAreaSelectionView: NSView {
     var onComplete: ((CGRect) -> Void)?
     var onCancel: (() -> Void)?
@@ -179,5 +240,31 @@ private final class RecordingAreaSelectionView: NSView {
             width: abs(currentPoint.x - startPoint.x),
             height: abs(currentPoint.y - startPoint.y)
         )
+    }
+}
+
+private final class RecordingAreaFocusView: NSView {
+    private let clearRect: CGRect
+
+    init(clearRect: CGRect) {
+        self.clearRect = clearRect
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.black.withAlphaComponent(0.30).setFill()
+        bounds.fill()
+
+        NSGraphicsContext.current?.cgContext.clear(clearRect)
+
+        NSColor.controlAccentColor.setStroke()
+        let path = NSBezierPath(rect: clearRect.insetBy(dx: -1, dy: -1))
+        path.lineWidth = 2
+        path.stroke()
     }
 }
