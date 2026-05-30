@@ -19,7 +19,7 @@ permissions:
 jobs:
   prepare-release:
     name: Open Version Bump PR
-    runs-on: macos-26
+    runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
