@@ -12,6 +12,7 @@ import SwiftUI
 struct VideoEditorView: View {
     let videoURL: URL
     private let capture: Capture?
+    private let savedFilePresenter: SavedFilePresenter
     private let closeAction: () -> Void
 
     @State private var player: AVPlayer
@@ -26,9 +27,15 @@ struct VideoEditorView: View {
     private static let playbackSkipOffset: Double = 0.04
     private static let successfulActionCloseDelay: TimeInterval = 0.6
 
-    init(videoURL: URL, capture: Capture? = nil, closeAction: @escaping () -> Void = {}) {
+    init(
+        videoURL: URL,
+        capture: Capture? = nil,
+        savedFilePresenter: SavedFilePresenter = SavedFilePresenter(),
+        closeAction: @escaping () -> Void = {}
+    ) {
         self.videoURL = videoURL
         self.capture = capture
+        self.savedFilePresenter = savedFilePresenter
         self.closeAction = closeAction
         let durationSeconds = (try? VideoMetadataReader.metadata(for: videoURL).durationSeconds)
             ?? capture?.durationSeconds
@@ -198,12 +205,13 @@ struct VideoEditorView: View {
         Task {
             do {
                 let exportResult = try await saveEditedVideoToDisk()
+                savedFilePresenter.revealInFinder(exportResult.fileURL)
 
                 if EditorClipboard.copyString(exportResult.fileURL.fileSystemPath) {
-                    statusMessage = "Saved; path copied to clipboard"
+                    statusMessage = "Saved; opened in Finder and path copied"
                     closeAfterShowingSuccess()
                 } else {
-                    statusMessage = "Saved, but path copy failed"
+                    statusMessage = "Saved and opened in Finder, but path copy failed"
                 }
             } catch {
                 statusMessage = error.localizedDescription
@@ -416,7 +424,7 @@ private struct VideoEditorToolbar: View {
 
                 ToolbarIconButton(
                     systemImageName: "square.and.arrow.down",
-                    helpText: "Save edited video and copy the file path",
+                    helpText: "Save edited video, reveal it in Finder, and copy the file path",
                     action: saveAction
                 )
                 .disabled(isExporting)

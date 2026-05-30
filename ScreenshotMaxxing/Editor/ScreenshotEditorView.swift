@@ -12,6 +12,7 @@ struct ScreenshotEditorView: View {
     private let capture: Capture?
     private let image: NSImage?
     private let editorSettingsStore: EditorSettingsStore
+    private let savedFilePresenter: SavedFilePresenter
     private let closeAction: () -> Void
     @State private var editorState: ScreenshotEditorState
     @State private var draftBlurRect: CGRect?
@@ -24,11 +25,13 @@ struct ScreenshotEditorView: View {
         imageURL: URL,
         capture: Capture? = nil,
         editorSettingsStore: EditorSettingsStore = EditorSettingsStore(),
+        savedFilePresenter: SavedFilePresenter = SavedFilePresenter(),
         closeAction: @escaping () -> Void = {}
     ) {
         self.imageURL = imageURL
         self.capture = capture
         self.editorSettingsStore = editorSettingsStore
+        self.savedFilePresenter = savedFilePresenter
         self.closeAction = closeAction
         self.image = NSImage(contentsOf: imageURL)
         self._editorState = State(initialValue: ScreenshotEditorState(
@@ -155,12 +158,13 @@ struct ScreenshotEditorView: View {
                 annotations: editorState.annotations
             )
             let editedFileURL = try saveEditedPNG(pngData)
+            savedFilePresenter.revealInFinder(editedFileURL)
 
             if EditorClipboard.copyString(editedFileURL.fileSystemPath) {
-                statusMessage = "Saved; path copied to clipboard"
+                statusMessage = "Saved; opened in Finder and path copied"
                 closeAfterShowingSuccess()
             } else {
-                statusMessage = "Saved, but path copy failed"
+                statusMessage = "Saved and opened in Finder, but path copy failed"
             }
         } catch {
             statusMessage = error.localizedDescription
@@ -798,7 +802,7 @@ private struct EditorToolbar: View {
 
                 ToolbarIconButton(
                     systemImageName: "square.and.arrow.down",
-                    helpText: "Save edited image and copy the file path",
+                    helpText: "Save edited image, reveal it in Finder, and copy the file path",
                     action: saveAction
                 )
             }

@@ -1662,6 +1662,17 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func savedFilePresenterRevealsSavedFileInFinder() {
+        let fileURL = URL(fileURLWithPath: "/tmp/example-edited.png")
+        var revealedFileURL: URL?
+        let presenter = SavedFilePresenter { revealedFileURL = $0 }
+
+        presenter.revealInFinder(fileURL)
+
+        #expect(revealedFileURL == fileURL)
+    }
+
+    @MainActor
     @Test func editorFileSaverWritesEditedImageAndCreatesNewHistoryCapture() throws {
         let fileManager = FileManager.default
         let baseDirectory = fileManager.temporaryDirectory
