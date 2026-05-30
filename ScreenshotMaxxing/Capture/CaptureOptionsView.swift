@@ -105,6 +105,7 @@ struct CaptureOptionsView: View {
                 CaptureOptionButton(
                     title: mode.captureOptionsDisplayName,
                     symbolName: mode.captureOptionsSymbolName,
+                    showsRecordingBadge: false,
                     accessibilityIdentifier: mode.captureOptionsAccessibilityIdentifier
                 ) {
                     onSelectCapture(mode)
@@ -115,6 +116,7 @@ struct CaptureOptionsView: View {
                 CaptureOptionButton(
                     title: mode.captureOptionsDisplayName,
                     symbolName: mode.captureOptionsSymbolName,
+                    showsRecordingBadge: true,
                     accessibilityIdentifier: mode.captureOptionsAccessibilityIdentifier
                 ) {
                     onSelectRecording(RecordingOptions(
@@ -185,6 +187,7 @@ private struct RecordingAudioToggle: View {
 private struct CaptureOptionButton: View {
     let title: String
     let symbolName: String
+    let showsRecordingBadge: Bool
     let accessibilityIdentifier: String
     let action: () -> Void
 
@@ -195,9 +198,10 @@ private struct CaptureOptionButton: View {
             action()
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: symbolName)
-                    .font(.system(size: 20, weight: .medium))
-                    .frame(width: 26, height: 22)
+                CaptureOptionIcon(
+                    symbolName: symbolName,
+                    showsRecordingBadge: showsRecordingBadge
+                )
 
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
@@ -217,6 +221,31 @@ private struct CaptureOptionButton: View {
         }
         .help(title)
         .accessibilityIdentifier(accessibilityIdentifier)
+    }
+}
+
+private struct CaptureOptionIcon: View {
+    let symbolName: String
+    let showsRecordingBadge: Bool
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Image(systemName: symbolName)
+                .font(.system(size: 20, weight: .medium))
+                .frame(width: 26, height: 22)
+
+            if showsRecordingBadge {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 8, height: 8)
+                    .overlay {
+                        Circle()
+                            .stroke(Color(nsColor: .windowBackgroundColor), lineWidth: 1)
+                    }
+                    .offset(x: 1, y: 1)
+            }
+        }
+        .frame(width: 30, height: 24)
     }
 }
 
@@ -388,9 +417,9 @@ private extension RecordingMode {
     var captureOptionsSymbolName: String {
         switch self {
         case .area:
-            "record.circle"
+            "rectangle.dashed"
         case .window:
-            "macwindow.badge.plus"
+            "macwindow"
         case .fullscreen:
             "display"
         }

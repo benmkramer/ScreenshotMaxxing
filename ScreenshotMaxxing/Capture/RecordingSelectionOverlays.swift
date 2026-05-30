@@ -54,6 +54,7 @@ final class RecordingAreaSelectionWindowController: NSWindowController {
             NSApp.activate(ignoringOtherApps: true)
             showWindow(nil)
             window?.makeKeyAndOrderFront(nil)
+            window?.orderFrontRegardless()
             window?.makeFirstResponder(window?.contentView)
             NSCursor.crosshair.set()
         }
@@ -116,6 +117,10 @@ private final class RecordingAreaSelectionView: NSView {
         true
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         NSColor.black.withAlphaComponent(0.28).setFill()
         bounds.fill()
@@ -124,8 +129,7 @@ private final class RecordingAreaSelectionView: NSView {
             return
         }
 
-        NSColor.clear.setFill()
-        selectionRect.fill(using: .clear)
+        NSGraphicsContext.current?.cgContext.clear(selectionRect)
         NSColor.controlAccentColor.setStroke()
         let path = NSBezierPath(rect: selectionRect)
         path.lineWidth = 2
