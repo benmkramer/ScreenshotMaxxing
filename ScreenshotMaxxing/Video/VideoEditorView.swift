@@ -53,7 +53,7 @@ struct VideoEditorView: View {
 
             Divider()
 
-            VideoPlayer(player: player)
+            VideoPlayerSurface(player: player)
                 .background(Color.black)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -234,6 +234,32 @@ struct VideoEditorView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.successfulActionCloseDelay) {
             closeAction()
         }
+    }
+}
+
+// Use AppKit playback directly to avoid SwiftUI VideoPlayer aborts while
+// _AVKit_SwiftUI materializes the editor window on some macOS 26 builds.
+private struct VideoPlayerSurface: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let playerView = AVPlayerView()
+        playerView.player = player
+        playerView.controlsStyle = .none
+        playerView.videoGravity = .resizeAspect
+        playerView.wantsLayer = true
+        playerView.layer?.backgroundColor = NSColor.black.cgColor
+        return playerView
+    }
+
+    func updateNSView(_ playerView: AVPlayerView, context: Context) {
+        if playerView.player !== player {
+            playerView.player = player
+        }
+    }
+
+    static func dismantleNSView(_ playerView: AVPlayerView, coordinator: ()) {
+        playerView.player = nil
     }
 }
 

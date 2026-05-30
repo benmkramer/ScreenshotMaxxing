@@ -808,6 +808,19 @@ struct ScreenshotMaxxingTests {
         #expect(ScreenshotEditorWindowController.windowTitle(for: imageURL) == "example-capture.png - ScreenshotMaxxing")
     }
 
+    @MainActor
+    @Test func videoEditorWindowCreatesAndLaysOutRecordedVideo() {
+        let videoURL = URL(fileURLWithPath: "/tmp/example-recording.mp4")
+        let controller = VideoEditorWindowController(videoURL: videoURL)
+        defer {
+            controller.window?.close()
+        }
+
+        controller.window?.contentView?.layoutSubtreeIfNeeded()
+
+        #expect(controller.window?.title == "example-recording.mp4 - ScreenshotMaxxing")
+    }
+
     @Test func imageCanvasFitsImageWithoutDistortion() {
         let geometry = ImageCanvasGeometry(
             imageSize: CGSize(width: 200, height: 100),
