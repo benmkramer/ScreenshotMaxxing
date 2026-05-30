@@ -48,7 +48,9 @@ struct VideoEditorView: View {
                 statusMessage: statusMessage,
                 playPauseAction: togglePlayback,
                 removeCutAction: removeSelectedCut,
-                saveAction: saveEditedVideo
+                copyAction: copyEditedVideo,
+                saveAction: saveEditedVideo,
+                copyAndDeleteAction: copyEditedVideoAndDeleteCapture
             )
 
             Divider()
@@ -105,6 +107,84 @@ struct VideoEditorView: View {
         editState.removeSelectedRange()
     }
 
+    private func copyEditedVideo() {
+        guard !isExporting else {
+            return
+        }
+
+        isExporting = true
+        statusMessage = "Exporting..."
+        player.pause()
+        isPlaying = false
+
+        Task {
+            do {
+                let exportResult = try await saveEditedVideoToDisk()
+                let mp4Data = try Data(contentsOf: exportResult.fileURL)
+
+                if EditorClipboard.copyMP4Data(mp4Data) {
+                    statusMessage = "Saved and copied video to clipboard"
+                    closeAfterShowingSuccess()
+                } else {
+                    statusMessage = "Saved, but copy failed"
+                }
+            } catch {
+                statusMessage = error.localizedDescription
+            }
+
+            isExporting = false
+        }
+    }
+
+    private func copyEditedVideoAndDeleteCapture() {
+        guard !isExporting else {
+            return
+        }
+
+        isExporting = true
+        statusMessage = "Exporting..."
+        player.pause()
+        isPlaying = false
+
+        Task {
+            var temporaryFileURL: URL?
+            defer {
+                if let temporaryFileURL {
+                    try? FileManager.default.removeItem(at: temporaryFileURL)
+                }
+
+                isExporting = false
+            }
+
+            do {
+                let exportResult = try await exportEditedVideoToTemporaryFile()
+                temporaryFileURL = exportResult.fileURL
+                let mp4Data = try Data(contentsOf: exportResult.fileURL)
+
+                guard EditorClipboard.copyMP4Data(mp4Data) else {
+                    statusMessage = "Copy failed"
+                    return
+                }
+
+                guard let capture else {
+                    statusMessage = "Copied video to clipboard"
+                    closeAfterShowingSuccess()
+                    return
+                }
+
+                do {
+                    try CaptureMetadataStore().deleteCaptureFromHistoryAndDisk(capture)
+                    statusMessage = "Copied and deleted capture"
+                    closeAfterShowingSuccess()
+                } catch {
+                    statusMessage = "Copied, but delete failed: \(error.localizedDescription)"
+                }
+            } catch {
+                statusMessage = error.localizedDescription
+            }
+        }
+    }
+
     private func saveEditedVideo() {
         guard !isExporting else {
             return
@@ -117,28 +197,7 @@ struct VideoEditorView: View {
 
         Task {
             do {
-                let directories = try FileLocations.ensureCaptureDirectories()
-                let editedFileURL = FileLocations.uniqueEditedFileURL(
-                    originalFileName: capture?.fileName ?? videoURL.lastPathComponent,
-                    directories: directories,
-                    fileExtension: "mp4"
-                )
-                let exportResult = try await VideoExporter().export(
-                    videoURL: videoURL,
-                    editState: editState,
-                    outputURL: editedFileURL
-                )
-                let thumbnailURL = try VideoThumbnailGenerator().writeThumbnail(
-                    for: exportResult.fileURL,
-                    originalFileName: exportResult.fileURL.lastPathComponent
-                )
-                try CaptureMetadataStore().saveEditedVideoCapture(
-                    editedFileURL: exportResult.fileURL,
-                    thumbnailURL: thumbnailURL,
-                    sourceCapture: capture,
-                    durationSeconds: exportResult.durationSeconds,
-                    dimensions: exportResult.dimensions
-                )
+                let exportResult = try await saveEditedVideoToDisk()
 
                 if EditorClipboard.copyString(exportResult.fileURL.fileSystemPath) {
                     statusMessage = "Saved; path copied to clipboard"
@@ -152,6 +211,44 @@ struct VideoEditorView: View {
 
             isExporting = false
         }
+    }
+
+    private func saveEditedVideoToDisk() async throws -> VideoExportResult {
+        let directories = try FileLocations.ensureCaptureDirectories()
+        let editedFileURL = FileLocations.uniqueEditedFileURL(
+            originalFileName: capture?.fileName ?? videoURL.lastPathComponent,
+            directories: directories,
+            fileExtension: "mp4"
+        )
+        let exportResult = try await VideoExporter().export(
+            videoURL: videoURL,
+            editState: editState,
+            outputURL: editedFileURL
+        )
+        let thumbnailURL = try VideoThumbnailGenerator().writeThumbnail(
+            for: exportResult.fileURL,
+            originalFileName: exportResult.fileURL.lastPathComponent
+        )
+        try CaptureMetadataStore().saveEditedVideoCapture(
+            editedFileURL: exportResult.fileURL,
+            thumbnailURL: thumbnailURL,
+            sourceCapture: capture,
+            durationSeconds: exportResult.durationSeconds,
+            dimensions: exportResult.dimensions
+        )
+
+        return exportResult
+    }
+
+    private func exportEditedVideoToTemporaryFile() async throws -> VideoExportResult {
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxing-\(UUID().uuidString).mp4")
+
+        return try await VideoExporter().export(
+            videoURL: videoURL,
+            editState: editState,
+            outputURL: outputURL
+        )
     }
 
     private func addPlaybackObserverIfNeeded() {
@@ -272,7 +369,9 @@ private struct VideoEditorToolbar: View {
     let statusMessage: String?
     let playPauseAction: () -> Void
     let removeCutAction: () -> Void
+    let copyAction: () -> Void
     let saveAction: () -> Void
+    let copyAndDeleteAction: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
@@ -307,10 +406,29 @@ private struct VideoEditorToolbar: View {
                     .foregroundStyle(.secondary)
             }
 
+            HStack(spacing: 6) {
+                ToolbarIconButton(
+                    systemImageName: "doc.on.doc",
+                    helpText: "Save edited video and copy it to the clipboard",
+                    action: copyAction
+                )
+                .disabled(isExporting)
+
+                ToolbarIconButton(
+                    systemImageName: "square.and.arrow.down",
+                    helpText: "Save edited video and copy the file path",
+                    action: saveAction
+                )
+                .disabled(isExporting)
+            }
+
+            Divider()
+                .frame(height: 22)
+
             ToolbarIconButton(
-                systemImageName: "square.and.arrow.down",
-                helpText: "Save edited video",
-                action: saveAction
+                systemImageName: "clipboard",
+                helpText: "Copy video to clipboard and delete it from history and disk",
+                action: copyAndDeleteAction
             )
             .disabled(isExporting)
         }

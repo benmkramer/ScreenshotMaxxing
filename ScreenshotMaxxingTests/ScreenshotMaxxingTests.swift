@@ -1420,6 +1420,21 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func editorClipboardWritesMP4DataToPasteboard() {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("ScreenshotMaxxingTests-\(UUID().uuidString)"))
+        defer {
+            pasteboard.releaseGlobally()
+        }
+        let mp4Data = Data("mp4".utf8)
+
+        let copied = EditorClipboard.copyMP4Data(mp4Data, to: pasteboard)
+
+        #expect(copied)
+        #expect(pasteboard.data(forType: NSPasteboard.PasteboardType("public.mpeg-4")) == mp4Data)
+        #expect(pasteboard.data(forType: NSPasteboard.PasteboardType("public.movie")) == mp4Data)
+    }
+
+    @MainActor
     @Test func editorFileSaverWritesEditedImageAndCreatesNewHistoryCapture() throws {
         let fileManager = FileManager.default
         let baseDirectory = fileManager.temporaryDirectory

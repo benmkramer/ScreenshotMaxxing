@@ -7,6 +7,7 @@
 
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 @MainActor
 enum EditorClipboard {
@@ -29,5 +30,14 @@ enum EditorClipboard {
         pasteboard.clearContents()
 
         return pasteboard.setString(string, forType: .string)
+    }
+
+    static func copyMP4Data(_ mp4Data: Data, to pasteboard: NSPasteboard = .general) -> Bool {
+        pasteboard.clearContents()
+
+        let wroteMP4 = pasteboard.setData(mp4Data, forType: NSPasteboard.PasteboardType(UTType.mpeg4Movie.identifier))
+        let wroteMovie = pasteboard.setData(mp4Data, forType: NSPasteboard.PasteboardType(UTType.movie.identifier))
+
+        return wroteMP4 || wroteMovie
     }
 }
