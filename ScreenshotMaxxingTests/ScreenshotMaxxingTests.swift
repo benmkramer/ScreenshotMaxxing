@@ -193,6 +193,90 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureMode.fullscreen.screencaptureArguments(outputURL: outputURL) == ["-x", "/tmp/Application Support/screenshot.png"])
     }
 
+    @Test func recordingWindowSelectionConvertsCGWindowBoundsToAppKitCoordinates() {
+        let display = RecordingDisplayCoordinateSpace(
+            displayID: 1,
+            cgFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+            appKitFrame: CGRect(x: 0, y: 0, width: 1440, height: 900)
+        )
+
+        let rect = RecordingWindowSelectionResolver.appKitRect(
+            forCGWindowBounds: CGRect(x: 100, y: 40, width: 400, height: 300),
+            displays: [display]
+        )
+
+        #expect(rect == CGRect(x: 100, y: 560, width: 400, height: 300))
+    }
+
+    @Test func recordingWindowSelectionUsesFrontmostWindowAtSelectedPoint() {
+        let display = RecordingDisplayCoordinateSpace(
+            displayID: 1,
+            cgFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+            appKitFrame: CGRect(x: 0, y: 0, width: 1440, height: 900)
+        )
+        let backWindow = RecordingWindowCandidate(
+            windowID: 101,
+            processID: 10,
+            layer: 0,
+            bounds: CGRect(x: 100, y: 100, width: 300, height: 300)
+        )
+        let frontWindow = RecordingWindowCandidate(
+            windowID: 202,
+            processID: 20,
+            layer: 0,
+            bounds: CGRect(x: 150, y: 150, width: 300, height: 300)
+        )
+
+        let windowID = RecordingWindowSelectionResolver.selectedWindowID(
+            at: CGPoint(x: 200, y: 550),
+            candidates: [frontWindow, backWindow],
+            displays: [display]
+        )
+
+        #expect(windowID == 202)
+    }
+
+    @Test func recordingWindowSelectionIgnoresOwnProcessAndUnselectableWindows() {
+        let display = RecordingDisplayCoordinateSpace(
+            displayID: 1,
+            cgFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+            appKitFrame: CGRect(x: 0, y: 0, width: 1440, height: 900)
+        )
+        let ownWindow = RecordingWindowCandidate(
+            windowID: 101,
+            processID: 10,
+            layer: 0,
+            bounds: CGRect(x: 100, y: 100, width: 300, height: 300)
+        )
+        let menuWindow = RecordingWindowCandidate(
+            windowID: 202,
+            processID: 20,
+            layer: 1,
+            bounds: CGRect(x: 100, y: 100, width: 300, height: 300)
+        )
+        let tinyWindow = RecordingWindowCandidate(
+            windowID: 303,
+            processID: 30,
+            layer: 0,
+            bounds: CGRect(x: 100, y: 100, width: 30, height: 30)
+        )
+        let selectableWindow = RecordingWindowCandidate(
+            windowID: 404,
+            processID: 40,
+            layer: 0,
+            bounds: CGRect(x: 100, y: 100, width: 300, height: 300)
+        )
+
+        let windowID = RecordingWindowSelectionResolver.selectedWindowID(
+            at: CGPoint(x: 200, y: 550),
+            candidates: [ownWindow, menuWindow, tinyWindow, selectableWindow],
+            displays: [display],
+            excludingProcessID: 10
+        )
+
+        #expect(windowID == 404)
+    }
+
     @Test func defaultAreaCaptureShortcutUsesControlShiftFour() {
         let shortcut = GlobalKeyboardShortcut.defaultAreaCapture
 

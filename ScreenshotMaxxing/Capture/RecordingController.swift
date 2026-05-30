@@ -310,19 +310,25 @@ final class RecordingController {
                 screen: selection.screen
             )
         case .window:
-            let windows = selectableWindows(in: content)
-            guard !windows.isEmpty else {
+            guard !selectableWindows(in: content).isEmpty else {
                 throw RecordingError.noRecordableWindows
             }
 
-            let selector = RecordingWindowSelectionWindowController(screen: screen, windows: windows)
-            let selectedWindow = try await selector.select()
+            let selectedWindowID = try await RecordingWindowSelectionController(fileManager: fileManager)
+                .selectWindowID(excludingProcessID: ProcessInfo.processInfo.processIdentifier)
+            let latestContent = try await SCShareableContent.current
+            let windows = selectableWindows(in: latestContent)
+            guard let selectedWindow = windows.first(where: { $0.windowID == selectedWindowID }) else {
+                throw RecordingError.selectedWindowUnavailable
+            }
+
             let filter = SCContentFilter(desktopIndependentWindow: selectedWindow)
+            let selectedScreen = screenContaining(window: selectedWindow) ?? screen
             return RecordingTarget(
                 filter: filter,
                 sourceRect: nil,
-                dimensions: dimensions(for: selectedWindow.frame.size, on: screen),
-                screen: screen
+                dimensions: dimensions(for: selectedWindow.frame.size, on: selectedScreen),
+                screen: selectedScreen
             )
         }
     }
@@ -457,6 +463,16 @@ final class RecordingController {
             height: rect.height
         )
     }
+
+    private func screenContaining(window: SCWindow) -> NSScreen? {
+        let displaySpaces = RecordingWindowSelectionResolver.currentDisplayCoordinateSpaces()
+        let windowRect = RecordingWindowSelectionResolver.appKitRect(
+            forCGWindowBounds: window.frame,
+            displays: displaySpaces
+        )
+
+        return NSScreen.screens.first { $0.frame.intersects(windowRect) }
+    }
 }
 
 private final class ActiveRecordingSession {
@@ -534,6 +550,8 @@ enum RecordingError: LocalizedError, Equatable {
     case alreadyRecording
     case displayUnavailable
     case noRecordableWindows
+    case selectedWindowUnavailable
+    case windowSelectionFailed(status: Int32)
     case microphonePermissionDenied
     case mp4RecordingUnavailable
     case h264RecordingUnavailable
@@ -546,6 +564,10 @@ enum RecordingError: LocalizedError, Equatable {
             "Could not find the display to record."
         case .noRecordableWindows:
             "No recordable windows are available."
+        case .selectedWindowUnavailable:
+            "The selected window is no longer available for recording."
+        case .windowSelectionFailed(let status):
+            "Window selection failed with status \(status)."
         case .microphonePermissionDenied:
             "Microphone access is required to record microphone audio."
         case .mp4RecordingUnavailable:
@@ -556,7 +578,7 @@ enum RecordingError: LocalizedError, Equatable {
     }
 }
 
-private extension NSScreen {
+extension NSScreen {
     var displayID: CGDirectDisplayID? {
         (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)
             .map { CGDirectDisplayID($0.uint32Value) }
