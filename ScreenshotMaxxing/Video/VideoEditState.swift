@@ -264,6 +264,26 @@ struct VideoEditState: Equatable {
     }
 }
 
+struct VideoEditUndoHistory: Equatable {
+    private(set) var snapshots: [VideoEditState] = []
+
+    var canUndo: Bool {
+        !snapshots.isEmpty
+    }
+
+    mutating func record(_ state: VideoEditState) {
+        guard snapshots.last != state else {
+            return
+        }
+
+        snapshots.append(state)
+    }
+
+    mutating func undo() -> VideoEditState? {
+        snapshots.popLast()
+    }
+}
+
 struct VideoCompositionPlan: Equatable {
     let keptRanges: [VideoTimeRange]
 

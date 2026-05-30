@@ -78,6 +78,18 @@ struct ScreenshotEditorView: View {
         }
         .frame(minWidth: 640, minHeight: 420)
         .background(Color(nsColor: .windowBackgroundColor))
+        .overlay(alignment: .topLeading) {
+            undoCommandButton
+        }
+    }
+
+    private var undoCommandButton: some View {
+        Button("Undo Annotation", action: undoLastAnnotation)
+            .keyboardShortcut("z", modifiers: .command)
+            .disabled(editorState.annotations.isEmpty)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
     }
 
     private var unavailableImageView: some View {
@@ -183,6 +195,10 @@ struct ScreenshotEditorView: View {
 
     private func removeSelectedAnnotation() {
         editorState.removeSelectedAnnotation()
+    }
+
+    private func undoLastAnnotation() {
+        editorState.undoLastAnnotation()
     }
 
     private func persistStrokeToolSettings() {
