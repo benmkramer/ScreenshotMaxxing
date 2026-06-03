@@ -502,6 +502,14 @@ struct ScreenshotMaxxingTests {
         #expect(requestCount == 1)
     }
 
+    @Test func screenCapturePermissionTargetsScreenRecordingSettings() {
+        let expectedURL = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture")
+
+        #expect(AppPermission.screenCapture.settingsURL == expectedURL)
+        #expect(AppPermission.screenCapture.settingsURL?.absoluteString.contains("Privacy_Accessibility") == false)
+        #expect(AppPermission.directScreenAccess.settingsURL == nil)
+    }
+
     @Test func directScreenAccessStoresSuccessfulApproval() async {
         var approvalCompleted = false
         var requestCount = 0

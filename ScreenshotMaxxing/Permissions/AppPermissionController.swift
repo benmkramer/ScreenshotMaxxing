@@ -20,16 +20,16 @@ enum AppPermission: CaseIterable, Equatable, Identifiable {
         case .screenCapture:
             "Screen Recording"
         case .directScreenAccess:
-            "First Capture Approval"
+            "First Capture Check"
         }
     }
 
     var explanation: String {
         switch self {
         case .screenCapture:
-            "Allows ScreenshotMaxxing to capture your screen."
+            "Allows ScreenshotMaxxing to capture and record your screen in System Settings."
         case .directScreenAccess:
-            "Handles the macOS direct screen access approval before your first screenshot."
+            "Runs one test capture after Screen Recording is enabled so your first real capture can continue."
         }
     }
 
@@ -45,7 +45,7 @@ enum AppPermission: CaseIterable, Equatable, Identifiable {
     var settingsURL: URL? {
         switch self {
         case .screenCapture:
-            return URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+            return URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture")
         case .directScreenAccess:
             return nil
         }
