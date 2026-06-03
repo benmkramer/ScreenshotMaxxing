@@ -38,6 +38,33 @@ struct RecordingOptions: Equatable {
         self.microphoneEnabled = microphoneEnabled
         self.systemAudioEnabled = systemAudioEnabled
     }
+
+    var outputContainer: RecordingOutputContainer {
+        microphoneEnabled ? .mov : .mp4
+    }
+}
+
+enum RecordingOutputContainer: Equatable {
+    case mp4
+    case mov
+
+    var fileExtension: String {
+        switch self {
+        case .mp4:
+            "mp4"
+        case .mov:
+            "mov"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .mp4:
+            "MP4"
+        case .mov:
+            "MOV"
+        }
+    }
 }
 
 struct RecordingResult: Equatable {

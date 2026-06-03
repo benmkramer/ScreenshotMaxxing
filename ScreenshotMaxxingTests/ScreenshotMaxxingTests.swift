@@ -466,6 +466,18 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureOptionsView.availableRecordingModes == [.area, .window, .fullscreen])
     }
 
+    @Test func recordingOptionsKeepMp4ContainerWithoutMicrophone() {
+        #expect(RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: false).outputContainer == .mp4)
+        #expect(RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: true).outputContainer == .mp4)
+        #expect(RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: true).outputContainer.fileExtension == "mp4")
+    }
+
+    @Test func recordingOptionsUseMovContainerWithMicrophone() {
+        #expect(RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: false).outputContainer == .mov)
+        #expect(RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: true).outputContainer == .mov)
+        #expect(RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: true).outputContainer.fileExtension == "mov")
+    }
+
     @Test func screenCapturePermissionPreflightsGrantedAccess() {
         var preflightCount = 0
         var requestCount = 0

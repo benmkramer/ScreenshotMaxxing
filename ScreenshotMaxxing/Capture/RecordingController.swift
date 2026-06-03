@@ -50,17 +50,13 @@ final class RecordingController {
 
         do {
             try await stopCapture(activeSession.stream)
-            if await recoverCompletedRecordingIfPossible() {
-                return
-            }
-
-            completeRecording()
+            scheduleRecordingCompletionFallback(for: activeSession)
         } catch {
             if await recoverCompletedRecordingIfPossible() {
                 return
             }
 
-            completeWithError(error)
+            completeWithError(recordingFailureError(error, options: activeSession.options))
         }
     }
 
@@ -133,13 +129,14 @@ final class RecordingController {
             baseDirectory: baseDirectory,
             fileManager: fileManager
         )
+        let outputContainer = options.outputContainer
         let outputURL = FileLocations.uniqueOriginalFileURL(
             captureMode: options.mode.fileNamePrefix,
             directories: directories,
-            fileExtension: "mp4"
+            fileExtension: outputContainer.fileExtension
         )
         let streamConfiguration = makeStreamConfiguration(target: target, options: options)
-        let recordingConfiguration = try makeRecordingConfiguration(outputURL: outputURL)
+        let recordingConfiguration = try makeRecordingConfiguration(outputURL: outputURL, container: outputContainer)
         let delegate = RecordingOutputDelegate(
             didFail: { [weak self] recordingOutput, error in
                 self?.handleRecordingOutputFailure(error, from: recordingOutput)
@@ -192,11 +189,12 @@ final class RecordingController {
             return
         }
 
-        do {
-            let result = try makeRecordingResult(for: activeSession)
-            completeWithResult(result)
-        } catch {
-            completeWithError(error)
+        Task { @MainActor in
+            if await recoverCompletedRecordingIfPossible() {
+                return
+            }
+
+            completeWithError(RecordingError.recordingDidNotFinish)
         }
     }
 
@@ -211,7 +209,7 @@ final class RecordingController {
         }
 
         guard activeSession.didRequestStop else {
-            completeWithError(error)
+            completeWithError(recordingFailureError(error, options: activeSession.options))
             return
         }
 
@@ -220,7 +218,27 @@ final class RecordingController {
                 return
             }
 
-            completeWithError(error)
+            completeWithError(recordingFailureError(error, options: activeSession.options))
+        }
+    }
+
+    private func scheduleRecordingCompletionFallback(for activeSession: ActiveRecordingSession) {
+        activeSession.completionFallbackTask?.cancel()
+        activeSession.completionFallbackTask = Task { @MainActor [weak self, weak activeSession] in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+
+            guard let self,
+                  let activeSession,
+                  self.activeSession === activeSession,
+                  activeSession.didRequestStop else {
+                return
+            }
+
+            if await self.recoverCompletedRecordingIfPossible() {
+                return
+            }
+
+            self.completeWithError(RecordingError.recordingDidNotFinish)
         }
     }
 
@@ -278,6 +296,7 @@ final class RecordingController {
 
     private func completeWithResult(_ result: RecordingResult) {
         let continuation = continuation
+        activeSession?.completionFallbackTask?.cancel()
         activeSession?.toolbar.close()
         activeSession?.focusOverlay?.close()
         activeSession = nil
@@ -287,6 +306,7 @@ final class RecordingController {
 
     private func completeWithError(_ error: Error) {
         let continuation = continuation
+        activeSession?.completionFallbackTask?.cancel()
         activeSession?.toolbar.close()
         activeSession?.focusOverlay?.close()
         activeSession = nil
@@ -365,11 +385,14 @@ final class RecordingController {
         return configuration
     }
 
-    private func makeRecordingConfiguration(outputURL: URL) throws -> SCRecordingOutputConfiguration {
+    private func makeRecordingConfiguration(
+        outputURL: URL,
+        container: RecordingOutputContainer
+    ) throws -> SCRecordingOutputConfiguration {
         let configuration = SCRecordingOutputConfiguration()
 
-        guard configuration.availableOutputFileTypes.contains(.mp4) else {
-            throw RecordingError.mp4RecordingUnavailable
+        guard configuration.availableOutputFileTypes.contains(container.avFileType) else {
+            throw RecordingError.outputFileTypeUnavailable(container.displayName)
         }
 
         guard configuration.availableVideoCodecTypes.contains(.h264) else {
@@ -377,7 +400,7 @@ final class RecordingController {
         }
 
         configuration.outputURL = outputURL
-        configuration.outputFileType = .mp4
+        configuration.outputFileType = container.avFileType
         configuration.videoCodecType = .h264
 
         return configuration
@@ -421,6 +444,39 @@ final class RecordingController {
                 }
             }
         }
+    }
+
+    private func recordingFailureError(_ error: Error, options: RecordingOptions) -> RecordingError {
+        let nsError = error as NSError
+        if nsError.domain == SCStreamErrorDomain {
+            switch SCStreamError.Code(rawValue: nsError.code) {
+            case .failedToStartAudioCapture, .failedToStopAudioCapture:
+                return .systemAudioCaptureFailed(errorDetails(from: nsError))
+            case .failedToStartMicrophoneCapture:
+                return .microphoneCaptureFailed(errorDetails(from: nsError))
+            default:
+                break
+            }
+        }
+
+        if options.microphoneEnabled && options.systemAudioEnabled {
+            return .audioCaptureFailed(errorDetails(from: nsError))
+        }
+
+        if options.microphoneEnabled {
+            return .microphoneCaptureFailed(errorDetails(from: nsError))
+        }
+
+        if options.systemAudioEnabled {
+            return .systemAudioCaptureFailed(errorDetails(from: nsError))
+        }
+
+        return .recordingOutputFailed(errorDetails(from: nsError))
+    }
+
+    private func errorDetails(from error: NSError) -> String {
+        let description = error.localizedDescription
+        return "\(description) (\(error.domain) \(error.code))"
     }
 
     private func displayFilter(display: SCDisplay, content: SCShareableContent) -> SCContentFilter {
@@ -502,6 +558,7 @@ private final class ActiveRecordingSession {
     let thumbnailBaseDirectory: URL?
     var didRequestStop = false
     var didRequestRestart = false
+    var completionFallbackTask: Task<Void, Never>?
 
     init(
         options: RecordingOptions,
@@ -575,8 +632,13 @@ enum RecordingError: LocalizedError, Equatable {
     case selectedWindowUnavailable
     case windowSelectionFailed(status: Int32)
     case microphonePermissionDenied
-    case mp4RecordingUnavailable
+    case audioCaptureFailed(String)
+    case microphoneCaptureFailed(String)
+    case systemAudioCaptureFailed(String)
+    case outputFileTypeUnavailable(String)
     case h264RecordingUnavailable
+    case recordingOutputFailed(String)
+    case recordingDidNotFinish
 
     var errorDescription: String? {
         switch self {
@@ -592,10 +654,31 @@ enum RecordingError: LocalizedError, Equatable {
             "Window selection failed with status \(status)."
         case .microphonePermissionDenied:
             "Microphone access is required to record microphone audio."
-        case .mp4RecordingUnavailable:
-            "ScreenCaptureKit cannot record MP4 files on this Mac."
+        case .audioCaptureFailed(let details):
+            "Audio recording failed. Turn off Microphone or System Audio, or check audio recording permissions in System Settings. \(details)"
+        case .microphoneCaptureFailed(let details):
+            "Microphone recording failed. Turn off Microphone or check Microphone permission in System Settings. \(details)"
+        case .systemAudioCaptureFailed(let details):
+            "System audio recording failed. Turn off System Audio or check Screen & System Audio Recording permission in System Settings. \(details)"
+        case .outputFileTypeUnavailable(let fileType):
+            "ScreenCaptureKit cannot record \(fileType) files on this Mac."
         case .h264RecordingUnavailable:
             "ScreenCaptureKit cannot record H.264 video on this Mac."
+        case .recordingOutputFailed(let details):
+            "ScreenCaptureKit failed to finish the recording. \(details)"
+        case .recordingDidNotFinish:
+            "ScreenCaptureKit did not finish writing the recording file."
+        }
+    }
+}
+
+private extension RecordingOutputContainer {
+    var avFileType: AVFileType {
+        switch self {
+        case .mp4:
+            .mp4
+        case .mov:
+            .mov
         }
     }
 }
