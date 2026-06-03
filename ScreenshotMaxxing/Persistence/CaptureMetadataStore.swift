@@ -48,6 +48,8 @@ final class CaptureMetadataStore {
             width: result.width,
             height: result.height,
             durationSeconds: result.durationSeconds,
+            microphoneEnabled: result.microphoneEnabled,
+            systemAudioEnabled: result.systemAudioEnabled,
             thumbnailFilePath: result.thumbnailURL.fileSystemPath,
             originalFilePath: result.fileURL.fileSystemPath
         )
@@ -99,6 +101,8 @@ final class CaptureMetadataStore {
             width: Int(dimensions.width.rounded()),
             height: Int(dimensions.height.rounded()),
             durationSeconds: durationSeconds,
+            microphoneEnabled: sourceCapture?.microphoneEnabled ?? false,
+            systemAudioEnabled: sourceCapture?.systemAudioEnabled ?? false,
             thumbnailFilePath: thumbnailURL.fileSystemPath,
             originalFilePath: editedFileURL.fileSystemPath
         )

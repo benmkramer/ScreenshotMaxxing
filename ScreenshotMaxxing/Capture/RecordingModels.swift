@@ -74,4 +74,26 @@ struct RecordingResult: Equatable {
     let width: Int
     let height: Int
     let thumbnailURL: URL
+    let microphoneEnabled: Bool
+    let systemAudioEnabled: Bool
+
+    init(
+        mode: RecordingMode,
+        fileURL: URL,
+        durationSeconds: Double,
+        width: Int,
+        height: Int,
+        thumbnailURL: URL,
+        microphoneEnabled: Bool = false,
+        systemAudioEnabled: Bool = false
+    ) {
+        self.mode = mode
+        self.fileURL = fileURL
+        self.durationSeconds = durationSeconds
+        self.width = width
+        self.height = height
+        self.thumbnailURL = thumbnailURL
+        self.microphoneEnabled = microphoneEnabled
+        self.systemAudioEnabled = systemAudioEnabled
+    }
 }

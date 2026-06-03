@@ -12,6 +12,7 @@ import SwiftUI
 struct VideoEditorView: View {
     let videoURL: URL
     private let capture: Capture?
+    private let hasAudioTracks: Bool
     private let savedFilePresenter: SavedFilePresenter
     private let closeAction: () -> Void
 
@@ -20,6 +21,7 @@ struct VideoEditorView: View {
     @State private var currentTime: Double = 0
     @State private var isPlaying = false
     @State private var isExporting = false
+    @State private var isDetectingSilence = false
     @State private var statusMessage: String?
     @State private var playbackObserver: Any?
     @State private var pendingPlaybackSkipTarget: Double?
@@ -38,6 +40,8 @@ struct VideoEditorView: View {
         self.capture = capture
         self.savedFilePresenter = savedFilePresenter
         self.closeAction = closeAction
+        let asset = AVURLAsset(url: videoURL)
+        self.hasAudioTracks = !asset.tracks(withMediaType: .audio).isEmpty
         let durationSeconds = (try? VideoMetadataReader.metadata(for: videoURL).durationSeconds)
             ?? capture?.durationSeconds
             ?? 0
@@ -50,12 +54,15 @@ struct VideoEditorView: View {
             VideoEditorToolbar(
                 isPlaying: isPlaying,
                 isExporting: isExporting,
+                isDetectingSilence: isDetectingSilence,
                 currentTime: currentTime,
                 duration: editState.durationSeconds,
                 hasSelectedCut: editState.selectedRemovedRangeID != nil,
+                canDetectSilence: hasAudioTracks,
                 statusMessage: statusMessage,
                 playPauseAction: togglePlayback,
                 removeCutAction: removeSelectedCut,
+                detectSilenceAction: detectSilentBlocks,
                 copyAction: copyEditedVideo,
                 saveAction: saveEditedVideo,
                 copyAndDeleteAction: copyEditedVideoAndDeleteCapture
@@ -131,6 +138,72 @@ struct VideoEditorView: View {
 
         recordUndoSnapshot()
         editState.removeSelectedRange()
+    }
+
+    private func detectSilentBlocks() {
+        guard !isExporting, !isDetectingSilence else {
+            return
+        }
+
+        guard hasAudioTracks else {
+            statusMessage = "No audio track to scan"
+            return
+        }
+
+        isDetectingSilence = true
+        statusMessage = "Detecting silence..."
+        player.pause()
+        isPlaying = false
+
+        let videoURL = videoURL
+        Task {
+            defer {
+                isDetectingSilence = false
+            }
+
+            do {
+                let detectedRanges = try await Task.detached(priority: .userInitiated) {
+                    try VideoSilenceDetector().silentRanges(in: videoURL)
+                }.value
+                let ranges = detectedRanges.compactMap(clampedToCurrentTrim)
+
+                guard !ranges.isEmpty else {
+                    statusMessage = "No 1s+ silence found"
+                    return
+                }
+
+                recordUndoSnapshot()
+                for range in ranges {
+                    editState.addRemovedRange(range)
+                }
+
+                if let skipTarget = editState.playbackSkipTarget(
+                    for: currentTime,
+                    offset: Self.playbackSkipOffset
+                ) {
+                    seek(to: skipTarget)
+                }
+
+                statusMessage = silenceDetectionSummary(for: ranges.count)
+            } catch {
+                statusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func clampedToCurrentTrim(_ range: VideoTimeRange) -> VideoTimeRange? {
+        let start = min(max(range.start, editState.trimStart), editState.trimEnd)
+        let end = min(max(range.end, editState.trimStart), editState.trimEnd)
+
+        guard end > start else {
+            return nil
+        }
+
+        return VideoTimeRange(start: start, end: end, source: range.source)
+    }
+
+    private func silenceDetectionSummary(for count: Int) -> String {
+        count == 1 ? "Added 1 silence cut" : "Added \(count) silence cuts"
     }
 
     private func recordUndoSnapshot() {
@@ -403,17 +476,22 @@ private struct VideoPlayerSurface: NSViewRepresentable {
 private struct VideoEditorToolbar: View {
     let isPlaying: Bool
     let isExporting: Bool
+    let isDetectingSilence: Bool
     let currentTime: Double
     let duration: Double
     let hasSelectedCut: Bool
+    let canDetectSilence: Bool
     let statusMessage: String?
     let playPauseAction: () -> Void
     let removeCutAction: () -> Void
+    let detectSilenceAction: () -> Void
     let copyAction: () -> Void
     let saveAction: () -> Void
     let copyAndDeleteAction: () -> Void
 
     var body: some View {
+        let isBusy = isExporting || isDetectingSilence
+
         HStack(spacing: 8) {
             ToolbarIconButton(
                 systemImageName: isPlaying ? "pause.fill" : "play.fill",
@@ -438,6 +516,13 @@ private struct VideoEditorToolbar: View {
             .disabled(!hasSelectedCut)
             .keyboardShortcut(.delete, modifiers: [])
 
+            ToolbarIconButton(
+                systemImageName: "waveform",
+                helpText: silenceDetectionHelpText,
+                action: detectSilenceAction
+            )
+            .disabled(!canDetectSilence || isBusy)
+
             Spacer()
 
             if let statusMessage {
@@ -452,14 +537,14 @@ private struct VideoEditorToolbar: View {
                     helpText: "Save edited video and copy it to the clipboard",
                     action: copyAction
                 )
-                .disabled(isExporting)
+                .disabled(isBusy)
 
                 ToolbarIconButton(
                     systemImageName: "square.and.arrow.down",
                     helpText: "Save edited video, reveal it in Finder, and copy the file path",
                     action: saveAction
                 )
-                .disabled(isExporting)
+                .disabled(isBusy)
             }
 
             Divider()
@@ -470,11 +555,19 @@ private struct VideoEditorToolbar: View {
                 helpText: "Copy video to clipboard and delete it from history and disk",
                 action: copyAndDeleteAction
             )
-            .disabled(isExporting)
+            .disabled(isBusy)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var silenceDetectionHelpText: String {
+        if isDetectingSilence {
+            return "Detecting silence"
+        }
+
+        return canDetectSilence ? "Detect 1s+ silent blocks" : "No audio track to scan"
     }
 }
 
@@ -768,6 +861,12 @@ private struct TimelineCutRangeView: View {
             )
             .offset(y: 5)
 
+            if range.source.showsSilenceIndicator {
+                TimelineSilenceCutIndicator(isSelected: isSelected)
+                    .frame(width: rangeWidth, height: metrics.trackHeight)
+                    .offset(y: 5)
+            }
+
             TimelineCutResizeHandle(isSelected: isSelected)
 
             TimelineCutResizeHandle(isSelected: isSelected)
@@ -776,7 +875,7 @@ private struct TimelineCutRangeView: View {
         .frame(width: rangeWidth, height: metrics.trackHeight + 10, alignment: .topLeading)
         .offset(x: metrics.x(for: range.start), y: metrics.trackY - 5)
         .contentShape(Rectangle())
-        .help("Cut")
+        .help(range.source.helpText)
     }
 }
 
@@ -804,6 +903,23 @@ private struct TimelineCutRangeShape: View {
         }
 
         return isSelected ? Color.gray.opacity(0.68) : Color.gray.opacity(0.5)
+    }
+}
+
+private struct TimelineSilenceCutIndicator: View {
+    let isSelected: Bool
+
+    var body: some View {
+        Image(systemName: "waveform")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(isSelected ? 0.95 : 0.82))
+            .padding(.horizontal, 3)
+            .padding(.vertical, 1)
+            .background {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.black.opacity(isSelected ? 0.3 : 0.2))
+            }
+            .accessibilityLabel("Silence-detected cut")
     }
 }
 

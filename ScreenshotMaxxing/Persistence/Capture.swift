@@ -23,6 +23,8 @@ final class Capture {
     var width: Int
     var height: Int
     var durationSeconds: Double?
+    var microphoneEnabled: Bool = false
+    var systemAudioEnabled: Bool = false
     var thumbnailFilePath: String?
     var originalFilePath: String
     var editedFilePath: String?
@@ -37,6 +39,8 @@ final class Capture {
         width: Int,
         height: Int,
         durationSeconds: Double? = nil,
+        microphoneEnabled: Bool = false,
+        systemAudioEnabled: Bool = false,
         thumbnailFilePath: String? = nil,
         originalFilePath: String,
         editedFilePath: String? = nil,
@@ -50,6 +54,8 @@ final class Capture {
         self.width = width
         self.height = height
         self.durationSeconds = durationSeconds
+        self.microphoneEnabled = microphoneEnabled
+        self.systemAudioEnabled = systemAudioEnabled
         self.thumbnailFilePath = thumbnailFilePath
         self.originalFilePath = originalFilePath
         self.editedFilePath = editedFilePath

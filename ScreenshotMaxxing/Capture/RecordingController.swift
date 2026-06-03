@@ -277,7 +277,9 @@ final class RecordingController {
             durationSeconds: metadata.durationSeconds,
             width: Int(dimensions.width.rounded()),
             height: Int(dimensions.height.rounded()),
-            thumbnailURL: thumbnailURL
+            thumbnailURL: thumbnailURL,
+            microphoneEnabled: activeSession.options.microphoneEnabled,
+            systemAudioEnabled: activeSession.options.systemAudioEnabled
         )
     }
 

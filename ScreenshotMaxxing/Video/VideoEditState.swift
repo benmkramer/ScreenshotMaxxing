@@ -7,31 +7,60 @@
 
 import Foundation
 
-struct VideoTimeRange: Identifiable, Equatable {
+enum VideoRemovedRangeSource: Equatable, Sendable {
+    case manual
+    case detectedSilence
+
+    nonisolated var showsSilenceIndicator: Bool {
+        self == .detectedSilence
+    }
+
+    nonisolated var helpText: String {
+        switch self {
+        case .manual:
+            "Cut"
+        case .detectedSilence:
+            "Silence-detected cut"
+        }
+    }
+
+    nonisolated func merging(_ other: VideoRemovedRangeSource) -> VideoRemovedRangeSource {
+        self == .detectedSilence || other == .detectedSilence ? .detectedSilence : .manual
+    }
+}
+
+struct VideoTimeRange: Identifiable, Equatable, Sendable {
     let id: UUID
     var start: Double
     var end: Double
+    var source: VideoRemovedRangeSource
 
-    init(id: UUID = UUID(), start: Double, end: Double) {
+    nonisolated init(
+        id: UUID = UUID(),
+        start: Double,
+        end: Double,
+        source: VideoRemovedRangeSource = .manual
+    ) {
         self.id = id
         self.start = start
         self.end = end
+        self.source = source
     }
 
-    var duration: Double {
+    nonisolated var duration: Double {
         max(end - start, 0)
     }
 
-    var normalized: VideoTimeRange {
+    nonisolated var normalized: VideoTimeRange {
         if start <= end {
             return self
         }
 
-        return VideoTimeRange(id: id, start: end, end: start)
+        return VideoTimeRange(id: id, start: end, end: start, source: source)
     }
 
     static func == (lhs: VideoTimeRange, rhs: VideoTimeRange) -> Bool {
-        lhs.start == rhs.start && lhs.end == rhs.end
+        lhs.start == rhs.start && lhs.end == rhs.end && lhs.source == rhs.source
     }
 }
 
@@ -239,7 +268,7 @@ struct VideoEditState: Equatable {
                     return nil
                 }
 
-                return VideoTimeRange(id: range.id, start: start, end: end)
+                return VideoTimeRange(id: range.id, start: start, end: end, source: range.source)
             }
             .sorted { first, second in
                 first.start == second.start ? first.end < second.end : first.start < second.start
@@ -253,6 +282,7 @@ struct VideoEditState: Equatable {
         for range in clamped.dropFirst() {
             if range.start <= current.end {
                 current.end = max(current.end, range.end)
+                current.source = current.source.merging(range.source)
             } else {
                 merged.append(current)
                 current = range

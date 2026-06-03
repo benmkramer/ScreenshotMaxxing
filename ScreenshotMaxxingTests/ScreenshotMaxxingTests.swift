@@ -852,6 +852,8 @@ struct ScreenshotMaxxingTests {
         #expect(capture.width == 2)
         #expect(capture.height == 3)
         #expect(capture.durationSeconds == nil)
+        #expect(!capture.microphoneEnabled)
+        #expect(!capture.systemAudioEnabled)
         #expect(capture.thumbnailFilePath == nil)
         #expect(capture.originalFilePath == imageURL.fileSystemPath)
         #expect(captures.count == 1)
@@ -908,6 +910,8 @@ struct ScreenshotMaxxingTests {
 
         #expect(capture.mediaType == CaptureMediaType.image.rawValue)
         #expect(capture.durationSeconds == nil)
+        #expect(!capture.microphoneEnabled)
+        #expect(!capture.systemAudioEnabled)
         #expect(capture.thumbnailFilePath == nil)
     }
 
@@ -924,7 +928,9 @@ struct ScreenshotMaxxingTests {
             durationSeconds: 12.5,
             width: 1920,
             height: 1080,
-            thumbnailURL: thumbnailURL
+            thumbnailURL: thumbnailURL,
+            microphoneEnabled: true,
+            systemAudioEnabled: true
         ))
         let captures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
 
@@ -932,9 +938,40 @@ struct ScreenshotMaxxingTests {
         #expect(capture.captureMode == "area")
         #expect(capture.mediaType == CaptureMediaType.video.rawValue)
         #expect(capture.durationSeconds == 12.5)
+        #expect(capture.microphoneEnabled)
+        #expect(capture.systemAudioEnabled)
         #expect(capture.thumbnailFilePath == thumbnailURL.fileSystemPath)
         #expect(capture.originalFilePath == videoURL.fileSystemPath)
         #expect(captures.count == 1)
+    }
+
+    @MainActor
+    @Test func captureMetadataStoreCarriesAudioFlagsToEditedVideoCaptures() throws {
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let store = CaptureMetadataStore(modelContainer: modelContainer)
+        let sourceCapture = Capture(
+            fileName: "recording-area.mov",
+            captureMode: "area",
+            mediaType: CaptureMediaType.video.rawValue,
+            width: 1920,
+            height: 1080,
+            durationSeconds: 12.5,
+            microphoneEnabled: true,
+            systemAudioEnabled: false,
+            thumbnailFilePath: "/tmp/recording-area-thumbnail.png",
+            originalFilePath: "/tmp/recording-area.mov"
+        )
+
+        let editedCapture = try store.saveEditedVideoCapture(
+            editedFileURL: URL(fileURLWithPath: "/tmp/recording-area-edited.mp4"),
+            thumbnailURL: URL(fileURLWithPath: "/tmp/recording-area-edited-thumbnail.png"),
+            sourceCapture: sourceCapture,
+            durationSeconds: 10,
+            dimensions: CGSize(width: 1920, height: 1080)
+        )
+
+        #expect(editedCapture.microphoneEnabled)
+        #expect(!editedCapture.systemAudioEnabled)
     }
 
     private func makePNGData(width: Int, height: Int) throws -> Data {
@@ -1945,6 +1982,46 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureHistoryData.detailText(for: videoCapture) == "Window - 1920x1080 - 1:15")
     }
 
+    @Test func videoSilenceDetectorIgnoresSubsecondSilenceAndFindsLongBlocks() {
+        let ranges = VideoSilenceDetector.silentRanges(
+            from: [
+                VideoSilenceDetector.AudioLevelWindow(start: 0, end: 0.4, rmsAmplitude: 0.02),
+                VideoSilenceDetector.AudioLevelWindow(start: 0.4, end: 0.9, rmsAmplitude: 0.001),
+                VideoSilenceDetector.AudioLevelWindow(start: 0.9, end: 1, rmsAmplitude: 0.02),
+                VideoSilenceDetector.AudioLevelWindow(start: 1, end: 1.6, rmsAmplitude: 0.001),
+                VideoSilenceDetector.AudioLevelWindow(start: 1.6, end: 2.2, rmsAmplitude: 0.001)
+            ],
+            configuration: VideoSilenceDetectionConfiguration(
+                minimumSilenceDuration: 1,
+                silenceThresholdDecibels: -45,
+                maximumNoiseGapDuration: 0,
+                edgePaddingDuration: 0
+            )
+        )
+
+        #expect(rangePairs(ranges) == [[1, 2.2]])
+        #expect(ranges.allSatisfy { $0.source == .detectedSilence })
+    }
+
+    @Test func videoSilenceDetectorMergesBriefNoiseAndPadsCutEdges() {
+        let ranges = VideoSilenceDetector.silentRanges(
+            from: [
+                VideoSilenceDetector.AudioLevelWindow(start: 0, end: 0.55, rmsAmplitude: 0.001),
+                VideoSilenceDetector.AudioLevelWindow(start: 0.55, end: 0.62, rmsAmplitude: 0.02),
+                VideoSilenceDetector.AudioLevelWindow(start: 0.62, end: 1.3, rmsAmplitude: 0.001)
+            ],
+            configuration: VideoSilenceDetectionConfiguration(
+                minimumSilenceDuration: 1,
+                silenceThresholdDecibels: -45,
+                maximumNoiseGapDuration: 0.12,
+                edgePaddingDuration: 0.1
+            )
+        )
+
+        #expect(rangePairs(ranges) == [[0.1, 1.2]])
+        #expect(ranges.allSatisfy { $0.source == .detectedSilence })
+    }
+
     @Test func videoEditStateKeepsTrimOnlyRange() {
         let state = VideoEditState(durationSeconds: 10, trimStart: 2, trimEnd: 8)
 
@@ -1982,6 +2059,29 @@ struct ScreenshotMaxxingTests {
         )
 
         #expect(rangePairs(state.keptRanges) == [[0, 2], [8, 10]])
+    }
+
+    @Test func videoEditStatePreservesSilenceCutSource() throws {
+        var state = VideoEditState(durationSeconds: 10)
+
+        state.addRemovedRange(VideoTimeRange(start: 4, end: 5, source: .detectedSilence))
+
+        let range = try #require(state.removedRanges.first)
+        #expect(range.source == .detectedSilence)
+    }
+
+    @Test func videoEditStateMarksMergedCutAsSilenceWhenDetectedRangeOverlapsManualCut() throws {
+        let state = VideoEditState(
+            durationSeconds: 10,
+            removedRanges: [
+                VideoTimeRange(start: 2, end: 5),
+                VideoTimeRange(start: 4, end: 8, source: .detectedSilence)
+            ]
+        )
+
+        let range = try #require(state.removedRanges.first)
+        #expect(rangePairs(state.removedRanges) == [[2, 8]])
+        #expect(range.source == .detectedSilence)
     }
 
     @Test func videoEditStateIgnoresZeroLengthCuts() {
