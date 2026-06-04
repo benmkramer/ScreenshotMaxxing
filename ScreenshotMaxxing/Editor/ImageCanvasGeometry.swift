@@ -10,6 +10,13 @@ import CoreGraphics
 struct ImageCanvasGeometry: Equatable {
     let imageSize: CGSize
     let containerSize: CGSize
+    let displayScale: CGFloat
+
+    init(imageSize: CGSize, containerSize: CGSize, displayScale: CGFloat = 1) {
+        self.imageSize = imageSize
+        self.containerSize = containerSize
+        self.displayScale = displayScale
+    }
 
     var imageRect: CGRect {
         guard imageSize.width > 0,
@@ -19,7 +26,13 @@ struct ImageCanvasGeometry: Equatable {
             return .zero
         }
 
-        let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+        let boundedDisplayScale = max(displayScale, 1)
+        let maximumPreviewScale = 1 / boundedDisplayScale
+        let scale = min(
+            containerSize.width / imageSize.width,
+            containerSize.height / imageSize.height,
+            maximumPreviewScale
+        )
         let fittedSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
         let origin = CGPoint(
             x: (containerSize.width - fittedSize.width) / 2,

@@ -222,13 +222,15 @@ struct ScreenshotImageCanvas: View {
     @Binding var draftBlurRect: CGRect?
     @Binding var draftStroke: AnnotationStroke?
     @Binding var draftArrow: AnnotationArrow?
+    @Environment(\.displayScale) private var displayScale
     @State private var activeAnnotationDrag: AnnotationDrag?
 
     var body: some View {
         GeometryReader { proxy in
             let geometry = ImageCanvasGeometry(
                 imageSize: image.pixelSize,
-                containerSize: proxy.size
+                containerSize: proxy.size,
+                displayScale: displayScale
             )
             let previewBlurRadius = geometry.viewDistance(forImageDistance: ImageRenderer.defaultBlurRadius)
 

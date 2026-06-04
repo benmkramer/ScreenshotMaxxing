@@ -1023,6 +1023,26 @@ struct ScreenshotMaxxingTests {
         #expect(geometry.imageRect == CGRect(x: 0, y: 25, width: 100, height: 50))
     }
 
+    @Test func imageCanvasDoesNotUpscaleSmallImageOnNonRetinaDisplay() {
+        let geometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 400, height: 300),
+            displayScale: 1
+        )
+
+        #expect(geometry.imageRect == CGRect(x: 100, y: 100, width: 200, height: 100))
+    }
+
+    @Test func imageCanvasLimitsPreviewToNativePixelsOnRetinaDisplay() {
+        let geometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 400, height: 300),
+            displayScale: 2
+        )
+
+        #expect(geometry.imageRect == CGRect(x: 150, y: 125, width: 100, height: 50))
+    }
+
     @Test func imageCanvasConvertsViewRectToImageCoordinates() throws {
         let geometry = ImageCanvasGeometry(
             imageSize: CGSize(width: 200, height: 100),
