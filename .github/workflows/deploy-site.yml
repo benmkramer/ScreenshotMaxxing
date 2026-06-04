@@ -1,0 +1,83 @@
+name: Deploy Site
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - site/**
+      - .github/workflows/deploy-site.yml
+  workflow_run:
+    workflows:
+      - Release DMG
+    types:
+      - completed
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy GitHub Pages
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Generate latest release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          export RAW_RELEASE="$RUNNER_TEMP/release.raw.json"
+          if ! gh release view --repo "$GITHUB_REPOSITORY" --json tagName,name,url,publishedAt,assets > "$RAW_RELEASE"; then
+            echo "No published release found; site will use fallback release link."
+            rm -f site/release.json
+            exit 0
+          fi
+
+          ruby <<'RUBY'
+          require "json"
+
+          raw_path = ENV.fetch("RAW_RELEASE")
+          release = JSON.parse(File.read(raw_path))
+          assets = release.fetch("assets", [])
+          asset = assets.find { |item| item["name"].to_s.end_with?(".dmg") } || assets.first || {}
+
+          site_release = {
+            tagName: release["tagName"],
+            name: release["name"],
+            url: release["url"],
+            publishedAt: release["publishedAt"],
+            assetName: asset["name"],
+            downloadUrl: asset["url"],
+            digest: asset["digest"],
+          }.compact
+
+          File.write("site/release.json", JSON.pretty_generate(site_release))
+          RUBY
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
