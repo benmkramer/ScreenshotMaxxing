@@ -13,8 +13,10 @@ scripts/release-dmg.sh
 The script archives the app, exports a Developer ID-signed `.app`, and creates:
 
 ```text
-dist/ScreenshotMaxxing-<marketing-version>-<build>.dmg
+dist/ScreenshotMaxxing-<marketing-version>.dmg
 ```
+
+The public DMG filename uses only the marketing version. The build number still lives in the app bundle as `CFBundleVersion` / `CURRENT_PROJECT_VERSION` and appears in release logs and release notes as `version (build)`.
 
 To notarize and staple the DMG, first create a notarytool keychain profile:
 
@@ -81,6 +83,8 @@ scripts/set-release-version.sh <marketing-version> [build-number]
 If no build number is provided, the script sets `CURRENT_PROJECT_VERSION` to the current maximum build number plus one. The workflow opens or updates a `release/v<version>` pull request with the Xcode project version changes.
 
 When that pull request merges to `main`, the `Release DMG` workflow checks whether `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` changed in `ScreenshotMaxxing.xcodeproj/project.pbxproj`. If either changed, it builds the app, exports the Developer ID-signed app, notarizes and staples the DMG, uploads the DMG as a workflow artifact, and creates or updates the matching GitHub Release tag.
+
+Public release artifacts are named after `MARKETING_VERSION`, for example `ScreenshotMaxxing-1.0.1.dmg`. `CURRENT_PROJECT_VERSION` remains the monotonic build number inside the app bundle.
 
 The `Release DMG` workflow can also be run as a dry run before merging release automation changes. Pushes to `codex-*` branches that touch the release workflow, export options, release script, or Xcode project build a signed and notarized DMG and upload it as a workflow artifact, but do not create or update a GitHub Release. The workflow can also be triggered manually with `publish_release` left disabled for the same dry-run behavior.
 

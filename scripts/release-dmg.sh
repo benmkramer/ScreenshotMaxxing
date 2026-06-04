@@ -27,7 +27,7 @@ usage() {
   cat <<USAGE
 Usage: scripts/release-dmg.sh
 
-Builds a Developer ID export and creates dist/$APP_NAME-<marketing-version>-<build>.dmg.
+Builds a Developer ID export and creates dist/$APP_NAME-<marketing-version>.dmg.
 
 Environment:
   DERIVED_DATA_PATH           Defaults to /private/tmp/ScreenshotMaxxingDerivedData
@@ -135,7 +135,7 @@ fi
 INFO_PLIST="$APP_BUNDLE/Contents/Info.plist"
 MARKETING_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
 BUILD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST")"
-DMG_NAME="$APP_NAME-$MARKETING_VERSION-$BUILD_VERSION.dmg"
+DMG_NAME="$APP_NAME-$MARKETING_VERSION.dmg"
 DMG_PATH="$DIST_DIR/$DMG_NAME"
 DMG_ROOT="$BUILD_DIR/dmg-root"
 DMG_TEMP_PATH="$BUILD_DIR/$APP_NAME-rw.dmg"
@@ -160,7 +160,7 @@ cleanup_dmg_mount() {
 
 trap cleanup_dmg_mount EXIT
 
-printf 'Creating %s...\n' "$DMG_PATH"
+printf 'Creating %s for %s %s (%s)...\n' "$DMG_PATH" "$APP_NAME" "$MARKETING_VERSION" "$BUILD_VERSION"
 rm -rf "$DMG_ROOT" "$DMG_PATH" "$DMG_TEMP_PATH"
 mkdir -p "$DMG_ROOT/.background"
 python3 "$SCRIPT_DIR/render-dmg-background.py" "$DMG_ROOT/.background/$DMG_BACKGROUND_NAME"
