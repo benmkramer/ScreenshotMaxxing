@@ -60,7 +60,12 @@ struct ScreenshotEditorView: View {
                                 persistStrokeToolSettings()
                             }
                         ),
+                        selectedBlurRadius: Binding(
+                            get: { editorState.selectedBlurRadius },
+                            set: { editorState.updateSelectedBlurRadius($0) }
+                        ),
                         showsStrokeControls: editorState.selectedTool.showsStrokeControls || editorState.selectedAnnotationUsesStrokeStyle,
+                        showsBlurControls: editorState.selectedTool == .blur || editorState.selectedAnnotationUsesBlurStyle,
                         selectedAnnotationID: editorState.selectedAnnotationID,
                         statusMessage: statusMessage,
                         deleteAction: removeSelectedAnnotation,
@@ -232,7 +237,7 @@ struct ScreenshotImageCanvas: View {
                 containerSize: proxy.size,
                 displayScale: displayScale
             )
-            let previewBlurRadius = geometry.viewDistance(forImageDistance: ImageRenderer.defaultBlurRadius)
+            let draftPreviewBlurRadius = geometry.viewDistance(forImageDistance: editorState.selectedBlurRadius)
 
             ZStack(alignment: .topLeading) {
                 Color(nsColor: .underPageBackgroundColor)
@@ -251,18 +256,17 @@ struct ScreenshotImageCanvas: View {
                         imageFrame: geometry.imageRect,
                         containerSize: proxy.size,
                         geometry: geometry,
-                        blurRadius: previewBlurRadius,
                         isSelected: annotation.id == editorState.selectedAnnotationID
                     )
                 }
 
                 if let draftBlurRect {
-                    RedactionPreviewOverlay(
+                    BlurPreviewOverlay(
                         image: image,
                         imageFrame: geometry.imageRect,
                         containerSize: proxy.size,
                         rect: geometry.viewRect(forImageRect: draftBlurRect),
-                        blurRadius: previewBlurRadius,
+                        blurRadius: draftPreviewBlurRadius,
                         isSelected: false,
                         isDraft: true
                     )
@@ -353,7 +357,7 @@ struct ScreenshotImageCanvas: View {
                         fromViewStart: value.startLocation,
                         toViewEnd: value.location
                    ) {
-                    editorState.addBlurRect(imageRect)
+                    editorState.addBlurRect(imageRect, radius: editorState.selectedBlurRadius)
                     return
                 }
 
@@ -569,18 +573,17 @@ private struct AnnotationPreviewOverlay: View {
     let imageFrame: CGRect
     let containerSize: CGSize
     let geometry: ImageCanvasGeometry
-    let blurRadius: CGFloat
     let isSelected: Bool
 
     var body: some View {
         switch annotation.type {
-        case .blur:
-            RedactionPreviewOverlay(
+        case .blur(let blur):
+            BlurPreviewOverlay(
                 image: image,
                 imageFrame: imageFrame,
                 containerSize: containerSize,
                 rect: geometry.viewRect(forImageRect: annotation.rect),
-                blurRadius: blurRadius,
+                blurRadius: geometry.viewDistance(forImageDistance: blur.radius),
                 isSelected: isSelected,
                 isDraft: false
             )
@@ -698,7 +701,7 @@ private struct StrokePreviewOverlay: View {
     }
 }
 
-private struct RedactionPreviewOverlay: View {
+private struct BlurPreviewOverlay: View {
     let image: NSImage
     let imageFrame: CGRect
     let containerSize: CGSize
@@ -764,7 +767,9 @@ private struct EditorToolbar: View {
     @Binding var selectedTool: EditorTool
     @Binding var selectedStrokeColor: AnnotationColor
     @Binding var selectedStrokeLineWidth: CGFloat
+    @Binding var selectedBlurRadius: Double
     let showsStrokeControls: Bool
+    let showsBlurControls: Bool
     let selectedAnnotationID: UUID?
     let statusMessage: String?
     let deleteAction: () -> Void
@@ -801,6 +806,13 @@ private struct EditorToolbar: View {
                     selectedColor: $selectedStrokeColor,
                     selectedLineWidth: $selectedStrokeLineWidth
                 )
+            }
+
+            if showsBlurControls {
+                Divider()
+                    .frame(height: 22)
+
+                BlurControls(selectedBlurRadius: $selectedBlurRadius)
             }
 
             Spacer()
@@ -860,6 +872,31 @@ private struct ToolButton: View {
         .foregroundStyle(isSelected ? Color.white : Color.primary)
         .accessibilityLabel(tool.displayName)
         .help(tool.helpText)
+    }
+}
+
+private struct BlurControls: View {
+    @Binding var selectedBlurRadius: Double
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "circle.grid.cross")
+                .foregroundStyle(.secondary)
+
+            Slider(
+                value: $selectedBlurRadius,
+                in: ScreenshotEditorState.minimumBlurRadius...ScreenshotEditorState.maximumBlurRadius,
+                step: 1
+            )
+            .frame(width: 112)
+
+            Text("\(Int(selectedBlurRadius.rounded()))")
+                .monospacedDigit()
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 24, alignment: .trailing)
+        }
+        .help("Blur strength. Use stronger blur for sensitive content.")
     }
 }
 

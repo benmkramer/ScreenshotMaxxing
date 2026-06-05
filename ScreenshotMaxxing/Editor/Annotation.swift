@@ -25,11 +25,35 @@ struct Annotation: Identifiable, Equatable {
 }
 
 enum AnnotationType: Equatable {
-    case blur
+    case blur(AnnotationBlur)
     case stroke(AnnotationStroke)
     case rectangle
     case arrow(AnnotationArrow)
     case text(String)
+}
+
+struct AnnotationBlur: Equatable {
+    static let minimumRadius: Double = 1
+    static let maximumRadius: Double = 80
+    static let defaultRadius: Double = 12
+
+    var radius: Double
+
+    init(radius: Double = Self.defaultRadius) {
+        self.radius = Self.clampedRadius(radius)
+    }
+
+    var normalized: AnnotationBlur {
+        AnnotationBlur(radius: radius)
+    }
+
+    static func clampedRadius(_ radius: Double) -> Double {
+        guard radius.isFinite else {
+            return defaultRadius
+        }
+
+        return min(max(radius, minimumRadius), maximumRadius)
+    }
 }
 
 struct AnnotationArrow: Equatable {

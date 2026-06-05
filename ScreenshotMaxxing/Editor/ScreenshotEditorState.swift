@@ -25,12 +25,15 @@ struct ScreenshotEditorState: Equatable {
     static let maximumStrokeLineWidth = AnnotationStrokeStyle.maximumLineWidth
     static let strokeSelectionHitPadding: CGFloat = 6
     static let arrowSelectionHitPadding: CGFloat = 6
+    static let minimumBlurRadius = AnnotationBlur.minimumRadius
+    static let maximumBlurRadius = AnnotationBlur.maximumRadius
 
     let originalImageURL: URL
     var selectedTool: EditorTool
     var annotations: [Annotation]
     var selectedAnnotationID: UUID?
     var strokeToolSettings: StrokeToolSettings
+    var blurToolSettings: AnnotationBlur
 
     var selectedAnnotationUsesStrokeStyle: Bool {
         guard let selectedAnnotationID,
@@ -46,6 +49,20 @@ struct ScreenshotEditorState: Equatable {
         }
     }
 
+    var selectedAnnotationUsesBlurStyle: Bool {
+        guard let selectedAnnotationID,
+              let annotation = annotation(id: selectedAnnotationID) else {
+            return false
+        }
+
+        switch annotation.type {
+        case .blur:
+            return true
+        case .stroke, .arrow, .rectangle, .text:
+            return false
+        }
+    }
+
     var selectedStrokeColor: AnnotationColor {
         selectedStrokeStyle.color
     }
@@ -54,28 +71,36 @@ struct ScreenshotEditorState: Equatable {
         selectedStrokeStyle.lineWidth
     }
 
+    var selectedBlurRadius: Double {
+        selectedBlurAnnotation()?.radius ?? blurToolSettings.radius
+    }
+
     init(
         originalImageURL: URL,
         selectedTool: EditorTool = .blur,
         annotations: [Annotation] = [],
         selectedAnnotationID: UUID? = nil,
-        strokeToolSettings: StrokeToolSettings = .defaultSettings
+        strokeToolSettings: StrokeToolSettings = .defaultSettings,
+        blurToolSettings: AnnotationBlur = AnnotationBlur()
     ) {
         self.originalImageURL = originalImageURL
         self.selectedTool = selectedTool
         self.annotations = annotations
         self.selectedAnnotationID = selectedAnnotationID
         self.strokeToolSettings = strokeToolSettings.normalized
+        self.blurToolSettings = blurToolSettings.normalized
     }
 
     @discardableResult
-    mutating func addBlurRect(_ rect: CGRect, id: UUID = UUID()) -> Annotation? {
+    mutating func addBlurRect(_ rect: CGRect, radius: Double? = nil, id: UUID = UUID()) -> Annotation? {
         guard rect.width > 0, rect.height > 0 else {
             return nil
         }
 
-        let annotation = Annotation(id: id, type: .blur, rect: rect)
+        let blur = AnnotationBlur(radius: radius ?? selectedBlurRadius)
+        let annotation = Annotation(id: id, type: .blur(blur), rect: rect)
         annotations.append(annotation)
+        blurToolSettings = blur
         selectAnnotation(id: annotation.id)
         return annotation
     }
@@ -150,6 +175,10 @@ struct ScreenshotEditorState: Equatable {
 
     mutating func selectAnnotation(id: UUID?) {
         selectedAnnotationID = id
+        if let id,
+           case .blur(let blur) = annotation(id: id)?.type {
+            blurToolSettings = blur.normalized
+        }
     }
 
     @discardableResult
@@ -260,6 +289,14 @@ struct ScreenshotEditorState: Equatable {
         }
     }
 
+    mutating func updateSelectedBlurRadius(_ radius: Double) {
+        let blur = AnnotationBlur(radius: radius)
+        blurToolSettings = blur
+        updateSelectedBlur { selectedBlur in
+            selectedBlur = blur
+        }
+    }
+
     func strokeStyle(for kind: AnnotationStrokeKind) -> AnnotationStrokeStyle {
         strokeToolSettings.style(for: kind)
     }
@@ -307,6 +344,26 @@ struct ScreenshotEditorState: Equatable {
         update(&arrow)
         annotations[annotationIndex].type = .arrow(arrow)
         annotations[annotationIndex].rect = arrow.visibleBounds
+    }
+
+    private mutating func updateSelectedBlur(_ update: (inout AnnotationBlur) -> Void) {
+        guard let selectedAnnotationID,
+              let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
+              case .blur(var blur) = annotations[annotationIndex].type else {
+            return
+        }
+
+        update(&blur)
+        annotations[annotationIndex].type = .blur(blur.normalized)
+    }
+
+    private func selectedBlurAnnotation() -> AnnotationBlur? {
+        guard let selectedAnnotationID,
+              case .blur(let blur) = annotation(id: selectedAnnotationID)?.type else {
+            return nil
+        }
+
+        return blur
     }
 
     private func selectedStrokeAnnotation() -> AnnotationStroke? {

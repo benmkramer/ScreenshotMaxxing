@@ -12,14 +12,12 @@ import ImageIO
 import UniformTypeIdentifiers
 
 struct ImageRenderer {
-    static let defaultBlurRadius: Double = 12
+    static let defaultBlurRadius = AnnotationBlur.defaultRadius
 
     private let context: CIContext
-    private let blurRadius: Double
 
-    init(blurRadius: Double = Self.defaultBlurRadius) {
+    init() {
         self.context = CIContext()
-        self.blurRadius = blurRadius
     }
 
     func renderPNG(imageURL: URL, annotations: [Annotation]) throws -> Data {
@@ -36,8 +34,8 @@ struct ImageRenderer {
     func render(sourceImage: CIImage, annotations: [Annotation]) throws -> CIImage {
         try annotations.reduce(sourceImage.cropped(to: sourceImage.extent)) { currentImage, annotation in
             switch annotation.type {
-            case .blur:
-                renderBlur(on: currentImage, imageRect: annotation.rect)
+            case .blur(let blur):
+                renderBlur(on: currentImage, imageRect: annotation.rect, radius: blur.radius)
             case .stroke(let stroke):
                 try renderStroke(stroke, over: currentImage)
             case .arrow(let arrow):
@@ -89,7 +87,7 @@ struct ImageRenderer {
         return data as Data
     }
 
-    private func renderBlur(on image: CIImage, imageRect: CGRect) -> CIImage {
+    private func renderBlur(on image: CIImage, imageRect: CGRect, radius: Double) -> CIImage {
         let blurRect = coreImageRect(forImageRect: imageRect, imageHeight: image.extent.height)
             .intersection(image.extent)
 
@@ -99,7 +97,7 @@ struct ImageRenderer {
 
         let blurredImage = image
             .clampedToExtent()
-            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: blurRadius])
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: AnnotationBlur.clampedRadius(radius)])
             .cropped(to: image.extent)
 
         return blurredImage

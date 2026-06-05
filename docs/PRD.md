@@ -2,7 +2,7 @@
 
 ## Product Summary
 
-ScreenshotMaxxing is a native macOS screenshot utility. It lives in the menu bar, supports keyboard shortcuts, captures areas/windows/fullscreen, opens screenshots in a lightweight editor, supports privacy-safe blur/pixelation redaction, and stores captures locally with metadata.
+ScreenshotMaxxing is a native macOS screenshot utility. It lives in the menu bar, supports keyboard shortcuts, captures areas/windows/fullscreen, opens screenshots in a lightweight editor, supports adjustable blur-based obscuration, and stores captures locally with metadata.
 
 ## Technical Direction
 
@@ -23,7 +23,7 @@ ScreenshotMaxxing is a native macOS screenshot utility. It lives in the menu bar
 - The app should feel like a Mac utility, not a document editor.
 - Screenshots are local-first.
 - Image files stay on disk; metadata stays in SwiftData.
-- Redaction must modify exported pixels, not just overlay a visual effect.
+- Blur/obscuration must modify exported pixels, not just overlay a visual effect. Stronger blur settings are recommended for sensitive content; blur is not certified irreversible redaction.
 - Prefer small working vertical slices over broad unfinished systems.
 
 ## V1 Scope
@@ -35,7 +35,7 @@ ScreenshotMaxxing is a native macOS screenshot utility. It lives in the menu bar
 - Capture window
 - Capture fullscreen
 - Editor window after capture
-- Blur/pixelate redaction rectangle
+- Adjustable blur obscuration rectangle
 - Basic annotation primitives
 - Copy edited image
 - Save edited image
@@ -168,7 +168,7 @@ ScreenshotMaxxing/
 | 9 | Done | Editor canvas | Display screenshot with correct scaling | Image fits window without distortion |
 | 10 | Done | Blur annotation model | Represent blur rectangles separately from image pixels | Drawing state stores one or more blur rects |
 | 11 | Done | Draw blur rectangles | Let user drag to place blur regions | User can draw visible blur selection rectangles |
-| 12 | Done | Render redactions | Bake blur into exported bitmap | Saved/copied image contains actual blurred pixels |
+| 12 | Done | Render blur regions | Bake blur into exported bitmap | Saved/copied image contains actual blurred pixels |
 | 13 | Done | Copy action | Copy edited image to clipboard | Paste into another app shows edited image |
 | 14 | Done | Save action | Save edited image to `edited/` folder | Edited file path is written and metadata updates |
 | 15 | Done | Basic history | Show recent captures from SwiftData | Relaunch app and previous captures still appear |
@@ -343,7 +343,7 @@ enum AnnotationType {
 
 ### 11. Draw Blur Rectangles
 
-Let user create redaction regions.
+Let user create blur regions.
 
 Tasks:
 
@@ -353,16 +353,16 @@ Tasks:
 - Add completed blur annotation on mouse up.
 - Support delete/undo soon after.
 
-### 12. Render Redactions
+### 12. Render Blur Regions
 
-Bake redactions into actual pixels.
+Bake blur regions into actual pixels.
 
 Tasks:
 
 - Add `ImageRenderer`.
 - Convert original image to `CIImage`.
-- Apply Gaussian blur or pixelation.
-- Crop blurred image to each redaction rectangle.
+- Apply adjustable Gaussian blur.
+- Crop blurred image to each blur rectangle.
 - Composite blurred region over original.
 - Export PNG.
 
@@ -478,7 +478,7 @@ Do these first, in order:
 8. Editor canvas
 9. Blur annotation model
 10. Draw blur rectangles
-11. Render redactions
+11. Render blur regions
 12. Copy action
 13. Save action
 

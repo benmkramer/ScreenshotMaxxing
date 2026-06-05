@@ -1067,8 +1067,45 @@ struct ScreenshotMaxxingTests {
         #expect(state.originalImageURL == imageURL)
         #expect(state.selectedTool == .blur)
         #expect(state.selectedAnnotationID == annotationID)
-        #expect(annotation == Annotation(id: annotationID, type: .blur, rect: CGRect(x: 20, y: 30, width: 40, height: 50)))
+        #expect(annotation == Annotation(
+            id: annotationID,
+            type: .blur(AnnotationBlur()),
+            rect: CGRect(x: 20, y: 30, width: 40, height: 50)
+        ))
         #expect(state.annotations == [annotation])
+    }
+
+    @MainActor
+    @Test func editorStateStoresCustomBlurStrengthOnBlurAnnotations() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000028")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+
+        state.updateSelectedBlurRadius(36)
+        let addedAnnotation = state.addBlurRect(CGRect(x: 20, y: 30, width: 40, height: 50), id: annotationID)
+        let annotation = try #require(addedAnnotation)
+
+        #expect(annotation == Annotation(
+            id: annotationID,
+            type: .blur(AnnotationBlur(radius: 36)),
+            rect: CGRect(x: 20, y: 30, width: 40, height: 50)
+        ))
+        #expect(state.selectedBlurRadius == 36)
+    }
+
+    @MainActor
+    @Test func editorStateUpdatesSelectedBlurStrength() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000029")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL)
+        state.addBlurRect(CGRect(x: 20, y: 30, width: 40, height: 50), id: annotationID)
+
+        state.updateSelectedBlurRadius(48)
+        let annotation = try #require(state.annotation(id: annotationID))
+
+        #expect(annotation.type == .blur(AnnotationBlur(radius: 48)))
+        #expect(state.selectedBlurRadius == 48)
+        #expect(state.selectedAnnotationUsesBlurStyle)
     }
 
     @MainActor
@@ -1585,7 +1622,7 @@ struct ScreenshotMaxxingTests {
         let renderedPNGData = try renderer.renderPNG(
             imageURL: imageURL,
             annotations: [
-                Annotation(type: .blur, rect: CGRect(x: 4, y: 0, width: 4, height: 8))
+                Annotation(type: .blur(AnnotationBlur()), rect: CGRect(x: 4, y: 0, width: 4, height: 8))
             ]
         )
         let changedPixels = try (4...7).contains { x in
@@ -1618,7 +1655,7 @@ struct ScreenshotMaxxingTests {
         let renderedPNGData = try renderer.renderPNG(
             imageURL: imageURL,
             annotations: [
-                Annotation(type: .blur, rect: CGRect(x: 0, y: 0, width: 8, height: 8))
+                Annotation(type: .blur(AnnotationBlur()), rect: CGRect(x: 0, y: 0, width: 8, height: 8))
             ]
         )
         let originalRed = try redChannel(in: uneditedPNGData, x: 5, y: 4)
@@ -1628,6 +1665,36 @@ struct ScreenshotMaxxingTests {
 
         #expect(abs(renderedRed - originalRed) > 0.01)
         #expect(abs(outsideRenderedRed - outsideOriginalRed) < 0.01)
+    }
+
+    @MainActor
+    @Test func imageRendererUsesCustomBlurStrengthForExportedPixels() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makeVerticalSplitPNGData(width: 48, height: 16).write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let blurRect = CGRect(x: 20, y: 0, width: 8, height: 16)
+        let defaultBlurPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [Annotation(type: .blur(AnnotationBlur()), rect: blurRect)]
+        )
+        let strongerBlurPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [Annotation(type: .blur(AnnotationBlur(radius: 48)), rect: blurRect)]
+        )
+        let defaultRed = try redChannel(in: defaultBlurPNGData, x: 22, y: 8)
+        let strongerRed = try redChannel(in: strongerBlurPNGData, x: 22, y: 8)
+
+        #expect(strongerBlurPNGData != defaultBlurPNGData)
+        #expect(abs(strongerRed - defaultRed) > 0.01)
     }
 
     @MainActor
