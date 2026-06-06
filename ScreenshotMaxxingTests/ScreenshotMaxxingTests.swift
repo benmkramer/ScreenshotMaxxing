@@ -343,8 +343,8 @@ struct ScreenshotMaxxingTests {
         #expect(visibleTitles[1] == "Capture Options (Control-Option-B)")
     }
 
-    @Test func editorToolbarOnlyShowsImplementedTools() {
-        #expect(EditorTool.implementedTools == [.select, .blur, .pen, .highlighter, .arrow])
+    @Test func editorToolbarShowsImplementedAnnotationTools() {
+        #expect(EditorTool.implementedTools == [.select, .blur, .pen, .highlighter, .rectangle, .arrow, .text])
     }
 
     @Test func editorStrokeToolSettingsUseSeparateDefaultSizes() {
@@ -1067,6 +1067,30 @@ struct ScreenshotMaxxingTests {
         #expect(geometry.imageRect == CGRect(x: 150, y: 125, width: 100, height: 50))
     }
 
+    @Test func imageCanvasZoomsPreviewPastNativePixelSize() {
+        let geometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 400, height: 300),
+            displayScale: 2,
+            zoomScale: 4
+        )
+
+        #expect(geometry.imageRect == CGRect(x: 0, y: 50, width: 400, height: 200))
+        #expect(geometry.contentSize == CGSize(width: 400, height: 300))
+    }
+
+    @Test func imageCanvasZoomCreatesScrollableContentWhenLargerThanViewport() {
+        let geometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 300, height: 200),
+            displayScale: 1,
+            zoomScale: 3
+        )
+
+        #expect(geometry.imageRect == CGRect(x: 0, y: 0, width: 600, height: 300))
+        #expect(geometry.contentSize == CGSize(width: 600, height: 300))
+    }
+
     @Test func imageCanvasConvertsViewRectToImageCoordinates() throws {
         let geometry = ImageCanvasGeometry(
             imageSize: CGSize(width: 200, height: 100),
@@ -1079,6 +1103,36 @@ struct ScreenshotMaxxingTests {
         #expect(geometry.viewRect(forImageRect: imageRect) == CGRect(x: 25, y: 25, width: 50, height: 25))
     }
 
+    @Test func imageCanvasConvertsZoomedViewRectToImageCoordinates() throws {
+        let geometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 300, height: 200),
+            displayScale: 1,
+            zoomScale: 3
+        )
+
+        let imageRect = try #require(geometry.imageRect(forViewRect: CGRect(x: 150, y: 75, width: 300, height: 150)))
+
+        #expect(imageRect == CGRect(x: 50, y: 25, width: 100, height: 50))
+        #expect(geometry.viewRect(forImageRect: imageRect) == CGRect(x: 150, y: 75, width: 300, height: 150))
+    }
+
+    @Test func imageCanvasScalesDistanceByZoom() {
+        let unzoomedGeometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 100, height: 100)
+        )
+        let zoomedGeometry = ImageCanvasGeometry(
+            imageSize: CGSize(width: 200, height: 100),
+            containerSize: CGSize(width: 100, height: 100),
+            zoomScale: 4
+        )
+
+        #expect(unzoomedGeometry.viewDistance(forImageDistance: ImageRenderer.defaultBlurRadius) == 6)
+        #expect(zoomedGeometry.viewDistance(forImageDistance: ImageRenderer.defaultBlurRadius) == 24)
+    }
+
+
     @MainActor
     @Test func editorStateStoresBlurRectAnnotationsInImageCoordinates() throws {
         let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
@@ -1089,7 +1143,7 @@ struct ScreenshotMaxxingTests {
         let annotation = try #require(addedAnnotation)
 
         #expect(state.originalImageURL == imageURL)
-        #expect(state.selectedTool == .blur)
+        #expect(state.selectedTool == .select)
         #expect(state.selectedAnnotationID == annotationID)
         #expect(annotation == Annotation(
             id: annotationID,
@@ -1319,6 +1373,115 @@ struct ScreenshotMaxxingTests {
         #expect(arrow.lineWidth == 14)
         #expect(state.strokeStyle(for: .pen) == AnnotationStrokeStyle(color: .black, lineWidth: 14))
         #expect(annotation.rect == arrow.visibleBounds)
+    }
+
+    @MainActor
+    @Test func editorStateStoresRectangleAnnotations() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000030")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL, selectedTool: .rectangle)
+
+        let addedAnnotation = state.addRectangle(CGRect(x: 20, y: 30, width: 40, height: 50), id: annotationID)
+        let annotation = try #require(addedAnnotation)
+
+        #expect(state.selectedAnnotationID == annotationID)
+        #expect(annotation == Annotation(
+            id: annotationID,
+            type: .rectangle(AnnotationRectangle()),
+            rect: CGRect(x: 20, y: 30, width: 40, height: 50)
+        ))
+        #expect(state.selectAnnotation(containing: CGPoint(x: 30, y: 40)) == annotationID)
+    }
+
+    @MainActor
+    @Test func editorStateUpdatesSelectedRectangleStyle() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000032")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL, selectedTool: .rectangle)
+
+        state.addRectangle(CGRect(x: 20, y: 30, width: 40, height: 50), id: annotationID)
+        state.updateSelectedRectangleColor(.blue)
+        state.updateSelectedRectangleLineWidth(9)
+
+        let annotation = try #require(state.annotation(id: annotationID))
+        guard case .rectangle(let rectangle) = annotation.type else {
+            Issue.record("Expected a rectangle annotation")
+            return
+        }
+
+        #expect(rectangle.color == .blue)
+        #expect(rectangle.lineWidth == 9)
+        #expect(state.selectedRectangleColor == .blue)
+        #expect(state.selectedRectangleLineWidth == 9)
+        #expect(state.rectangleToolSettings == AnnotationRectangle(color: .blue, lineWidth: 9))
+    }
+
+    @MainActor
+    @Test func editorStateStoresAndUpdatesTextAnnotations() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000031")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL, selectedTool: .text)
+
+        let addedAnnotation = state.addText("  Ship it  ", rect: CGRect(x: 20, y: 30, width: 80, height: 40), id: annotationID)
+        let annotation = try #require(addedAnnotation)
+
+        #expect(state.selectedAnnotationID == annotationID)
+        #expect(state.selectedAnnotationUsesTextContent)
+        #expect(annotation == Annotation(
+            id: annotationID,
+            type: .text(AnnotationText(content: "Ship it")),
+            rect: CGRect(x: 20, y: 30, width: 80, height: 40)
+        ))
+
+        state.updateSelectedText("Done now ")
+
+        #expect(state.annotation(id: annotationID)?.type == .text(AnnotationText(content: "Done now ")))
+        #expect(state.textContent(id: annotationID) == "Done now ")
+        state.updateText(id: annotationID, "Edited inline")
+        #expect(state.annotation(id: annotationID)?.type == .text(AnnotationText(content: "Edited inline")))
+        state.updateText(id: annotationID, "")
+        #expect(state.annotation(id: annotationID)?.type == .text(AnnotationText(content: "")))
+        #expect(state.selectAnnotation(containing: CGPoint(x: 30, y: 40)) == annotationID)
+    }
+
+    @MainActor
+    @Test func editorStateUpdatesSelectedTextStyle() throws {
+        let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
+        let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000033")!
+        var state = ScreenshotEditorState(originalImageURL: imageURL, selectedTool: .text)
+
+        state.addText("Label", rect: CGRect(x: 20, y: 30, width: 80, height: 40), id: annotationID)
+        state.updateSelectedTextColor(.green)
+        state.updateSelectedTextFontSize(36)
+
+        let annotation = try #require(state.annotation(id: annotationID))
+        guard case .text(let text) = annotation.type else {
+            Issue.record("Expected a text annotation")
+            return
+        }
+
+        #expect(text.content == "Label")
+        #expect(text.color == .green)
+        #expect(text.fontSize == 36)
+        #expect(state.selectedTextColor == .green)
+        #expect(state.selectedTextFontSize == 36)
+        #expect(state.textToolSettings.color == .green)
+        #expect(state.textToolSettings.fontSize == 36)
+    }
+
+    @MainActor
+    @Test func editorStateCreatesDefaultTextRectInsideImageBounds() {
+        let rect = ScreenshotEditorState.textRect(
+            startingAt: CGPoint(x: 190, y: 90),
+            within: CGSize(width: 200, height: 100)
+        )
+
+        #expect(rect == CGRect(
+            x: 40,
+            y: 52,
+            width: AnnotationText.defaultSize.width,
+            height: AnnotationText.defaultSize.height
+        ))
     }
 
     @MainActor
@@ -1810,6 +1973,119 @@ struct ScreenshotMaxxingTests {
 
         #expect(renderedColor.blueComponent > 0.5)
         #expect(renderedColor.redComponent < 0.4)
+    }
+
+    @MainActor
+    @Test func imageRendererBakesRectangleAnnotationsIntoPNG() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makeVerticalSplitPNGData(width: 12, height: 8).write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [Annotation(type: .rectangle(AnnotationRectangle()), rect: CGRect(x: 1, y: 1, width: 10, height: 6))]
+        )
+        let renderedColor = try color(in: renderedPNGData, x: 1, y: 1)
+
+        #expect(renderedColor.redComponent > 0.5)
+        #expect(renderedColor.greenComponent < 0.4)
+    }
+
+    @MainActor
+    @Test func imageRendererUsesRectangleStyleForExportedPixels() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makeVerticalSplitPNGData(width: 12, height: 8).write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [
+                Annotation(
+                    type: .rectangle(AnnotationRectangle(color: .blue, lineWidth: 6)),
+                    rect: CGRect(x: 1, y: 1, width: 10, height: 6)
+                )
+            ]
+        )
+        let hasBluePixel = try (1..<11).contains { x in
+            try (1..<7).contains { y in
+                let renderedColor = try color(in: renderedPNGData, x: x, y: y)
+                return renderedColor.blueComponent > 0.5 && renderedColor.redComponent < 0.4
+            }
+        }
+
+        #expect(hasBluePixel)
+    }
+
+    @MainActor
+    @Test func imageRendererBakesTextAnnotationsIntoPNG() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makeVerticalSplitPNGData(width: 80, height: 40).write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let uneditedPNGData = try renderer.renderPNG(imageURL: imageURL, annotations: [])
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [Annotation(type: .text(AnnotationText(content: "Text")), rect: CGRect(x: 2, y: 2, width: 76, height: 36))]
+        )
+
+        #expect(renderedPNGData != uneditedPNGData)
+    }
+
+    @MainActor
+    @Test func imageRendererUsesTextStyleForExportedPixels() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makeVerticalSplitPNGData(width: 80, height: 40).write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [
+                Annotation(
+                    type: .text(AnnotationText(content: "Text", color: .blue, fontSize: 32)),
+                    rect: CGRect(x: 2, y: 2, width: 76, height: 36)
+                )
+            ]
+        )
+        let hasBluePixel = try (2..<78).contains { x in
+            try (2..<38).contains { y in
+                let renderedColor = try color(in: renderedPNGData, x: x, y: y)
+                return renderedColor.blueComponent > 0.5 && renderedColor.redComponent < 0.4
+            }
+        }
+
+        #expect(hasBluePixel)
     }
 
     @MainActor

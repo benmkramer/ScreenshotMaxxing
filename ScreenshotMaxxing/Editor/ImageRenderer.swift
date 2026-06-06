@@ -9,6 +9,7 @@ import CoreImage
 import CoreGraphics
 import Foundation
 import ImageIO
+import AppKit
 import UniformTypeIdentifiers
 
 struct ImageRenderer {
@@ -40,8 +41,10 @@ struct ImageRenderer {
                 try renderStroke(stroke, over: currentImage)
             case .arrow(let arrow):
                 try renderArrow(arrow, over: currentImage)
-            case .rectangle, .text:
-                currentImage
+            case .rectangle(let rectangle):
+                try renderRectangle(rectangle, in: annotation.rect, over: currentImage)
+            case .text(let text):
+                try renderText(text, in: annotation.rect, over: currentImage)
             }
         }
     }
@@ -170,6 +173,49 @@ struct ImageRenderer {
         return CIImage(cgImage: renderedCGImage).cropped(to: image.extent)
     }
 
+    private func renderRectangle(_ rectangle: AnnotationRectangle, in rect: CGRect, over image: CIImage) throws -> CIImage {
+        try renderBitmap(over: image) { bitmapContext, imageHeight in
+            drawRectangle(rectangle, in: rect, context: bitmapContext, imageHeight: imageHeight)
+        }
+    }
+
+    private func renderText(_ text: AnnotationText, in rect: CGRect, over image: CIImage) throws -> CIImage {
+        try renderBitmap(over: image) { bitmapContext, imageHeight in
+            drawText(text, in: rect, context: bitmapContext, imageHeight: imageHeight)
+        }
+    }
+
+    private func renderBitmap(
+        over image: CIImage,
+        draw: (CGContext, CGFloat) -> Void
+    ) throws -> CIImage {
+        let width = Int(image.extent.width.rounded(.up))
+        let height = Int(image.extent.height.rounded(.up))
+
+        guard width > 0, height > 0,
+              let cgImage = context.createCGImage(image, from: image.extent),
+              let bitmapContext = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
+            throw ImageRendererError.renderFailed
+        }
+
+        bitmapContext.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        draw(bitmapContext, CGFloat(height))
+
+        guard let renderedCGImage = bitmapContext.makeImage() else {
+            throw ImageRendererError.renderFailed
+        }
+
+        return CIImage(cgImage: renderedCGImage).cropped(to: image.extent)
+    }
+
     private func draw(_ stroke: AnnotationStroke, in context: CGContext, imageHeight: CGFloat) {
         guard let firstPoint = stroke.points.first else {
             return
@@ -212,6 +258,46 @@ struct ImageRenderer {
         }
         context.strokePath()
         context.restoreGState()
+    }
+
+    private func drawRectangle(_ rectangle: AnnotationRectangle, in rect: CGRect, context: CGContext, imageHeight: CGFloat) {
+        context.saveGState()
+        context.translateBy(x: 0, y: imageHeight)
+        context.scaleBy(x: 1, y: -1)
+        context.setBlendMode(.normal)
+        context.setStrokeColor(rectangle.color.cgColor(opacity: 1))
+        context.setLineWidth(rectangle.lineWidth)
+        context.stroke(rect.standardized.insetBy(dx: rectangle.lineWidth / 2, dy: rectangle.lineWidth / 2))
+        context.restoreGState()
+    }
+
+    private func drawText(_ text: AnnotationText, in rect: CGRect, context: CGContext, imageHeight: CGFloat) {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .left
+        paragraphStyle.lineBreakMode = .byWordWrapping
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: text.fontSize, weight: .semibold),
+            .foregroundColor: NSColor(
+                calibratedRed: text.color.red,
+                green: text.color.green,
+                blue: text.color.blue,
+                alpha: 1
+            ),
+            .paragraphStyle: paragraphStyle
+        ]
+        let attributedText = NSAttributedString(string: text.content, attributes: attributes)
+        let textRect = CGRect(
+            x: rect.minX,
+            y: imageHeight - rect.maxY,
+            width: rect.width,
+            height: rect.height
+        )
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        attributedText.draw(in: textRect)
+        NSGraphicsContext.restoreGraphicsState()
     }
 }
 

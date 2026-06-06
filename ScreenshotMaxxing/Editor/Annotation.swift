@@ -27,9 +27,69 @@ struct Annotation: Identifiable, Equatable {
 enum AnnotationType: Equatable {
     case blur(AnnotationBlur)
     case stroke(AnnotationStroke)
-    case rectangle
+    case rectangle(AnnotationRectangle)
     case arrow(AnnotationArrow)
-    case text(String)
+    case text(AnnotationText)
+}
+
+struct AnnotationRectangle: Equatable {
+    static let minimumLineWidth: CGFloat = 1
+    static let maximumLineWidth: CGFloat = 24
+    static let defaultLineWidth: CGFloat = 4
+    static let defaultColor = AnnotationColor.red
+
+    var color: AnnotationColor
+    var lineWidth: CGFloat
+
+    init(color: AnnotationColor = Self.defaultColor, lineWidth: CGFloat = Self.defaultLineWidth) {
+        self.color = color
+        self.lineWidth = Self.clampedLineWidth(lineWidth)
+    }
+
+    var normalized: AnnotationRectangle {
+        AnnotationRectangle(color: color, lineWidth: lineWidth)
+    }
+
+    static func clampedLineWidth(_ lineWidth: CGFloat) -> CGFloat {
+        guard lineWidth.isFinite else {
+            return defaultLineWidth
+        }
+
+        return min(max(lineWidth, minimumLineWidth), maximumLineWidth)
+    }
+}
+
+struct AnnotationText: Equatable {
+    static let defaultText = "Text"
+    static let defaultColor = AnnotationColor.black
+    static let defaultFontSize: CGFloat = 24
+    static let minimumFontSize: CGFloat = 8
+    static let maximumFontSize: CGFloat = 96
+    static let minimumWidth: CGFloat = 40
+    static let minimumHeight: CGFloat = 24
+    static let defaultSize = CGSize(width: 160, height: 48)
+
+    var content: String
+    var color: AnnotationColor
+    var fontSize: CGFloat
+
+    init(content: String = Self.defaultText, color: AnnotationColor = Self.defaultColor, fontSize: CGFloat = Self.defaultFontSize) {
+        self.content = content
+        self.color = color
+        self.fontSize = Self.clampedFontSize(fontSize)
+    }
+
+    var normalized: AnnotationText {
+        AnnotationText(content: content, color: color, fontSize: fontSize)
+    }
+
+    static func clampedFontSize(_ fontSize: CGFloat) -> CGFloat {
+        guard fontSize.isFinite else {
+            return defaultFontSize
+        }
+
+        return min(max(fontSize, minimumFontSize), maximumFontSize)
+    }
 }
 
 struct AnnotationBlur: Equatable {

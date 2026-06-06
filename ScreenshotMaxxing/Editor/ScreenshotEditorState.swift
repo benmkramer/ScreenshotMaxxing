@@ -34,6 +34,8 @@ struct ScreenshotEditorState: Equatable {
     var selectedAnnotationID: UUID?
     var strokeToolSettings: StrokeToolSettings
     var blurToolSettings: AnnotationBlur
+    var rectangleToolSettings: AnnotationRectangle
+    var textToolSettings: AnnotationText
 
     var selectedAnnotationUsesStrokeStyle: Bool {
         guard let selectedAnnotationID,
@@ -63,6 +65,53 @@ struct ScreenshotEditorState: Equatable {
         }
     }
 
+    var selectedAnnotationUsesTextContent: Bool {
+        guard let selectedAnnotationID,
+              case .text = annotation(id: selectedAnnotationID)?.type else {
+            return false
+        }
+
+        return true
+    }
+
+    var selectedAnnotationUsesRectangleStyle: Bool {
+        guard let selectedAnnotationID,
+              case .rectangle = annotation(id: selectedAnnotationID)?.type else {
+            return false
+        }
+
+        return true
+    }
+
+    var selectedAnnotationUsesTextStyle: Bool {
+        selectedAnnotationUsesTextContent
+    }
+
+    var selectedText: String {
+        guard let selectedAnnotationID,
+              case .text(let text) = annotation(id: selectedAnnotationID)?.type else {
+            return AnnotationText.defaultText
+        }
+
+        return text.content
+    }
+
+    var selectedRectangleColor: AnnotationColor {
+        selectedRectangleAnnotation()?.color ?? rectangleToolSettings.color
+    }
+
+    var selectedRectangleLineWidth: CGFloat {
+        selectedRectangleAnnotation()?.lineWidth ?? rectangleToolSettings.lineWidth
+    }
+
+    var selectedTextColor: AnnotationColor {
+        selectedTextAnnotation()?.color ?? textToolSettings.color
+    }
+
+    var selectedTextFontSize: CGFloat {
+        selectedTextAnnotation()?.fontSize ?? textToolSettings.fontSize
+    }
+
     var selectedStrokeColor: AnnotationColor {
         selectedStrokeStyle.color
     }
@@ -77,11 +126,13 @@ struct ScreenshotEditorState: Equatable {
 
     init(
         originalImageURL: URL,
-        selectedTool: EditorTool = .blur,
+        selectedTool: EditorTool = .select,
         annotations: [Annotation] = [],
         selectedAnnotationID: UUID? = nil,
         strokeToolSettings: StrokeToolSettings = .defaultSettings,
-        blurToolSettings: AnnotationBlur = AnnotationBlur()
+        blurToolSettings: AnnotationBlur = AnnotationBlur(),
+        rectangleToolSettings: AnnotationRectangle = AnnotationRectangle(),
+        textToolSettings: AnnotationText = AnnotationText()
     ) {
         self.originalImageURL = originalImageURL
         self.selectedTool = selectedTool
@@ -89,6 +140,8 @@ struct ScreenshotEditorState: Equatable {
         self.selectedAnnotationID = selectedAnnotationID
         self.strokeToolSettings = strokeToolSettings.normalized
         self.blurToolSettings = blurToolSettings.normalized
+        self.rectangleToolSettings = rectangleToolSettings.normalized
+        self.textToolSettings = textToolSettings.normalized
     }
 
     @discardableResult
@@ -158,6 +211,36 @@ struct ScreenshotEditorState: Equatable {
         return annotation
     }
 
+    @discardableResult
+    mutating func addRectangle(_ rect: CGRect, id: UUID = UUID()) -> Annotation? {
+        guard rect.width > 0, rect.height > 0 else {
+            return nil
+        }
+
+        let rectangle = rectangleToolSettings.normalized
+        let annotation = Annotation(id: id, type: .rectangle(rectangle), rect: rect)
+        annotations.append(annotation)
+        selectAnnotation(id: annotation.id)
+        return annotation
+    }
+
+    @discardableResult
+    mutating func addText(_ text: String = AnnotationText.defaultText, rect: CGRect, id: UUID = UUID()) -> Annotation? {
+        guard rect.width > 0, rect.height > 0 else {
+            return nil
+        }
+
+        let textAnnotation = AnnotationText(
+            content: Self.normalizedText(text),
+            color: textToolSettings.color,
+            fontSize: textToolSettings.fontSize
+        )
+        let annotation = Annotation(id: id, type: .text(textAnnotation), rect: rect)
+        annotations.append(annotation)
+        selectAnnotation(id: annotation.id)
+        return annotation
+    }
+
     mutating func removeAnnotation(id: UUID) {
         annotations.removeAll { $0.id == id }
         if selectedAnnotationID == id {
@@ -175,9 +258,19 @@ struct ScreenshotEditorState: Equatable {
 
     mutating func selectAnnotation(id: UUID?) {
         selectedAnnotationID = id
-        if let id,
-           case .blur(let blur) = annotation(id: id)?.type {
+        guard let id else {
+            return
+        }
+
+        switch annotation(id: id)?.type {
+        case .blur(let blur):
             blurToolSettings = blur.normalized
+        case .rectangle(let rectangle):
+            rectangleToolSettings = rectangle.normalized
+        case .text(let text):
+            textToolSettings = text.normalized
+        case .stroke, .arrow, nil:
+            break
         }
     }
 
@@ -198,13 +291,21 @@ struct ScreenshotEditorState: Equatable {
             case .arrow(let arrow):
                 arrow.contains(imagePoint, hitPadding: Self.arrowSelectionHitPadding)
             case .rectangle, .text:
-                false
+                annotation.rect.standardized.contains(imagePoint)
             }
         }?.id
     }
 
     func annotation(id: UUID) -> Annotation? {
         annotations.first { $0.id == id }
+    }
+
+    func textContent(id: UUID) -> String? {
+        guard case .text(let text) = annotation(id: id)?.type else {
+            return nil
+        }
+
+        return text.content
     }
 
     mutating func moveAnnotation(id: UUID, from originalRect: CGRect, by translation: CGSize, within imageSize: CGSize) {
@@ -297,8 +398,64 @@ struct ScreenshotEditorState: Equatable {
         }
     }
 
+    mutating func updateSelectedText(_ text: String) {
+        guard let selectedAnnotationID else {
+            return
+        }
+
+        updateText(id: selectedAnnotationID, text)
+    }
+
+    mutating func updateText(id: UUID, _ text: String) {
+        guard
+              let annotationIndex = annotations.firstIndex(where: { $0.id == id }),
+              case .text(var textAnnotation) = annotations[annotationIndex].type else {
+            return
+        }
+
+        textAnnotation.content = Self.editableText(text)
+        annotations[annotationIndex].type = .text(textAnnotation.normalized)
+        textToolSettings = textAnnotation.normalized
+    }
+
+    mutating func updateSelectedRectangleColor(_ color: AnnotationColor) {
+        rectangleToolSettings.color = color
+        updateSelectedRectangle { rectangle in
+            rectangle.color = color
+        }
+    }
+
+    mutating func updateSelectedRectangleLineWidth(_ lineWidth: CGFloat) {
+        let clampedLineWidth = AnnotationRectangle.clampedLineWidth(lineWidth)
+        rectangleToolSettings.lineWidth = clampedLineWidth
+        updateSelectedRectangle { rectangle in
+            rectangle.lineWidth = clampedLineWidth
+        }
+    }
+
+    mutating func updateSelectedTextColor(_ color: AnnotationColor) {
+        textToolSettings.color = color
+        updateSelectedTextAnnotation { text in
+            text.color = color
+        }
+    }
+
+    mutating func updateSelectedTextFontSize(_ fontSize: CGFloat) {
+        let clampedFontSize = AnnotationText.clampedFontSize(fontSize)
+        textToolSettings.fontSize = clampedFontSize
+        updateSelectedTextAnnotation { text in
+            text.fontSize = clampedFontSize
+        }
+    }
+
     func strokeStyle(for kind: AnnotationStrokeKind) -> AnnotationStrokeStyle {
         strokeToolSettings.style(for: kind)
+    }
+
+    static func textRect(startingAt origin: CGPoint, within imageSize: CGSize) -> CGRect {
+        let imageBounds = CGRect(origin: .zero, size: imageSize)
+        let preferredRect = CGRect(origin: origin, size: AnnotationText.defaultSize)
+        return preferredRect.clamped(within: imageBounds)
     }
 
     private mutating func updateAnnotation(id: UUID, from originalAnnotation: Annotation, to rect: CGRect) {
@@ -357,6 +514,28 @@ struct ScreenshotEditorState: Equatable {
         annotations[annotationIndex].type = .blur(blur.normalized)
     }
 
+    private mutating func updateSelectedRectangle(_ update: (inout AnnotationRectangle) -> Void) {
+        guard let selectedAnnotationID,
+              let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
+              case .rectangle(var rectangle) = annotations[annotationIndex].type else {
+            return
+        }
+
+        update(&rectangle)
+        annotations[annotationIndex].type = .rectangle(rectangle.normalized)
+    }
+
+    private mutating func updateSelectedTextAnnotation(_ update: (inout AnnotationText) -> Void) {
+        guard let selectedAnnotationID,
+              let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
+              case .text(var text) = annotations[annotationIndex].type else {
+            return
+        }
+
+        update(&text)
+        annotations[annotationIndex].type = .text(text.normalized)
+    }
+
     private func selectedBlurAnnotation() -> AnnotationBlur? {
         guard let selectedAnnotationID,
               case .blur(let blur) = annotation(id: selectedAnnotationID)?.type else {
@@ -384,6 +563,24 @@ struct ScreenshotEditorState: Equatable {
         return arrow
     }
 
+    private func selectedRectangleAnnotation() -> AnnotationRectangle? {
+        guard let selectedAnnotationID,
+              case .rectangle(let rectangle) = annotation(id: selectedAnnotationID)?.type else {
+            return nil
+        }
+
+        return rectangle
+    }
+
+    private func selectedTextAnnotation() -> AnnotationText? {
+        guard let selectedAnnotationID,
+              case .text(let text) = annotation(id: selectedAnnotationID)?.type else {
+            return nil
+        }
+
+        return text
+    }
+
     private var activeStrokeStyleKind: AnnotationStrokeKind? {
         if selectedArrowAnnotation() != nil || selectedTool == .arrow {
             return .pen
@@ -408,6 +605,14 @@ struct ScreenshotEditorState: Equatable {
         return strokeToolSettings.style(for: strokeKind)
     }
 
+    private static func normalizedText(_ text: String) -> String {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedText.isEmpty ? AnnotationText.defaultText : trimmedText
+    }
+
+    private static func editableText(_ text: String) -> String {
+        text
+    }
 }
 
 private extension CGRect {

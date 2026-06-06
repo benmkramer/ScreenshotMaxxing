@@ -11,11 +11,22 @@ struct ImageCanvasGeometry: Equatable {
     let imageSize: CGSize
     let containerSize: CGSize
     let displayScale: CGFloat
+    let zoomScale: CGFloat
 
-    init(imageSize: CGSize, containerSize: CGSize, displayScale: CGFloat = 1) {
+    init(imageSize: CGSize, containerSize: CGSize, displayScale: CGFloat = 1, zoomScale: CGFloat = 1) {
         self.imageSize = imageSize
         self.containerSize = containerSize
         self.displayScale = displayScale
+        self.zoomScale = Self.clampedZoomScale(zoomScale)
+    }
+
+    var contentSize: CGSize {
+        let fittedSize = imageRect.size
+
+        return CGSize(
+            width: max(containerSize.width, fittedSize.width),
+            height: max(containerSize.height, fittedSize.height)
+        )
     }
 
     var imageRect: CGRect {
@@ -28,15 +39,20 @@ struct ImageCanvasGeometry: Equatable {
 
         let boundedDisplayScale = max(displayScale, 1)
         let maximumPreviewScale = 1 / boundedDisplayScale
-        let scale = min(
+        let fittedScale = min(
             containerSize.width / imageSize.width,
             containerSize.height / imageSize.height,
             maximumPreviewScale
         )
+        let scale = fittedScale * zoomScale
         let fittedSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        let canvasSize = CGSize(
+            width: max(containerSize.width, fittedSize.width),
+            height: max(containerSize.height, fittedSize.height)
+        )
         let origin = CGPoint(
-            x: (containerSize.width - fittedSize.width) / 2,
-            y: (containerSize.height - fittedSize.height) / 2
+            x: (canvasSize.width - fittedSize.width) / 2,
+            y: (canvasSize.height - fittedSize.height) / 2
         )
 
         return CGRect(origin: origin, size: fittedSize)
@@ -153,5 +169,13 @@ struct ImageCanvasGeometry: Equatable {
         }
 
         return CGFloat(imageDistance) * (rect.width / imageSize.width)
+    }
+
+    private static func clampedZoomScale(_ zoomScale: CGFloat) -> CGFloat {
+        guard zoomScale.isFinite else {
+            return 1
+        }
+
+        return min(max(zoomScale, 0.25), 8)
     }
 }

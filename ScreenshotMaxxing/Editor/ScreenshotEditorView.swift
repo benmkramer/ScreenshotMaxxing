@@ -18,8 +18,15 @@ struct ScreenshotEditorView: View {
     @State private var draftBlurRect: CGRect?
     @State private var draftStroke: AnnotationStroke?
     @State private var draftArrow: AnnotationArrow?
+    @State private var draftRectangleRect: CGRect?
+    @State private var draftTextRect: CGRect?
+    @State private var zoomScale: CGFloat = 1
+    @State private var magnificationGestureBaseZoomScale: CGFloat?
+    @State private var editingTextAnnotationID: UUID?
     @State private var statusMessage: String?
     private static let successfulActionCloseDelay: TimeInterval = 0.6
+    private static let minimumZoomScale: CGFloat = 0.5
+    private static let maximumZoomScale: CGFloat = 8
 
     init(
         imageURL: URL,
@@ -66,7 +73,25 @@ struct ScreenshotEditorView: View {
                         ),
                         showsStrokeControls: editorState.selectedTool.showsStrokeControls || editorState.selectedAnnotationUsesStrokeStyle,
                         showsBlurControls: editorState.selectedTool == .blur || editorState.selectedAnnotationUsesBlurStyle,
+                        showsTextControls: editorState.selectedTool == .text || editorState.selectedAnnotationUsesTextContent,
+                        showsRectangleControls: editorState.selectedTool == .rectangle || editorState.selectedAnnotationUsesRectangleStyle,
                         selectedAnnotationID: editorState.selectedAnnotationID,
+                        selectedRectangleColor: Binding(
+                            get: { editorState.selectedRectangleColor },
+                            set: { editorState.updateSelectedRectangleColor($0) }
+                        ),
+                        selectedRectangleLineWidth: Binding(
+                            get: { editorState.selectedRectangleLineWidth },
+                            set: { editorState.updateSelectedRectangleLineWidth($0) }
+                        ),
+                        selectedTextColor: Binding(
+                            get: { editorState.selectedTextColor },
+                            set: { editorState.updateSelectedTextColor($0) }
+                        ),
+                        selectedTextFontSize: Binding(
+                            get: { editorState.selectedTextFontSize },
+                            set: { editorState.updateSelectedTextFontSize($0) }
+                        ),
                         statusMessage: statusMessage,
                         deleteAction: removeSelectedAnnotation,
                         copyAction: copyEditedImage,
@@ -79,8 +104,19 @@ struct ScreenshotEditorView: View {
                         editorState: $editorState,
                         draftBlurRect: $draftBlurRect,
                         draftStroke: $draftStroke,
-                        draftArrow: $draftArrow
+                        draftArrow: $draftArrow,
+                        draftRectangleRect: $draftRectangleRect,
+                        draftTextRect: $draftTextRect,
+                        editingTextAnnotationID: $editingTextAnnotationID,
+                        zoomScale: zoomScale,
+                        scrollZoomAction: zoomByScroll
                     )
+                    .simultaneousGesture(canvasMagnificationGesture)
+                    .overlay(alignment: .bottomTrailing) {
+                        if showsResetZoomButton {
+                            resetZoomButton
+                        }
+                    }
                 }
             } else {
                 unavailableImageView
@@ -89,7 +125,20 @@ struct ScreenshotEditorView: View {
         .frame(minWidth: 640, minHeight: 420)
         .background(Color(nsColor: .windowBackgroundColor))
         .overlay(alignment: .topLeading) {
-            undoCommandButton
+            Group {
+                undoCommandButton
+                zoomOutCommandButton
+                resetZoomCommandButton
+                zoomInCommandButton
+            }
+        }
+        .onChange(of: editorState.selectedTool) { _, selectedTool in
+            guard selectedTool != .text, editingTextAnnotationID != nil else {
+                return
+            }
+
+            editingTextAnnotationID = nil
+            editorState.selectAnnotation(id: nil)
         }
     }
 
@@ -100,6 +149,68 @@ struct ScreenshotEditorView: View {
             .frame(width: 0, height: 0)
             .opacity(0)
             .accessibilityHidden(true)
+    }
+
+    private var zoomOutCommandButton: some View {
+        Button("Zoom Out", action: zoomOut)
+            .keyboardShortcut("-", modifiers: .command)
+            .disabled(zoomScale <= Self.minimumZoomScale)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
+    }
+
+    private var resetZoomCommandButton: some View {
+        Button("Actual Size", action: resetZoom)
+            .keyboardShortcut("0", modifiers: .command)
+            .disabled(zoomScale == 1)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
+    }
+
+    private var zoomInCommandButton: some View {
+        Button("Zoom In", action: zoomIn)
+            .keyboardShortcut("+", modifiers: .command)
+            .disabled(zoomScale >= Self.maximumZoomScale)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
+    }
+
+    private var showsResetZoomButton: Bool {
+        abs(zoomScale - 1) > 0.001
+    }
+
+    private var resetZoomButton: some View {
+        Button(action: resetZoom) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.counterclockwise")
+                Text("\(Int((zoomScale * 100).rounded()))%")
+                    .monospacedDigit()
+            }
+            .font(.caption)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .help("Reset zoom")
+        .padding(12)
+    }
+
+    private var canvasMagnificationGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                if magnificationGestureBaseZoomScale == nil {
+                    magnificationGestureBaseZoomScale = zoomScale
+                }
+
+                zoomScale = clampedZoomScale((magnificationGestureBaseZoomScale ?? zoomScale) * value)
+            }
+            .onEnded { _ in
+                magnificationGestureBaseZoomScale = nil
+            }
     }
 
     private var unavailableImageView: some View {
@@ -205,11 +316,47 @@ struct ScreenshotEditorView: View {
     }
 
     private func removeSelectedAnnotation() {
+        if editingTextAnnotationID == editorState.selectedAnnotationID {
+            editingTextAnnotationID = nil
+        }
+
         editorState.removeSelectedAnnotation()
     }
 
     private func undoLastAnnotation() {
         editorState.undoLastAnnotation()
+
+        if let editingTextAnnotationID,
+           editorState.annotation(id: editingTextAnnotationID) == nil {
+            self.editingTextAnnotationID = nil
+        }
+    }
+
+    private func zoomOut() {
+        zoomScale = clampedZoomScale(zoomScale / 1.25)
+    }
+
+    private func resetZoom() {
+        zoomScale = 1
+    }
+
+    private func zoomIn() {
+        zoomScale = clampedZoomScale(zoomScale * 1.25)
+    }
+
+    private func zoomByScroll(_ scrollDelta: CGFloat) {
+        guard scrollDelta.isFinite, scrollDelta != 0 else {
+            return
+        }
+
+        let scrollDirection: CGFloat = scrollDelta > 0 ? 1 : -1
+        let scrollAmount = min(max(abs(scrollDelta), 1), 12)
+        let zoomMultiplier = pow(1.015, scrollDirection * scrollAmount)
+        zoomScale = clampedZoomScale(zoomScale * zoomMultiplier)
+    }
+
+    private func clampedZoomScale(_ scale: CGFloat) -> CGFloat {
+        min(max(scale, Self.minimumZoomScale), Self.maximumZoomScale)
     }
 
     private func persistStrokeToolSettings() {
@@ -227,74 +374,118 @@ struct ScreenshotImageCanvas: View {
     @Binding var draftBlurRect: CGRect?
     @Binding var draftStroke: AnnotationStroke?
     @Binding var draftArrow: AnnotationArrow?
+    @Binding var draftRectangleRect: CGRect?
+    @Binding var draftTextRect: CGRect?
+    @Binding var editingTextAnnotationID: UUID?
+    let zoomScale: CGFloat
+    let scrollZoomAction: (CGFloat) -> Void
     @Environment(\.displayScale) private var displayScale
     @State private var activeAnnotationDrag: AnnotationDrag?
+    @State private var pendingSingleTapWorkItem: DispatchWorkItem?
+    @State private var suppressSingleTapUntil: Date = .distantPast
 
     var body: some View {
         GeometryReader { proxy in
             let geometry = ImageCanvasGeometry(
                 imageSize: image.pixelSize,
                 containerSize: proxy.size,
-                displayScale: displayScale
+                displayScale: displayScale,
+                zoomScale: zoomScale
             )
             let draftPreviewBlurRadius = geometry.viewDistance(forImageDistance: editorState.selectedBlurRadius)
 
-            ZStack(alignment: .topLeading) {
-                Color(nsColor: .underPageBackgroundColor)
+            ScrollView([.horizontal, .vertical]) {
+                ZStack(alignment: .topLeading) {
+                    Color(nsColor: .underPageBackgroundColor)
 
-                Image(nsImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: geometry.imageRect.width, height: geometry.imageRect.height)
-                    .position(x: geometry.imageRect.midX, y: geometry.imageRect.midY)
-                    .accessibilityLabel("Screenshot")
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: geometry.imageRect.width, height: geometry.imageRect.height)
+                        .position(x: geometry.imageRect.midX, y: geometry.imageRect.midY)
+                        .accessibilityLabel("Screenshot")
 
-                ForEach(editorState.annotations) { annotation in
-                    AnnotationPreviewOverlay(
-                        annotation: annotation,
-                        image: image,
-                        imageFrame: geometry.imageRect,
-                        containerSize: proxy.size,
-                        geometry: geometry,
-                        isSelected: annotation.id == editorState.selectedAnnotationID
-                    )
+                    ForEach(editorState.annotations) { annotation in
+                        AnnotationPreviewOverlay(
+                            annotation: annotation,
+                            image: image,
+                            imageFrame: geometry.imageRect,
+                            containerSize: geometry.contentSize,
+                            geometry: geometry,
+                            isSelected: annotation.id == editorState.selectedAnnotationID,
+                            isEditingText: annotation.id == editingTextAnnotationID,
+                            textContent: Binding(
+                                get: { editorState.textContent(id: annotation.id) ?? AnnotationText.defaultText },
+                                set: { editorState.updateText(id: annotation.id, $0) }
+                            )
+                        )
+                    }
+
+                    if let draftBlurRect {
+                        BlurPreviewOverlay(
+                            image: image,
+                            imageFrame: geometry.imageRect,
+                            containerSize: geometry.contentSize,
+                            rect: geometry.viewRect(forImageRect: draftBlurRect),
+                            blurRadius: draftPreviewBlurRadius,
+                            isSelected: false,
+                            isDraft: true
+                        )
+                    }
+
+                    if let draftStroke {
+                        StrokePreviewOverlay(
+                            stroke: draftStroke,
+                            geometry: geometry,
+                            selectionRect: geometry.viewRect(forImageRect: draftStroke.visibleBounds),
+                            isSelected: false,
+                            isDraft: true
+                        )
+                    }
+
+                    if let draftArrow {
+                        ArrowPreviewOverlay(
+                            arrow: draftArrow,
+                            geometry: geometry,
+                            selectionRect: geometry.viewRect(forImageRect: draftArrow.visibleBounds),
+                            isSelected: false,
+                            isDraft: true
+                        )
+                    }
+
+                    if let draftRectangleRect {
+                        RectanglePreviewOverlay(
+                            rectangle: editorState.rectangleToolSettings,
+                            rect: geometry.viewRect(forImageRect: draftRectangleRect),
+                            isSelected: false,
+                            isDraft: true
+                        )
+                    }
+
+                    if let draftTextRect {
+                        TextPreviewOverlay(
+                            text: AnnotationText(
+                                content: AnnotationText.defaultText,
+                                color: editorState.textToolSettings.color,
+                                fontSize: editorState.textToolSettings.fontSize
+                            ),
+                            textContent: .constant(AnnotationText.defaultText),
+                            rect: geometry.viewRect(forImageRect: draftTextRect),
+                            geometry: geometry,
+                            isSelected: false,
+                            isEditing: false,
+                            isDraft: true
+                        )
+                    }
                 }
-
-                if let draftBlurRect {
-                    BlurPreviewOverlay(
-                        image: image,
-                        imageFrame: geometry.imageRect,
-                        containerSize: proxy.size,
-                        rect: geometry.viewRect(forImageRect: draftBlurRect),
-                        blurRadius: draftPreviewBlurRadius,
-                        isSelected: false,
-                        isDraft: true
-                    )
-                }
-
-                if let draftStroke {
-                    StrokePreviewOverlay(
-                        stroke: draftStroke,
-                        geometry: geometry,
-                        selectionRect: geometry.viewRect(forImageRect: draftStroke.visibleBounds),
-                        isSelected: false,
-                        isDraft: true
-                    )
-                }
-
-                if let draftArrow {
-                    ArrowPreviewOverlay(
-                        arrow: draftArrow,
-                        geometry: geometry,
-                        selectionRect: geometry.viewRect(forImageRect: draftArrow.visibleBounds),
-                        isSelected: false,
-                        isDraft: true
-                    )
-                }
+                .frame(width: geometry.contentSize.width, height: geometry.contentSize.height)
+                .contentShape(Rectangle())
+                .gesture(canvasDragGesture(geometry: geometry))
+                .simultaneousGesture(selectTapGesture(geometry: geometry))
+                .simultaneousGesture(textEditDoubleTapGesture(geometry: geometry))
             }
-            .contentShape(Rectangle())
-            .gesture(canvasDragGesture(geometry: geometry))
-            .simultaneousGesture(selectTapGesture(geometry: geometry))
+            .background(Color(nsColor: .underPageBackgroundColor))
+            .background(CanvasScrollZoomView(scrollZoomAction: scrollZoomAction))
         }
     }
 
@@ -308,6 +499,7 @@ struct ScreenshotImageCanvas: View {
                 }
 
                 if let activeAnnotationDrag {
+                    editingTextAnnotationID = nil
                     let translation = geometry.imageTranslation(
                         fromViewStart: value.startLocation,
                         toViewEnd: value.location
@@ -316,12 +508,17 @@ struct ScreenshotImageCanvas: View {
                     draftBlurRect = nil
                     draftStroke = nil
                     draftArrow = nil
+                    draftRectangleRect = nil
+                    draftTextRect = nil
                     return
                 }
 
                 switch editorState.selectedTool {
                 case .blur:
                     draftStroke = nil
+                    draftArrow = nil
+                    draftRectangleRect = nil
+                    draftTextRect = nil
                     draftBlurRect = geometry.imageRect(
                         fromViewStart: value.startLocation,
                         toViewEnd: value.location
@@ -329,15 +526,39 @@ struct ScreenshotImageCanvas: View {
                 case .pen, .highlighter:
                     draftBlurRect = nil
                     draftArrow = nil
+                    draftRectangleRect = nil
+                    draftTextRect = nil
                     updateDraftStroke(with: value, geometry: geometry)
                 case .arrow:
                     draftBlurRect = nil
                     draftStroke = nil
+                    draftRectangleRect = nil
+                    draftTextRect = nil
                     updateDraftArrow(with: value, geometry: geometry)
-                case .select, .rectangle, .text:
+                case .rectangle:
                     draftBlurRect = nil
                     draftStroke = nil
                     draftArrow = nil
+                    draftTextRect = nil
+                    draftRectangleRect = geometry.imageRect(
+                        fromViewStart: value.startLocation,
+                        toViewEnd: value.location
+                    )
+                case .text:
+                    draftBlurRect = nil
+                    draftStroke = nil
+                    draftArrow = nil
+                    draftRectangleRect = nil
+                    draftTextRect = geometry.imageRect(
+                        fromViewStart: value.startLocation,
+                        toViewEnd: value.location
+                    )
+                case .select:
+                    draftBlurRect = nil
+                    draftStroke = nil
+                    draftArrow = nil
+                    draftRectangleRect = nil
+                    draftTextRect = nil
                 }
             }
             .onEnded { value in
@@ -346,6 +567,8 @@ struct ScreenshotImageCanvas: View {
                     draftBlurRect = nil
                     draftStroke = nil
                     draftArrow = nil
+                    draftRectangleRect = nil
+                    draftTextRect = nil
                 }
 
                 guard activeAnnotationDrag == nil else {
@@ -373,6 +596,24 @@ struct ScreenshotImageCanvas: View {
                             lineWidth: arrowStyle.lineWidth
                         )
                     }
+                    return
+                }
+
+                if editorState.selectedTool == .rectangle,
+                   let imageRect = geometry.imageRect(
+                        fromViewStart: value.startLocation,
+                        toViewEnd: value.location
+                   ) {
+                    editorState.addRectangle(imageRect)
+                    return
+                }
+
+                if editorState.selectedTool == .text,
+                   let imageRect = geometry.imageRect(
+                        fromViewStart: value.startLocation,
+                        toViewEnd: value.location
+                   ) {
+                    editingTextAnnotationID = editorState.addText(rect: imageRect)?.id
                     return
                 }
 
@@ -455,17 +696,76 @@ struct ScreenshotImageCanvas: View {
     private func selectTapGesture(geometry: ImageCanvasGeometry) -> some Gesture {
         SpatialTapGesture(coordinateSpace: .local)
             .onEnded { value in
-                if resizeHandle(at: value.location, geometry: geometry) != nil {
+                guard Date() >= suppressSingleTapUntil else {
                     return
                 }
 
-                guard let imagePoint = geometry.imagePoint(forViewPoint: value.location) else {
-                    editorState.selectAnnotation(id: nil)
-                    return
+                pendingSingleTapWorkItem?.cancel()
+                let workItem = DispatchWorkItem {
+                    handleSelectTap(at: value.location, geometry: geometry)
                 }
-
-                editorState.selectAnnotation(containing: imagePoint)
+                pendingSingleTapWorkItem = workItem
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: workItem)
             }
+    }
+
+    private func textEditDoubleTapGesture(geometry: ImageCanvasGeometry) -> some Gesture {
+        SpatialTapGesture(count: 2, coordinateSpace: .local)
+            .onEnded { value in
+                pendingSingleTapWorkItem?.cancel()
+                pendingSingleTapWorkItem = nil
+                suppressSingleTapUntil = Date().addingTimeInterval(0.24)
+
+                guard let imagePoint = geometry.imagePoint(forViewPoint: value.location),
+                      let annotationID = editorState.annotationID(containing: imagePoint),
+                      case .text = editorState.annotation(id: annotationID)?.type else {
+                    editingTextAnnotationID = nil
+                    return
+                }
+
+                editorState.selectAnnotation(id: annotationID)
+                editingTextAnnotationID = annotationID
+            }
+    }
+
+    private func handleSelectTap(at viewPoint: CGPoint, geometry: ImageCanvasGeometry) {
+        pendingSingleTapWorkItem = nil
+        guard Date() >= suppressSingleTapUntil else {
+            return
+        }
+
+        if resizeHandle(at: viewPoint, geometry: geometry) != nil {
+            return
+        }
+
+        guard let imagePoint = geometry.imagePoint(forViewPoint: viewPoint) else {
+            editorState.selectAnnotation(id: nil)
+            editingTextAnnotationID = nil
+            return
+        }
+
+        if editingTextAnnotationID != nil {
+            editorState.selectAnnotation(containing: imagePoint)
+            editingTextAnnotationID = nil
+            return
+        }
+
+        if editorState.selectedTool == .text,
+           editorState.annotationID(containing: imagePoint) == nil {
+            let textAnnotation = editorState.addText(
+                rect: ScreenshotEditorState.textRect(
+                    startingAt: imagePoint,
+                    within: image.pixelSize
+                )
+            )
+            editingTextAnnotationID = textAnnotation?.id
+            return
+        }
+
+        let selectedAnnotationID = editorState.selectAnnotation(containing: imagePoint)
+        if selectedAnnotationID != editingTextAnnotationID {
+            editingTextAnnotationID = nil
+        }
     }
 
     private func annotationDrag(startingAt startLocation: CGPoint, geometry: ImageCanvasGeometry) -> AnnotationDrag? {
@@ -527,6 +827,63 @@ private struct AnnotationDrag: Equatable {
     var resizeHandle: AnnotationResizeHandle? = nil
 }
 
+private struct CanvasScrollZoomView: NSViewRepresentable {
+    let scrollZoomAction: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> CanvasScrollZoomNSView {
+        let view = CanvasScrollZoomNSView()
+        view.scrollZoomAction = scrollZoomAction
+        return view
+    }
+
+    func updateNSView(_ nsView: CanvasScrollZoomNSView, context: Context) {
+        nsView.scrollZoomAction = scrollZoomAction
+    }
+}
+
+private final class CanvasScrollZoomNSView: NSView {
+    var scrollZoomAction: (CGFloat) -> Void = { _ in }
+    private var scrollWheelMonitor: Any?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateScrollWheelMonitor()
+    }
+
+    deinit {
+        if let scrollWheelMonitor {
+            NSEvent.removeMonitor(scrollWheelMonitor)
+        }
+    }
+
+    private func updateScrollWheelMonitor() {
+        if let scrollWheelMonitor {
+            NSEvent.removeMonitor(scrollWheelMonitor)
+            self.scrollWheelMonitor = nil
+        }
+
+        guard window != nil else {
+            return
+        }
+
+        scrollWheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self,
+                  event.window === self.window,
+                  self.bounds.contains(self.convert(event.locationInWindow, from: nil)) else {
+                return event
+            }
+
+            let scrollDelta = event.scrollingDeltaY != 0 ? event.scrollingDeltaY : -event.scrollingDeltaX
+            guard scrollDelta != 0 else {
+                return event
+            }
+
+            self.scrollZoomAction(scrollDelta)
+            return nil
+        }
+    }
+}
+
 private enum EditorCanvasMetrics {
     static let resizeHandleVisualSize: CGFloat = 8
     static let resizeHandleHitSize: CGFloat = 18
@@ -574,6 +931,8 @@ private struct AnnotationPreviewOverlay: View {
     let containerSize: CGSize
     let geometry: ImageCanvasGeometry
     let isSelected: Bool
+    let isEditingText: Bool
+    @Binding var textContent: String
 
     var body: some View {
         switch annotation.type {
@@ -603,9 +962,122 @@ private struct AnnotationPreviewOverlay: View {
                 isSelected: isSelected,
                 isDraft: false
             )
-        case .rectangle, .text:
-            EmptyView()
+        case .rectangle(let rectangle):
+            RectanglePreviewOverlay(
+                rectangle: rectangle,
+                rect: geometry.viewRect(forImageRect: annotation.rect),
+                isSelected: isSelected,
+                isDraft: false
+            )
+        case .text(let text):
+            TextPreviewOverlay(
+                text: text,
+                textContent: $textContent,
+                rect: geometry.viewRect(forImageRect: annotation.rect),
+                geometry: geometry,
+                isSelected: isSelected,
+                isEditing: isEditingText,
+                isDraft: false
+            )
         }
+    }
+}
+
+private struct RectanglePreviewOverlay: View {
+    let rectangle: AnnotationRectangle
+    let rect: CGRect
+    let isSelected: Bool
+    let isDraft: Bool
+
+    var body: some View {
+        Path { path in
+            path.addRect(rect)
+        }
+        .stroke(
+            Color(annotationColor: rectangle.color),
+            lineWidth: rectangle.lineWidth
+        )
+        .overlay(alignment: .topLeading) {
+            if isSelected || isDraft {
+                Rectangle()
+                    .strokeBorder(
+                        Color.accentColor,
+                        style: StrokeStyle(lineWidth: 2, dash: isDraft ? [6, 4] : [])
+                    )
+                    .frame(width: rect.width, height: rect.height)
+                    .offset(x: rect.minX, y: rect.minY)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if isSelected && !isDraft {
+                ForEach(AnnotationResizeHandle.allCases, id: \.self) { handle in
+                    ResizeHandleView()
+                        .position(handle.viewPosition(in: rect))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct TextPreviewOverlay: View {
+    let text: AnnotationText
+    @Binding var textContent: String
+    let rect: CGRect
+    let geometry: ImageCanvasGeometry
+    let isSelected: Bool
+    let isEditing: Bool
+    let isDraft: Bool
+    @FocusState private var isTextEditorFocused: Bool
+
+    var body: some View {
+        let fontSize = max(geometry.viewDistance(forImageDistance: text.fontSize), AnnotationText.minimumFontSize)
+
+        ZStack(alignment: .topLeading) {
+            if isEditing {
+                TextEditor(text: $textContent)
+                    .font(.system(size: fontSize, weight: .semibold))
+                    .foregroundStyle(Color(annotationColor: text.color))
+                    .tint(Color(annotationColor: text.color))
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                    .focused($isTextEditorFocused)
+                    .frame(width: rect.width, height: rect.height, alignment: .topLeading)
+                    .offset(x: rect.minX, y: rect.minY)
+                    .onAppear {
+                        DispatchQueue.main.async {
+                            isTextEditorFocused = true
+                        }
+                    }
+            } else {
+                Text(text.content)
+                    .font(.system(size: fontSize, weight: .semibold))
+                    .foregroundStyle(Color(annotationColor: text.color))
+                    .lineLimit(nil)
+                    .multilineTextAlignment(.leading)
+                    .frame(width: rect.width, height: rect.height, alignment: .topLeading)
+                    .clipped()
+                    .offset(x: rect.minX, y: rect.minY)
+            }
+
+            if isSelected || isDraft {
+                Rectangle()
+                    .strokeBorder(
+                        Color.accentColor,
+                        style: StrokeStyle(lineWidth: 2, dash: isDraft ? [6, 4] : [])
+                    )
+                    .frame(width: rect.width, height: rect.height)
+                    .offset(x: rect.minX, y: rect.minY)
+            }
+
+            if isSelected && !isDraft && !isEditing {
+                ForEach(AnnotationResizeHandle.allCases, id: \.self) { handle in
+                    ResizeHandleView()
+                        .position(handle.viewPosition(in: rect))
+                }
+            }
+        }
+        .allowsHitTesting(isEditing)
     }
 }
 
@@ -770,7 +1242,13 @@ private struct EditorToolbar: View {
     @Binding var selectedBlurRadius: Double
     let showsStrokeControls: Bool
     let showsBlurControls: Bool
+    let showsTextControls: Bool
+    let showsRectangleControls: Bool
     let selectedAnnotationID: UUID?
+    @Binding var selectedRectangleColor: AnnotationColor
+    @Binding var selectedRectangleLineWidth: CGFloat
+    @Binding var selectedTextColor: AnnotationColor
+    @Binding var selectedTextFontSize: CGFloat
     let statusMessage: String?
     let deleteAction: () -> Void
     let copyAction: () -> Void
@@ -813,6 +1291,26 @@ private struct EditorToolbar: View {
                     .frame(height: 22)
 
                 BlurControls(selectedBlurRadius: $selectedBlurRadius)
+            }
+
+            if showsRectangleControls {
+                Divider()
+                    .frame(height: 22)
+
+                RectangleControls(
+                    selectedColor: $selectedRectangleColor,
+                    selectedLineWidth: $selectedRectangleLineWidth
+                )
+            }
+
+            if showsTextControls {
+                Divider()
+                    .frame(height: 22)
+
+                TextControls(
+                    selectedColor: $selectedTextColor,
+                    selectedFontSize: $selectedTextFontSize
+                )
             }
 
             Spacer()
@@ -875,6 +1373,72 @@ private struct ToolButton: View {
     }
 }
 
+private struct RectangleControls: View {
+    @Binding var selectedColor: AnnotationColor
+    @Binding var selectedLineWidth: CGFloat
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ColorSwatches(selectedColor: $selectedColor, helpText: "Rectangle color")
+
+            HStack(spacing: 6) {
+                Image(systemName: "lineweight")
+                    .foregroundStyle(.secondary)
+
+                Slider(
+                    value: Binding(
+                        get: { Double(selectedLineWidth) },
+                        set: { selectedLineWidth = CGFloat($0) }
+                    ),
+                    in: Double(AnnotationRectangle.minimumLineWidth)...Double(AnnotationRectangle.maximumLineWidth),
+                    step: 1
+                )
+                .frame(width: 88)
+
+                Text("\(Int(selectedLineWidth.rounded()))")
+                    .monospacedDigit()
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, alignment: .trailing)
+            }
+            .help("Rectangle border thickness")
+        }
+    }
+}
+
+private struct TextControls: View {
+    @Binding var selectedColor: AnnotationColor
+    @Binding var selectedFontSize: CGFloat
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ColorSwatches(selectedColor: $selectedColor, helpText: "Text color")
+
+            HStack(spacing: 6) {
+                Image(systemName: "textformat.size")
+                    .foregroundStyle(.secondary)
+
+                Slider(
+                    value: Binding(
+                        get: { Double(selectedFontSize) },
+                        set: { selectedFontSize = CGFloat($0) }
+                    ),
+                    in: Double(AnnotationText.minimumFontSize)...Double(AnnotationText.maximumFontSize),
+                    step: 1
+                )
+                .frame(width: 88)
+
+                Text("\(Int(selectedFontSize.rounded()))")
+                    .monospacedDigit()
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, alignment: .trailing)
+            }
+            .help("Text size")
+        }
+    }
+}
+
 private struct BlurControls: View {
     @Binding var selectedBlurRadius: Double
 
@@ -906,16 +1470,7 @@ private struct StrokeControls: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            HStack(spacing: 5) {
-                ForEach(AnnotationColor.palette, id: \.self) { color in
-                    ColorSwatchButton(
-                        color: color,
-                        isSelected: selectedColor == color
-                    ) {
-                        selectedColor = color
-                    }
-                }
-            }
+            ColorSwatches(selectedColor: $selectedColor, helpText: "Stroke color")
 
             HStack(spacing: 6) {
                 Image(systemName: "lineweight")
@@ -942,9 +1497,29 @@ private struct StrokeControls: View {
     }
 }
 
+private struct ColorSwatches: View {
+    @Binding var selectedColor: AnnotationColor
+    let helpText: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(AnnotationColor.palette, id: \.self) { color in
+                ColorSwatchButton(
+                    color: color,
+                    isSelected: selectedColor == color,
+                    helpText: helpText
+                ) {
+                    selectedColor = color
+                }
+            }
+        }
+    }
+}
+
 private struct ColorSwatchButton: View {
     let color: AnnotationColor
     let isSelected: Bool
+    let helpText: String
     let action: () -> Void
 
     var body: some View {
@@ -966,8 +1541,8 @@ private struct ColorSwatchButton: View {
         }
         .buttonStyle(.plain)
         .frame(width: 24, height: 24)
-        .accessibilityLabel("Stroke color")
-        .help("Stroke color")
+        .accessibilityLabel(helpText)
+        .help(helpText)
     }
 }
 
