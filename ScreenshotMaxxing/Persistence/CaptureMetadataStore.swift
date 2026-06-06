@@ -77,9 +77,13 @@ final class CaptureMetadataStore {
         return capture
     }
 
-    func deleteCaptureFromHistoryAndDisk(_ capture: Capture, fileManager: FileManager = .default) throws {
+    func deleteCaptureFromHistoryAndDisk(
+        _ capture: Capture,
+        fileManager: FileManager = .default,
+        fileTrash: CaptureFileTrashing = FileManager.default
+    ) throws {
         for filePath in uniqueFilePaths(for: capture) where fileManager.fileExists(atPath: filePath) {
-            try fileManager.removeItem(atPath: filePath)
+            try fileTrash.moveItemToTrash(at: URL(fileURLWithPath: filePath))
         }
 
         modelContainer.mainContext.delete(capture)

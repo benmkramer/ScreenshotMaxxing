@@ -910,8 +910,9 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
-    @Test func captureMetadataStoreDeletesCaptureHistoryAndLocalFiles() throws {
+    @Test func captureMetadataStoreDeletesCaptureHistoryAndTrashesLocalFiles() throws {
         let fileManager = FileManager.default
+        let fileTrash = SpyFileTrash()
         let baseDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
         let originalURL = baseDirectory.appendingPathComponent("original.png")
@@ -940,13 +941,18 @@ struct ScreenshotMaxxingTests {
         try modelContainer.mainContext.save()
 
         let store = CaptureMetadataStore(modelContainer: modelContainer)
-        try store.deleteCaptureFromHistoryAndDisk(capture, fileManager: fileManager)
+        try store.deleteCaptureFromHistoryAndDisk(capture, fileManager: fileManager, fileTrash: fileTrash)
         let captures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
 
         #expect(captures.isEmpty)
-        #expect(!fileManager.fileExists(atPath: originalURL.fileSystemPath))
-        #expect(!fileManager.fileExists(atPath: editedURL.fileSystemPath))
-        #expect(!fileManager.fileExists(atPath: thumbnailURL.fileSystemPath))
+        #expect(Set(fileTrash.trashedFileURLs.map(\.fileSystemPath)) == [
+            originalURL.fileSystemPath,
+            editedURL.fileSystemPath,
+            thumbnailURL.fileSystemPath
+        ])
+        #expect(fileManager.fileExists(atPath: originalURL.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: editedURL.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: thumbnailURL.fileSystemPath))
     }
 
     @Test func captureDefaultsKeepExistingCapturesAsImages() {
@@ -2314,9 +2320,15 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "missing", calendar: calendar).isEmpty)
     }
 
+    @Test func captureHistoryDeleteConfirmationMentionsTrash() {
+        #expect(CaptureHistoryData.deleteConfirmationMessage.contains("moves them to the Trash"))
+        #expect(!CaptureHistoryData.deleteConfirmationMessage.contains("cannot be undone"))
+    }
+
     @MainActor
-    @Test func captureHistoryDeletionRemovesSelectedCaptureAndEditedVersionsFromDiskAndStore() throws {
+    @Test func captureHistoryDeletionTrashesSelectedCaptureAndEditedVersions() throws {
         let fileManager = FileManager.default
+        let fileTrash = SpyFileTrash()
         let baseDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
         defer {
@@ -2330,9 +2342,10 @@ struct ScreenshotMaxxingTests {
         let originalURL = directories.originals.appendingPathComponent("area-20260526-101500-aaaaaaaa.png")
         let editedURL = directories.edited.appendingPathComponent("area-20260526-101500-aaaaaaaa-edited-bbbbbbbb.png")
         let diskOnlyEditedURL = directories.edited.appendingPathComponent("area-20260526-101500-aaaaaaaa-edited-cccccccc.png")
+        let thumbnailURL = directories.thumbnails.appendingPathComponent("area-20260526-101500-aaaaaaaa-thumbnail.png")
         let unrelatedURL = directories.edited.appendingPathComponent("window-20260526-101500-dddddddd-edited-eeeeeeee.png")
 
-        try [originalURL, editedURL, diskOnlyEditedURL, unrelatedURL].forEach { fileURL in
+        try [originalURL, editedURL, diskOnlyEditedURL, thumbnailURL, unrelatedURL].forEach { fileURL in
             try Data("png".utf8).write(to: fileURL)
         }
 
@@ -2342,6 +2355,7 @@ struct ScreenshotMaxxingTests {
             captureMode: "area",
             width: 20,
             height: 10,
+            thumbnailFilePath: thumbnailURL.fileSystemPath,
             originalFilePath: originalURL.fileSystemPath
         )
         let editedCapture = Capture(
@@ -2379,20 +2393,29 @@ struct ScreenshotMaxxingTests {
         #expect(filePathsToDelete.contains(canonicalFileSystemPath(for: originalURL)))
         #expect(filePathsToDelete.contains(canonicalFileSystemPath(for: editedURL)))
         #expect(filePathsToDelete.contains(canonicalFileSystemPath(for: diskOnlyEditedURL)))
+        #expect(filePathsToDelete.contains(canonicalFileSystemPath(for: thumbnailURL)))
         #expect(!filePathsToDelete.contains(canonicalFileSystemPath(for: unrelatedURL)))
 
         try CaptureHistoryData.deleteCaptures(
             capturesToDelete,
             from: modelContainer.mainContext,
             allCaptures: allCaptures,
-            fileManager: fileManager
+            fileManager: fileManager,
+            fileTrash: fileTrash
         )
         let remainingCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
 
         #expect(remainingCaptures.map(\.fileName) == [unrelatedURL.lastPathComponent])
-        #expect(!fileManager.fileExists(atPath: originalURL.fileSystemPath))
-        #expect(!fileManager.fileExists(atPath: editedURL.fileSystemPath))
-        #expect(!fileManager.fileExists(atPath: diskOnlyEditedURL.fileSystemPath))
+        #expect(Set(fileTrash.trashedFileURLs.map(\.fileSystemPath)) == [
+            originalURL.fileSystemPath,
+            editedURL.fileSystemPath,
+            diskOnlyEditedURL.fileSystemPath,
+            thumbnailURL.fileSystemPath
+        ])
+        #expect(fileManager.fileExists(atPath: originalURL.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: editedURL.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: diskOnlyEditedURL.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: thumbnailURL.fileSystemPath))
         #expect(fileManager.fileExists(atPath: unrelatedURL.fileSystemPath))
     }
 
@@ -2757,4 +2780,12 @@ struct ScreenshotMaxxingTests {
         return color
     }
 
+}
+
+private final class SpyFileTrash: CaptureFileTrashing {
+    private(set) var trashedFileURLs = [URL]()
+
+    func moveItemToTrash(at fileURL: URL) throws {
+        trashedFileURLs.append(fileURL)
+    }
 }

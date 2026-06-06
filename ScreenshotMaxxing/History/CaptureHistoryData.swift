@@ -9,6 +9,8 @@ import Foundation
 import SwiftData
 
 enum CaptureHistoryData {
+    static let deleteConfirmationMessage = "Deleting from the history view removes the file and any edited versions from history and moves them to the Trash."
+
     static var newestFirstSortDescriptors: [SortDescriptor<Capture>] {
         [SortDescriptor(\Capture.createdAt, order: .reverse)]
     }
@@ -131,7 +133,8 @@ enum CaptureHistoryData {
         _ capturesToDelete: [Capture],
         from modelContext: ModelContext,
         allCaptures: [Capture],
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        fileTrash: CaptureFileTrashing = FileManager.default
     ) throws {
         let fileURLs = try fileURLsToDelete(
             for: capturesToDelete,
@@ -140,7 +143,7 @@ enum CaptureHistoryData {
         )
 
         for fileURL in fileURLs where fileManager.fileExists(atPath: fileURL.fileSystemPath) {
-            try fileManager.removeItem(at: fileURL)
+            try fileTrash.moveItemToTrash(at: fileURL)
         }
 
         let expandedCapturesToDelete = Self.capturesToDelete(
@@ -172,6 +175,10 @@ enum CaptureHistoryData {
 
             if let editedFilePath = capture.editedFilePath {
                 fileURLs.insert(canonicalFileURL(URL(fileURLWithPath: editedFilePath)))
+            }
+
+            if let thumbnailFilePath = capture.thumbnailFilePath {
+                fileURLs.insert(canonicalFileURL(URL(fileURLWithPath: thumbnailFilePath)))
             }
 
             try editedVersionFileURLs(for: capture, fileManager: fileManager).forEach { editedFileURL in

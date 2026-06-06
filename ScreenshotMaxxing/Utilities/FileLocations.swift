@@ -7,6 +7,17 @@
 
 import Foundation
 
+protocol CaptureFileTrashing {
+    func moveItemToTrash(at fileURL: URL) throws
+}
+
+extension FileManager: CaptureFileTrashing {
+    func moveItemToTrash(at fileURL: URL) throws {
+        var trashedURL: NSURL?
+        try trashItem(at: fileURL, resultingItemURL: &trashedURL)
+    }
+}
+
 extension URL {
     var fileSystemPath: String {
         path(percentEncoded: false)
