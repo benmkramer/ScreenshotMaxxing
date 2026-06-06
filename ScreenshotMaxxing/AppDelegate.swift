@@ -38,14 +38,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let areaCaptureShortcut = shortcutSettingsStore.areaCaptureShortcut()
         let captureOptionsShortcut = shortcutSettingsStore.captureOptionsShortcut()
+        let openHistoryShortcut = shortcutSettingsStore.openHistoryShortcut()
         showMenuBarController(
             areaCaptureShortcut: areaCaptureShortcut,
-            captureOptionsShortcut: captureOptionsShortcut
+            captureOptionsShortcut: captureOptionsShortcut,
+            openHistoryShortcut: openHistoryShortcut
         )
         hotKeyManager = HotKeyManager { [weak self] action in
             self?.handleHotKeyAction(action)
         }
-        registerCaptureHotKeys()
+        registerGlobalHotKeys()
         if !isRunningUnderTests {
             DispatchQueue.main.async { [weak self] in
                 self?.showPermissionOnboardingIfNeeded()
@@ -107,6 +109,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             startCapture(.area)
         case .showCaptureOptions:
             openCaptureOptions()
+        case .openHistory:
+            openHistory()
         }
     }
 
@@ -198,9 +202,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func registerCaptureHotKeys() {
+    private func registerOpenHistoryHotKey() {
+        do {
+            try hotKeyManager?.registerOpenHistoryShortcut(shortcutSettingsStore.openHistoryShortcut())
+        } catch {
+            presentError(error, title: "Shortcut Unavailable")
+        }
+    }
+
+    private func registerGlobalHotKeys() {
         registerAreaCaptureHotKey()
         registerCaptureOptionsHotKey()
+        registerOpenHistoryHotKey()
     }
 
     private func updateAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) -> Bool {
@@ -215,6 +228,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func resetAreaCaptureShortcut() -> GlobalKeyboardShortcut {
+        let shortcut = GlobalKeyboardShortcut.defaultAreaCapture
+        do {
+            try hotKeyManager?.registerAreaCaptureShortcut(shortcut)
+            shortcutSettingsStore.resetAreaCaptureShortcut()
+            menuBarController?.updateAreaCaptureShortcut(shortcut)
+        } catch {
+            presentError(error, title: "Shortcut Unavailable")
+        }
+        return hotKeyManager?.registeredAreaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut()
+    }
+
     private func updateCaptureOptionsShortcut(_ shortcut: GlobalKeyboardShortcut) -> Bool {
         do {
             try hotKeyManager?.registerCaptureOptionsShortcut(shortcut)
@@ -227,9 +252,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func resetCaptureOptionsShortcut() -> GlobalKeyboardShortcut {
+        let shortcut = GlobalKeyboardShortcut.defaultCaptureOptions
+        do {
+            try hotKeyManager?.registerCaptureOptionsShortcut(shortcut)
+            shortcutSettingsStore.resetCaptureOptionsShortcut()
+            menuBarController?.updateCaptureOptionsShortcut(shortcut)
+        } catch {
+            presentError(error, title: "Shortcut Unavailable")
+        }
+        return hotKeyManager?.registeredCaptureOptionsShortcut ?? shortcutSettingsStore.captureOptionsShortcut()
+    }
+
+    private func updateOpenHistoryShortcut(_ shortcut: GlobalKeyboardShortcut) -> Bool {
+        do {
+            try hotKeyManager?.registerOpenHistoryShortcut(shortcut)
+            try shortcutSettingsStore.saveOpenHistoryShortcut(shortcut)
+            menuBarController?.updateOpenHistoryShortcut(shortcut)
+            return true
+        } catch {
+            presentError(error, title: "Shortcut Unavailable")
+            return false
+        }
+    }
+
+    private func resetOpenHistoryShortcut() -> GlobalKeyboardShortcut {
+        let shortcut = GlobalKeyboardShortcut.defaultOpenHistory
+        do {
+            try hotKeyManager?.registerOpenHistoryShortcut(shortcut)
+            shortcutSettingsStore.resetOpenHistoryShortcut()
+            menuBarController?.updateOpenHistoryShortcut(shortcut)
+        } catch {
+            presentError(error, title: "Shortcut Unavailable")
+        }
+        return hotKeyManager?.registeredOpenHistoryShortcut ?? shortcutSettingsStore.openHistoryShortcut()
+    }
+
     private func showMenuBarController(
         areaCaptureShortcut: GlobalKeyboardShortcut? = nil,
-        captureOptionsShortcut: GlobalKeyboardShortcut? = nil
+        captureOptionsShortcut: GlobalKeyboardShortcut? = nil,
+        openHistoryShortcut: GlobalKeyboardShortcut? = nil
     ) {
         guard menuBarController == nil else {
             return
@@ -237,7 +299,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menuBarController = MenuBarController(
             areaCaptureShortcut: areaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut(),
-            captureOptionsShortcut: captureOptionsShortcut ?? shortcutSettingsStore.captureOptionsShortcut()
+            captureOptionsShortcut: captureOptionsShortcut ?? shortcutSettingsStore.captureOptionsShortcut(),
+            openHistoryShortcut: openHistoryShortcut ?? shortcutSettingsStore.openHistoryShortcut()
         ) { [weak self] action in
             self?.handleMenuBarAction(action)
         }
@@ -330,6 +393,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let preferences = try PreferencesData.current(
             areaCaptureShortcut: hotKeyManager?.registeredAreaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut(),
             captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut ?? shortcutSettingsStore.captureOptionsShortcut(),
+            openHistoryShortcut: hotKeyManager?.registeredOpenHistoryShortcut ?? shortcutSettingsStore.openHistoryShortcut(),
             launchAtLoginEnabled: loginItemController.launchAtLoginEnabled
         )
 
@@ -340,6 +404,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onCaptureOptionsShortcutChange: { [weak self] shortcut in
                 self?.updateCaptureOptionsShortcut(shortcut) ?? false
+            },
+            onOpenHistoryShortcutChange: { [weak self] shortcut in
+                self?.updateOpenHistoryShortcut(shortcut) ?? false
+            },
+            onAreaCaptureShortcutReset: { [weak self] in
+                self?.resetAreaCaptureShortcut() ?? .defaultAreaCapture
+            },
+            onCaptureOptionsShortcutReset: { [weak self] in
+                self?.resetCaptureOptionsShortcut() ?? .defaultCaptureOptions
+            },
+            onOpenHistoryShortcutReset: { [weak self] in
+                self?.resetOpenHistoryShortcut() ?? .defaultOpenHistory
             },
             onLaunchAtLoginChange: { [weak self] isEnabled in
                 self?.updateLaunchAtLoginEnabled(isEnabled) ?? false

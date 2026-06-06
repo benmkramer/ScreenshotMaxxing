@@ -12,37 +12,48 @@ import SwiftUI
 struct ShortcutRecorderView: NSViewRepresentable {
     let shortcut: GlobalKeyboardShortcut
     let onShortcutChange: (GlobalKeyboardShortcut) -> Bool
+    let onShortcutReset: () -> GlobalKeyboardShortcut
 
     init(
         shortcut: GlobalKeyboardShortcut,
-        onShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool
+        onShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool,
+        onShortcutReset: (() -> GlobalKeyboardShortcut)? = nil
     ) {
         self.shortcut = shortcut
         self.onShortcutChange = onShortcutChange
+        self.onShortcutReset = onShortcutReset ?? { shortcut }
     }
 
     func makeNSView(context: Context) -> ShortcutRecorderButton {
-        ShortcutRecorderButton(shortcut: shortcut, onShortcutChange: onShortcutChange)
+        ShortcutRecorderButton(
+            shortcut: shortcut,
+            onShortcutChange: onShortcutChange,
+            onShortcutReset: onShortcutReset
+        )
     }
 
     func updateNSView(_ nsView: ShortcutRecorderButton, context: Context) {
         nsView.setShortcut(shortcut)
         nsView.onShortcutChange = onShortcutChange
+        nsView.onShortcutReset = onShortcutReset
     }
 }
 
 final class ShortcutRecorderButton: NSButton {
     var onShortcutChange: (GlobalKeyboardShortcut) -> Bool
+    var onShortcutReset: () -> GlobalKeyboardShortcut
 
     private var shortcut: GlobalKeyboardShortcut
     private var isRecording = false
 
     init(
         shortcut: GlobalKeyboardShortcut,
-        onShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool
+        onShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool,
+        onShortcutReset: @escaping () -> GlobalKeyboardShortcut
     ) {
         self.shortcut = shortcut
         self.onShortcutChange = onShortcutChange
+        self.onShortcutReset = onShortcutReset
         super.init(frame: .zero)
 
         bezelStyle = .rounded
@@ -78,6 +89,16 @@ final class ShortcutRecorderButton: NSButton {
 
     override func keyDown(with event: NSEvent) {
         if Int(event.keyCode) == kVK_Escape {
+            stopRecording()
+            return
+        }
+
+        let isUnmodifiedDelete = (
+            Int(event.keyCode) == kVK_Delete || Int(event.keyCode) == kVK_ForwardDelete
+        ) && GlobalKeyboardShortcut.carbonModifiers(from: event.modifierFlags) == 0
+
+        if isUnmodifiedDelete {
+            shortcut = onShortcutReset()
             stopRecording()
             return
         }

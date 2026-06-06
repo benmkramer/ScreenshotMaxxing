@@ -12,6 +12,10 @@ struct PreferencesView: View {
     @State private var preferences: PreferencesData
     private let onAreaCaptureShortcutChange: (GlobalKeyboardShortcut) -> Bool
     private let onCaptureOptionsShortcutChange: (GlobalKeyboardShortcut) -> Bool
+    private let onOpenHistoryShortcutChange: (GlobalKeyboardShortcut) -> Bool
+    private let onAreaCaptureShortcutReset: () -> GlobalKeyboardShortcut
+    private let onCaptureOptionsShortcutReset: () -> GlobalKeyboardShortcut
+    private let onOpenHistoryShortcutReset: () -> GlobalKeyboardShortcut
     private let onLaunchAtLoginChange: (Bool) -> Bool
     private let onOpenStorageFolder: (String) -> Void
 
@@ -19,6 +23,10 @@ struct PreferencesView: View {
         preferences: PreferencesData,
         onAreaCaptureShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
         onCaptureOptionsShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
+        onOpenHistoryShortcutChange: @escaping (GlobalKeyboardShortcut) -> Bool = { _ in true },
+        onAreaCaptureShortcutReset: @escaping () -> GlobalKeyboardShortcut = { .defaultAreaCapture },
+        onCaptureOptionsShortcutReset: @escaping () -> GlobalKeyboardShortcut = { .defaultCaptureOptions },
+        onOpenHistoryShortcutReset: @escaping () -> GlobalKeyboardShortcut = { .defaultOpenHistory },
         onLaunchAtLoginChange: @escaping (Bool) -> Bool = { _ in true },
         onOpenStorageFolder: @escaping (String) -> Void = { path in
             NSWorkspace.shared.open(URL(fileURLWithPath: path, isDirectory: true))
@@ -27,6 +35,10 @@ struct PreferencesView: View {
         _preferences = State(initialValue: preferences)
         self.onAreaCaptureShortcutChange = onAreaCaptureShortcutChange
         self.onCaptureOptionsShortcutChange = onCaptureOptionsShortcutChange
+        self.onOpenHistoryShortcutChange = onOpenHistoryShortcutChange
+        self.onAreaCaptureShortcutReset = onAreaCaptureShortcutReset
+        self.onCaptureOptionsShortcutReset = onCaptureOptionsShortcutReset
+        self.onOpenHistoryShortcutReset = onOpenHistoryShortcutReset
         self.onLaunchAtLoginChange = onLaunchAtLoginChange
         self.onOpenStorageFolder = onOpenStorageFolder
     }
@@ -55,6 +67,10 @@ struct PreferencesView: View {
 
                         preferences = preferences.updatingAreaCaptureShortcut(shortcut)
                         return true
+                    } onShortcutReset: {
+                        let shortcut = onAreaCaptureShortcutReset()
+                        preferences = preferences.resettingAreaCaptureShortcut()
+                        return shortcut
                     }
                     .frame(width: 160)
                 }
@@ -67,6 +83,26 @@ struct PreferencesView: View {
 
                         preferences = preferences.updatingCaptureOptionsShortcut(shortcut)
                         return true
+                    } onShortcutReset: {
+                        let shortcut = onCaptureOptionsShortcutReset()
+                        preferences = preferences.resettingCaptureOptionsShortcut()
+                        return shortcut
+                    }
+                    .frame(width: 160)
+                }
+
+                LabeledContent("Open history shortcut") {
+                    ShortcutRecorderView(shortcut: preferences.openHistoryShortcut) { shortcut in
+                        guard onOpenHistoryShortcutChange(shortcut) else {
+                            return false
+                        }
+
+                        preferences = preferences.updatingOpenHistoryShortcut(shortcut)
+                        return true
+                    } onShortcutReset: {
+                        let shortcut = onOpenHistoryShortcutReset()
+                        preferences = preferences.resettingOpenHistoryShortcut()
+                        return shortcut
                     }
                     .frame(width: 160)
                 }
@@ -145,6 +181,7 @@ private struct StorageFolderRow: View {
         preferences: PreferencesData(
             areaCaptureShortcut: .defaultAreaCapture,
             captureOptionsShortcut: .defaultCaptureOptions,
+            openHistoryShortcut: .defaultOpenHistory,
             launchAtLoginEnabled: false,
             originalsFolderPath: "/Users/example/Library/Application Support/ScreenshotMaxxing/Captures/originals",
             editedFolderPath: "/Users/example/Library/Application Support/ScreenshotMaxxing/Captures/edited"

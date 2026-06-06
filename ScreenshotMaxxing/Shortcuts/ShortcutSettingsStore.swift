@@ -10,6 +10,7 @@ import Foundation
 struct ShortcutSettingsStore {
     private static let areaCaptureShortcutKey = "areaCaptureShortcut"
     private static let captureOptionsShortcutKey = "captureOptionsShortcut"
+    private static let openHistoryShortcutKey = "openHistoryShortcut"
 
     private let userDefaults: UserDefaults
     private let encoder = JSONEncoder()
@@ -27,12 +28,32 @@ struct ShortcutSettingsStore {
         shortcut(forKey: Self.captureOptionsShortcutKey, defaultShortcut: .defaultCaptureOptions)
     }
 
+    func openHistoryShortcut() -> GlobalKeyboardShortcut {
+        shortcut(forKey: Self.openHistoryShortcutKey, defaultShortcut: .defaultOpenHistory)
+    }
+
     func saveAreaCaptureShortcut(_ shortcut: GlobalKeyboardShortcut) throws {
         try save(shortcut, forKey: Self.areaCaptureShortcutKey)
     }
 
+    func resetAreaCaptureShortcut() {
+        userDefaults.removeObject(forKey: Self.areaCaptureShortcutKey)
+    }
+
     func saveCaptureOptionsShortcut(_ shortcut: GlobalKeyboardShortcut) throws {
         try save(shortcut, forKey: Self.captureOptionsShortcutKey)
+    }
+
+    func resetCaptureOptionsShortcut() {
+        userDefaults.removeObject(forKey: Self.captureOptionsShortcutKey)
+    }
+
+    func saveOpenHistoryShortcut(_ shortcut: GlobalKeyboardShortcut) throws {
+        try save(shortcut, forKey: Self.openHistoryShortcutKey)
+    }
+
+    func resetOpenHistoryShortcut() {
+        userDefaults.removeObject(forKey: Self.openHistoryShortcutKey)
     }
 
     private func shortcut(
