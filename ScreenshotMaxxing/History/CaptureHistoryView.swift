@@ -55,7 +55,7 @@ struct CaptureHistoryView: View {
                 pendingDeletionIDs.removeAll()
             }
         } message: {
-            Text("Deleting from the history view removes the file and any edited versions from disk as well. This cannot be undone.")
+            Text(CaptureHistoryData.deleteConfirmationMessage)
         }
         .alert(
             "Could not delete captures",
