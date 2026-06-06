@@ -11,6 +11,10 @@ extension URL {
     var fileSystemPath: String {
         path(percentEncoded: false)
     }
+
+    var canonicalFileIdentityURL: URL {
+        standardizedFileURL.resolvingSymlinksInPath()
+    }
 }
 
 struct CaptureDirectories: Equatable {

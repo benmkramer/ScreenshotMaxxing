@@ -1002,6 +1002,18 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func screenshotEditorWindowMatchesCanonicalImageURL() {
+        let imageURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/current/../example-capture.png")
+        let controller = ScreenshotEditorWindowController(imageURL: imageURL)
+        defer {
+            controller.window?.close()
+        }
+
+        #expect(controller.isEditingImage(at: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/example-capture.png")))
+        #expect(!controller.isEditingImage(at: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/other-capture.png")))
+    }
+
+    @MainActor
     @Test func videoEditorWindowCreatesAndLaysOutRecordedVideo() {
         let videoURL = URL(fileURLWithPath: "/tmp/example-recording.mp4")
         let controller = VideoEditorWindowController(videoURL: videoURL)
@@ -1012,6 +1024,18 @@ struct ScreenshotMaxxingTests {
         controller.window?.contentView?.layoutSubtreeIfNeeded()
 
         #expect(controller.window?.title == "example-recording.mp4 - ScreenshotMaxxing")
+    }
+
+    @MainActor
+    @Test func videoEditorWindowMatchesCanonicalVideoURL() {
+        let videoURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/current/../example-recording.mp4")
+        let controller = VideoEditorWindowController(videoURL: videoURL)
+        defer {
+            controller.window?.close()
+        }
+
+        #expect(controller.isEditingVideo(at: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/example-recording.mp4")))
+        #expect(!controller.isEditingVideo(at: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/other-recording.mp4")))
     }
 
     @Test func imageCanvasFitsImageWithoutDistortion() {
