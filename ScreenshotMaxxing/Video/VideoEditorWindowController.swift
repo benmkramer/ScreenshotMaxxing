@@ -27,6 +27,10 @@ final class VideoEditorWindowController: NSObject, NSWindowDelegate {
         "\(videoURL.lastPathComponent) - ScreenshotMaxxing"
     }
 
+    func isEditingVideo(at candidateURL: URL) -> Bool {
+        videoURL.canonicalFileIdentityURL == candidateURL.canonicalFileIdentityURL
+    }
+
     func show() {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

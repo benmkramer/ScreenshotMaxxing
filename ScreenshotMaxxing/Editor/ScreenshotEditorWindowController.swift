@@ -27,6 +27,10 @@ final class ScreenshotEditorWindowController: NSObject, NSWindowDelegate {
         "\(imageURL.lastPathComponent) - ScreenshotMaxxing"
     }
 
+    func isEditingImage(at candidateURL: URL) -> Bool {
+        imageURL.canonicalFileIdentityURL == candidateURL.canonicalFileIdentityURL
+    }
+
     func show() {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

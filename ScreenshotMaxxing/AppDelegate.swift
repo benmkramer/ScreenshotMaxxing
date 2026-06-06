@@ -245,6 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var userFacingWindows: [NSWindow] {
         var windows = editorWindowControllers.compactMap { $0.window }
+        windows.append(contentsOf: videoEditorWindowControllers.compactMap { $0.window })
 
         if let window = captureOptionsWindowController?.window {
             windows.append(window)
@@ -413,6 +414,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openEditor(for imageURL: URL, capture: Capture?) {
+        if let controller = editorWindowControllers.first(where: { $0.isEditingImage(at: imageURL) }) {
+            controller.show()
+            return
+        }
+
         let controller = ScreenshotEditorWindowController(imageURL: imageURL, capture: capture)
         controller.onClose = { [weak self] closedController in
             self?.editorWindowControllers.removeAll { $0 === closedController }
@@ -424,6 +430,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openVideoEditor(for videoURL: URL, capture: Capture?) {
+        if let controller = videoEditorWindowControllers.first(where: { $0.isEditingVideo(at: videoURL) }) {
+            controller.show()
+            return
+        }
+
         let controller = VideoEditorWindowController(videoURL: videoURL, capture: capture)
         controller.onClose = { [weak self] closedController in
             self?.videoEditorWindowControllers.removeAll { $0 === closedController }
