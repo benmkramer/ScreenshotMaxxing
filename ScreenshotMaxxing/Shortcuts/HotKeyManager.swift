@@ -22,6 +22,11 @@ struct GlobalKeyboardShortcut: Codable, Equatable {
         carbonModifiers: UInt32(controlKey | shiftKey)
     )
 
+    nonisolated static let defaultOpenHistory = GlobalKeyboardShortcut(
+        keyCode: UInt32(kVK_ANSI_H),
+        carbonModifiers: UInt32(controlKey | optionKey | cmdKey)
+    )
+
     init(keyCode: UInt32, carbonModifiers: UInt32) {
         self.keyCode = keyCode
         self.carbonModifiers = carbonModifiers
@@ -150,6 +155,7 @@ struct GlobalKeyboardShortcut: Codable, Equatable {
 enum HotKeyAction: UInt32, Equatable {
     case captureArea = 1
     case showCaptureOptions = 2
+    case openHistory = 3
 }
 
 enum HotKeyManagerError: LocalizedError, Equatable {
@@ -175,6 +181,7 @@ enum HotKeyManagerError: LocalizedError, Equatable {
 final class HotKeyManager {
     static let areaCaptureHotKeyID = HotKeyAction.captureArea.rawValue
     static let captureOptionsHotKeyID = HotKeyAction.showCaptureOptions.rawValue
+    static let openHistoryHotKeyID = HotKeyAction.openHistory.rawValue
     private static let hotKeySignature = OSType(0x534D6178) // SMax
 
     private let actionHandler: (HotKeyAction) -> Void
@@ -188,6 +195,10 @@ final class HotKeyManager {
 
     var registeredCaptureOptionsShortcut: GlobalKeyboardShortcut? {
         registeredShortcuts[.showCaptureOptions]
+    }
+
+    var registeredOpenHistoryShortcut: GlobalKeyboardShortcut? {
+        registeredShortcuts[.openHistory]
     }
 
     init(actionHandler: @escaping (HotKeyAction) -> Void) {
@@ -206,12 +217,20 @@ final class HotKeyManager {
         try registerShortcut(shortcut, for: .showCaptureOptions)
     }
 
+    func registerOpenHistoryShortcut(_ shortcut: GlobalKeyboardShortcut = .defaultOpenHistory) throws {
+        try registerShortcut(shortcut, for: .openHistory)
+    }
+
     func unregisterAreaCaptureShortcut() {
         unregisterShortcut(for: .captureArea)
     }
 
     func unregisterCaptureOptionsShortcut() {
         unregisterShortcut(for: .showCaptureOptions)
+    }
+
+    func unregisterOpenHistoryShortcut() {
+        unregisterShortcut(for: .openHistory)
     }
 
     func invalidate() {

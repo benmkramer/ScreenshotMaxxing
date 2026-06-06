@@ -26,6 +26,17 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func menuBarHistoryItemAdvertisesGlobalHistoryShortcut() throws {
+        let menu = MenuBarController.makeMenu(target: nil)
+        let historyItem = try #require(menu.items.first {
+            $0.title == "Open History (Control-Option-Command-H)"
+        })
+
+        #expect(historyItem.keyEquivalent == "h")
+        #expect(historyItem.keyEquivalentModifierMask == [.control, .option, .command])
+    }
+
+    @MainActor
     @Test func fileLocationsCreateWritableCaptureDirectories() throws {
         let fileManager = FileManager.default
         let baseDirectory = fileManager.temporaryDirectory
@@ -301,6 +312,13 @@ struct ScreenshotMaxxingTests {
         #expect(shortcut.displayString == "Control-Shift-5")
     }
 
+    @Test func defaultOpenHistoryShortcutUsesUniqueGlobalChord() {
+        let shortcut = GlobalKeyboardShortcut.defaultOpenHistory
+
+        #expect(shortcut.displayString == "Control-Option-Command-H")
+        #expect(!shortcut.isReservedSystemScreenshotShortcut)
+    }
+
     @Test func commandShiftScreenshotShortcutsAreReservedForMacOS() {
         let commandShiftFour = GlobalKeyboardShortcut(
             keyCode: UInt32(kVK_ANSI_4),
@@ -341,6 +359,7 @@ struct ScreenshotMaxxingTests {
         ))
         #expect(visibleTitles.first == "Capture Area (Option-Command-A)")
         #expect(visibleTitles[1] == "Capture Options (Control-Option-B)")
+        #expect(visibleTitles[4] == "Open History (Control-Option-Command-H)")
     }
 
     @Test func editorToolbarShowsImplementedAnnotationTools() {
@@ -382,9 +401,10 @@ struct ScreenshotMaxxingTests {
 
         manager.handleHotKeyPressed(id: HotKeyManager.areaCaptureHotKeyID)
         manager.handleHotKeyPressed(id: HotKeyManager.captureOptionsHotKeyID)
+        manager.handleHotKeyPressed(id: HotKeyManager.openHistoryHotKeyID)
         manager.handleHotKeyPressed(id: 999)
 
-        #expect(actions == [.captureArea, .showCaptureOptions])
+        #expect(actions == [.captureArea, .showCaptureOptions, .openHistory])
     }
 
     @MainActor
@@ -405,6 +425,7 @@ struct ScreenshotMaxxingTests {
 
         #expect(preferences.areaCaptureShortcut.displayString == "Control-Shift-4")
         #expect(preferences.captureOptionsShortcut.displayString == "Control-Shift-5")
+        #expect(preferences.openHistoryShortcut.displayString == "Control-Option-Command-H")
         #expect(preferences.launchAtLoginEnabled)
         #expect(URL(fileURLWithPath: preferences.originalsFolderPath).lastPathComponent == "originals")
         #expect(URL(fileURLWithPath: preferences.originalsFolderPath).deletingLastPathComponent().lastPathComponent == "Captures")
@@ -419,6 +440,7 @@ struct ScreenshotMaxxingTests {
         let preferences = PreferencesData(
             areaCaptureShortcut: .defaultAreaCapture,
             captureOptionsShortcut: .defaultCaptureOptions,
+            openHistoryShortcut: .defaultOpenHistory,
             launchAtLoginEnabled: false,
             originalsFolderPath: "/tmp/originals",
             editedFolderPath: "/tmp/edited"
@@ -431,14 +453,27 @@ struct ScreenshotMaxxingTests {
             keyCode: UInt32(kVK_ANSI_B),
             carbonModifiers: UInt32(controlKey | optionKey)
         )
+        let openHistoryShortcut = GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_C),
+            carbonModifiers: UInt32(controlKey | cmdKey)
+        )
 
         let updatedAreaCapture = preferences.updatingAreaCaptureShortcut(areaCaptureShortcut)
         let updatedCaptureOptions = updatedAreaCapture.updatingCaptureOptionsShortcut(captureOptionsShortcut)
+        let updatedOpenHistory = updatedCaptureOptions.updatingOpenHistoryShortcut(openHistoryShortcut)
 
         #expect(updatedAreaCapture.areaCaptureShortcut == areaCaptureShortcut)
         #expect(updatedAreaCapture.captureOptionsShortcut == .defaultCaptureOptions)
+        #expect(updatedAreaCapture.openHistoryShortcut == .defaultOpenHistory)
         #expect(updatedCaptureOptions.areaCaptureShortcut == areaCaptureShortcut)
         #expect(updatedCaptureOptions.captureOptionsShortcut == captureOptionsShortcut)
+        #expect(updatedCaptureOptions.openHistoryShortcut == .defaultOpenHistory)
+        #expect(updatedOpenHistory.areaCaptureShortcut == areaCaptureShortcut)
+        #expect(updatedOpenHistory.captureOptionsShortcut == captureOptionsShortcut)
+        #expect(updatedOpenHistory.openHistoryShortcut == openHistoryShortcut)
+        #expect(updatedOpenHistory.resettingAreaCaptureShortcut().areaCaptureShortcut == .defaultAreaCapture)
+        #expect(updatedOpenHistory.resettingCaptureOptionsShortcut().captureOptionsShortcut == .defaultCaptureOptions)
+        #expect(updatedOpenHistory.resettingOpenHistoryShortcut().openHistoryShortcut == .defaultOpenHistory)
     }
 
     @MainActor
@@ -762,10 +797,15 @@ struct ScreenshotMaxxingTests {
             keyCode: UInt32(kVK_ANSI_B),
             carbonModifiers: UInt32(controlKey | optionKey)
         )
+        let openHistoryShortcut = GlobalKeyboardShortcut(
+            keyCode: UInt32(kVK_ANSI_C),
+            carbonModifiers: UInt32(controlKey | cmdKey)
+        )
 
         let store = ShortcutSettingsStore(userDefaults: userDefaults)
         try store.saveAreaCaptureShortcut(areaCaptureShortcut)
         try store.saveCaptureOptionsShortcut(captureOptionsShortcut)
+        try store.saveOpenHistoryShortcut(openHistoryShortcut)
 
         let reloadedStore = ShortcutSettingsStore(userDefaults: userDefaults)
 
@@ -773,6 +813,16 @@ struct ScreenshotMaxxingTests {
         #expect(reloadedStore.areaCaptureShortcut().displayString == "Option-Command-A")
         #expect(reloadedStore.captureOptionsShortcut() == captureOptionsShortcut)
         #expect(reloadedStore.captureOptionsShortcut().displayString == "Control-Option-B")
+        #expect(reloadedStore.openHistoryShortcut() == openHistoryShortcut)
+        #expect(reloadedStore.openHistoryShortcut().displayString == "Control-Command-C")
+
+        reloadedStore.resetAreaCaptureShortcut()
+        reloadedStore.resetCaptureOptionsShortcut()
+        reloadedStore.resetOpenHistoryShortcut()
+
+        #expect(reloadedStore.areaCaptureShortcut() == .defaultAreaCapture)
+        #expect(reloadedStore.captureOptionsShortcut() == .defaultCaptureOptions)
+        #expect(reloadedStore.openHistoryShortcut() == .defaultOpenHistory)
     }
 
     @Test func recordingSettingsStorePersistsAudioDefaults() throws {
