@@ -1,6 +1,6 @@
 # ScreenshotMaxxing
 
-ScreenshotMaxxing is a local-first native macOS capture utility. It lives in the menu bar, supports keyboard shortcuts, captures screenshots and screen recordings, opens captures in lightweight editors, supports adjustable blur-based obscuration for screenshots, and stores captures locally.
+ScreenshotMaxxing is a local-first native macOS capture utility. It lives in the menu bar, supports keyboard shortcuts, captures screenshots and screen recordings, opens captures in lightweight editors, supports adjustable pixelated blur-based obscuration for screenshots, and stores captures locally.
 
 ## Features
 

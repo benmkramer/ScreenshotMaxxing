@@ -6,6 +6,8 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 
 ## Unreleased
 
+- Changed screenshot blur annotations to render as pixelated mosaic blocks sampled from the underlying image colors.
+
 ## 2.0.5
 
 - Open sourced the repository with MIT licensing guidance and added open-source readiness docs: privacy, contributing, security, support, architecture, changelog, agent instructions, and issue templates.

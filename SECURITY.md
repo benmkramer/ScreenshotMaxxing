@@ -47,7 +47,7 @@ Reports are especially useful in these areas:
 
 ## Redaction And Sensitive Content
 
-ScreenshotMaxxing's blur tool modifies exported pixels, but blur is not certified irreversible redaction. Do not assume blurred secrets are unrecoverable. Security reports about misleading redaction behavior are in scope.
+ScreenshotMaxxing's pixelated blur tool modifies exported pixels, but blur is not certified irreversible redaction. Do not assume blurred secrets are unrecoverable. Security reports about misleading redaction behavior are in scope.
 
 ## Secrets
 
