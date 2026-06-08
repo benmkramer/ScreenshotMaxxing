@@ -2067,20 +2067,50 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
-    @Test func imageRendererUsesCustomBlurStrengthForExportedPixels() throws {
+    @Test func imageRendererAppliesPixelatedBlurToSelectedVerticalRegionOnly() throws {
         let fileManager = FileManager.default
         let baseDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
-        let imageURL = baseDirectory.appendingPathComponent("split.png")
+        let imageURL = baseDirectory.appendingPathComponent("vertical-gradient.png")
         defer {
             try? fileManager.removeItem(at: baseDirectory)
         }
 
         try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
-        try makeVerticalSplitPNGData(width: 48, height: 16).write(to: imageURL)
+        try makeVerticalGradientPNGData(width: 16, height: 16).write(to: imageURL)
 
         let renderer = ImageRenderer()
-        let blurRect = CGRect(x: 20, y: 0, width: 8, height: 16)
+        let uneditedPNGData = try renderer.renderPNG(imageURL: imageURL, annotations: [])
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [
+                Annotation(type: .blur(AnnotationBlur(radius: 8)), rect: CGRect(x: 0, y: 0, width: 16, height: 8))
+            ]
+        )
+        let originalInsideRed = try redChannel(in: uneditedPNGData, x: 8, y: 2)
+        let renderedInsideRed = try redChannel(in: renderedPNGData, x: 8, y: 2)
+        let originalOutsideRed = try redChannel(in: uneditedPNGData, x: 8, y: 12)
+        let renderedOutsideRed = try redChannel(in: renderedPNGData, x: 8, y: 12)
+
+        #expect(abs(renderedInsideRed - originalInsideRed) > 0.01)
+        #expect(abs(renderedOutsideRed - originalOutsideRed) < 0.01)
+    }
+
+    @MainActor
+    @Test func imageRendererUsesCustomBlurStrengthForExportedPixels() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("gradient.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try makeHorizontalGradientPNGData(width: 48, height: 16).write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let blurRect = CGRect(x: 0, y: 0, width: 48, height: 16)
         let defaultBlurPNGData = try renderer.renderPNG(
             imageURL: imageURL,
             annotations: [Annotation(type: .blur(AnnotationBlur()), rect: blurRect)]
@@ -2089,11 +2119,46 @@ struct ScreenshotMaxxingTests {
             imageURL: imageURL,
             annotations: [Annotation(type: .blur(AnnotationBlur(radius: 48)), rect: blurRect)]
         )
-        let defaultRed = try redChannel(in: defaultBlurPNGData, x: 22, y: 8)
-        let strongerRed = try redChannel(in: strongerBlurPNGData, x: 22, y: 8)
+        let defaultRed = try redChannel(in: defaultBlurPNGData, x: 4, y: 8)
+        let strongerRed = try redChannel(in: strongerBlurPNGData, x: 4, y: 8)
 
         #expect(strongerBlurPNGData != defaultBlurPNGData)
         #expect(abs(strongerRed - defaultRed) > 0.01)
+    }
+
+    @MainActor
+    @Test func imageRendererRendersBlurAsPixelatedColorBlocks() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let imageURL = baseDirectory.appendingPathComponent("gradient.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        let originalPNGData = try makeHorizontalGradientPNGData(width: 16, height: 8)
+        try originalPNGData.write(to: imageURL)
+
+        let renderer = ImageRenderer()
+        let renderedPNGData = try renderer.renderPNG(
+            imageURL: imageURL,
+            annotations: [
+                Annotation(
+                    type: .blur(AnnotationBlur(radius: 4)),
+                    rect: CGRect(x: 0, y: 0, width: 16, height: 8)
+                )
+            ]
+        )
+        let originalFirstRed = try redChannel(in: originalPNGData, x: 0, y: 4)
+        let originalSameBlockRed = try redChannel(in: originalPNGData, x: 3, y: 4)
+        let renderedFirstRed = try redChannel(in: renderedPNGData, x: 0, y: 4)
+        let renderedSameBlockRed = try redChannel(in: renderedPNGData, x: 3, y: 4)
+        let renderedNextBlockRed = try redChannel(in: renderedPNGData, x: 6, y: 4)
+
+        #expect(abs(originalSameBlockRed - originalFirstRed) > 0.05)
+        #expect(abs(renderedSameBlockRed - renderedFirstRed) < 0.01)
+        #expect(abs(renderedNextBlockRed - renderedFirstRed) > 0.05)
     }
 
     @MainActor
@@ -3093,6 +3158,74 @@ struct ScreenshotMaxxingTests {
         for y in 0..<height {
             for x in 0..<width {
                 imageRep.setColor(x < width / 2 ? black : white, atX: x, y: y)
+            }
+        }
+
+        guard let pngData = imageRep.representation(using: .png, properties: [:]) else {
+            throw ImageRendererError.renderFailed
+        }
+
+        return pngData
+    }
+
+    private func makeHorizontalGradientPNGData(width: Int, height: Int) throws -> Data {
+        let imageRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+
+        guard let imageRep else {
+            throw ImageRendererError.renderFailed
+        }
+
+        let denominator = CGFloat(max(width - 1, 1))
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let red = CGFloat(x) / denominator
+                imageRep.setColor(NSColor(deviceRed: red, green: 0, blue: 0, alpha: 1), atX: x, y: y)
+            }
+        }
+
+        guard let pngData = imageRep.representation(using: .png, properties: [:]) else {
+            throw ImageRendererError.renderFailed
+        }
+
+        return pngData
+    }
+
+    private func makeVerticalGradientPNGData(width: Int, height: Int) throws -> Data {
+        let imageRep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )
+
+        guard let imageRep else {
+            throw ImageRendererError.renderFailed
+        }
+
+        let denominator = CGFloat(max(height - 1, 1))
+
+        for y in 0..<height {
+            for x in 0..<width {
+                let red = CGFloat(y) / denominator
+                imageRep.setColor(NSColor(deviceRed: red, green: 0, blue: 0, alpha: 1), atX: x, y: y)
             }
         }
 

@@ -107,12 +107,20 @@ struct AnnotationBlur: Equatable {
         AnnotationBlur(radius: radius)
     }
 
+    var pixelBlockSize: Double {
+        Self.pixelBlockSize(forRadius: radius)
+    }
+
     static func clampedRadius(_ radius: Double) -> Double {
         guard radius.isFinite else {
             return defaultRadius
         }
 
         return min(max(radius, minimumRadius), maximumRadius)
+    }
+
+    static func pixelBlockSize(forRadius radius: Double) -> Double {
+        clampedRadius(radius).rounded()
     }
 }
 

@@ -43,7 +43,7 @@ The app may generate thumbnails for video history. Thumbnails are stored locally
 
 Blur and other editing tools affect exported files only after you save, copy, or export the edited result. Original files may remain in the `originals/` folder unless you delete them.
 
-Blur is an obscuration tool, not certified irreversible redaction. Stronger blur settings reduce visible detail, but blur should not be treated as a guarantee against recovery or inference for highly sensitive information. For high-risk secrets, prefer cropping, covering with an opaque shape if available, or avoiding capture of the secret in the first place.
+Blur is a pixelated obscuration tool, not certified irreversible redaction. Stronger blur settings use larger color blocks and reduce visible detail, but blur should not be treated as a guarantee against recovery or inference for highly sensitive information. For high-risk secrets, prefer cropping, covering with an opaque shape if available, or avoiding capture of the secret in the first place.
 
 ## Deletion
 

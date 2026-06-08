@@ -1183,20 +1183,13 @@ private struct BlurPreviewOverlay: View {
     let isDraft: Bool
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: imageFrame.width, height: imageFrame.height)
-                .position(x: imageFrame.midX, y: imageFrame.midY)
-                .blur(radius: blurRadius, opaque: true)
-        }
+        PixelatedBlurPreviewImageView(
+            image: image,
+            imageFrame: imageFrame,
+            rect: rect,
+            pixelBlockSize: pixelBlockSize
+        )
         .frame(width: containerSize.width, height: containerSize.height, alignment: .topLeading)
-        .mask(alignment: .topLeading) {
-            Rectangle()
-                .frame(width: rect.width, height: rect.height)
-                .offset(x: rect.minX, y: rect.minY)
-        }
         .overlay(alignment: .topLeading) {
             if isSelected || isDraft {
                 Rectangle()
@@ -1217,6 +1210,116 @@ private struct BlurPreviewOverlay: View {
             }
         }
         .allowsHitTesting(false)
+    }
+
+    private var pixelBlockSize: CGFloat {
+        guard blurRadius.isFinite else {
+            return CGFloat(AnnotationBlur.defaultRadius)
+        }
+
+        return max(blurRadius.rounded(), 4)
+    }
+}
+
+private struct PixelatedBlurPreviewImageView: NSViewRepresentable {
+    let image: NSImage
+    let imageFrame: CGRect
+    let rect: CGRect
+    let pixelBlockSize: CGFloat
+
+    func makeNSView(context: Context) -> PixelatedBlurPreviewNSView {
+        let view = PixelatedBlurPreviewNSView()
+        view.image = image
+        view.imageFrame = imageFrame
+        view.rect = rect
+        view.pixelBlockSize = pixelBlockSize
+        return view
+    }
+
+    func updateNSView(_ nsView: PixelatedBlurPreviewNSView, context: Context) {
+        nsView.image = image
+        nsView.imageFrame = imageFrame
+        nsView.rect = rect
+        nsView.pixelBlockSize = pixelBlockSize
+    }
+}
+
+private final class PixelatedBlurPreviewNSView: NSView {
+    var image: NSImage? {
+        didSet {
+            needsDisplay = true
+        }
+    }
+    var imageFrame: CGRect = .zero {
+        didSet {
+            needsDisplay = true
+        }
+    }
+    var rect: CGRect = .zero {
+        didSet {
+            needsDisplay = true
+        }
+    }
+    var pixelBlockSize: CGFloat = CGFloat(AnnotationBlur.defaultRadius) {
+        didSet {
+            needsDisplay = true
+        }
+    }
+
+    override var isFlipped: Bool {
+        true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let image,
+              imageFrame.width > 0,
+              imageFrame.height > 0,
+              rect.width > 0,
+              rect.height > 0,
+              let graphicsContext = NSGraphicsContext.current else {
+            return
+        }
+
+        let clippedRect = rect.intersection(imageFrame)
+        guard !clippedRect.isNull,
+              clippedRect.width > 0,
+              clippedRect.height > 0 else {
+            return
+        }
+
+        let blockSize = max(pixelBlockSize, 1)
+        let sampleSize = CGSize(
+            width: max((imageFrame.width / blockSize).rounded(.up), 1),
+            height: max((imageFrame.height / blockSize).rounded(.up), 1)
+        )
+        let sampledImage = NSImage(size: sampleSize)
+
+        sampledImage.lockFocus()
+        if let sampleContext = NSGraphicsContext.current {
+            sampleContext.imageInterpolation = .medium
+        }
+        image.draw(
+            in: CGRect(origin: .zero, size: sampleSize),
+            from: CGRect(origin: .zero, size: image.size),
+            operation: .copy,
+            fraction: 1,
+            respectFlipped: true,
+            hints: nil
+        )
+        sampledImage.unlockFocus()
+
+        graphicsContext.saveGraphicsState()
+        NSBezierPath(rect: clippedRect).setClip()
+        graphicsContext.imageInterpolation = .none
+        sampledImage.draw(
+            in: imageFrame,
+            from: CGRect(origin: .zero, size: sampleSize),
+            operation: .sourceOver,
+            fraction: 1,
+            respectFlipped: true,
+            hints: nil
+        )
+        graphicsContext.restoreGraphicsState()
     }
 }
 
@@ -1460,7 +1563,7 @@ private struct BlurControls: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 24, alignment: .trailing)
         }
-        .help("Blur strength. Use stronger blur for sensitive content.")
+        .help("Pixelated blur strength. Larger values make bigger color blocks.")
     }
 }
 

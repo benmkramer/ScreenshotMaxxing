@@ -65,7 +65,7 @@ enum EditorTool: String, CaseIterable, Identifiable {
         case .select:
             "Select an annotation"
         case .blur:
-            "Draw a blur effect"
+            "Draw a pixelated blur effect"
         case .pen:
             "Draw a solid line"
         case .highlighter:

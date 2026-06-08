@@ -51,7 +51,7 @@ Screenshot editing code lives in `Editor/`.
 - `ImageRenderer` bakes annotations into exported bitmap pixels.
 - `EditorFileSaver` and `EditorClipboard` handle save/copy operations.
 
-Blur annotations are rendered into exported pixels, but blur is an obscuration tool rather than certified irreversible redaction.
+Blur annotations are rendered as pixelated mosaic blocks into exported pixels, but blur is an obscuration tool rather than certified irreversible redaction.
 
 Video editing code lives in `Video/`.
 
