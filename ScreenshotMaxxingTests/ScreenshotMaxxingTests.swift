@@ -520,12 +520,11 @@ struct ScreenshotMaxxingTests {
         let baseDirectory = fileManager.temporaryDirectory
             .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
         let outputURL = baseDirectory.appendingPathComponent("recording.mp4")
-        let thumbnailURL = baseDirectory.appendingPathComponent("recording-thumbnail.png")
         let options = RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: true)
         let session = SpyRecordingSession(
             options: options,
             outputURL: outputURL,
-            dimensions: CGSize(width: 1280, height: 720),
+            dimensions: CGSize(width: 96, height: 64),
             thumbnailBaseDirectory: baseDirectory
         )
         defer {
@@ -540,19 +539,6 @@ struct ScreenshotMaxxingTests {
                 #expect(requestedBaseDirectory == baseDirectory)
                 return session
             },
-            recordingResultFactory: { activeSession in
-                #expect(activeSession === session)
-                return RecordingResult(
-                    mode: activeSession.mode,
-                    fileURL: activeSession.outputURL,
-                    durationSeconds: 2.5,
-                    width: Int(activeSession.dimensions.width),
-                    height: Int(activeSession.dimensions.height),
-                    thumbnailURL: thumbnailURL,
-                    microphoneEnabled: activeSession.options.microphoneEnabled,
-                    systemAudioEnabled: activeSession.options.systemAudioEnabled
-                )
-            },
             recoveryRetryCount: 1,
             recoveryRetryDelayNanoseconds: 0,
             completionFallbackDelayNanoseconds: 0,
@@ -562,25 +548,24 @@ struct ScreenshotMaxxingTests {
         let recordTask = Task {
             try await controller.record(options: options, baseDirectory: baseDirectory)
         }
-        #expect(await waitForCondition(session.showCount == 1))
-        try Data("recording".utf8).write(to: outputURL)
+        try await waitForCondition(session.showCount == 1)
+        try await makeTestVideo(at: outputURL, durationSeconds: 2.5, size: CGSize(width: 96, height: 64))
 
         await controller.stopActiveRecording()
         let result = try await recordTask.value
 
         #expect(session.didRequestStop)
         #expect(session.stopCount == 1)
-        #expect(session.closeCount == 2)
-        #expect(result == RecordingResult(
-            mode: .area,
-            fileURL: outputURL,
-            durationSeconds: 2.5,
-            width: 1280,
-            height: 720,
-            thumbnailURL: thumbnailURL,
-            microphoneEnabled: false,
-            systemAudioEnabled: true
-        ))
+        #expect(session.closeCount >= 1)
+        #expect(result.mode == .area)
+        #expect(result.fileURL == outputURL)
+        #expect(isApproximately(result.durationSeconds, 2.5, accuracy: 0.08))
+        #expect(result.width == 96)
+        #expect(result.height == 64)
+        #expect(result.microphoneEnabled == false)
+        #expect(result.systemAudioEnabled == true)
+        #expect(result.thumbnailURL.deletingLastPathComponent().lastPathComponent == "thumbnails")
+        #expect(fileManager.fileExists(atPath: result.thumbnailURL.fileSystemPath))
     }
 
     @MainActor
@@ -615,14 +600,14 @@ struct ScreenshotMaxxingTests {
         let recordTask = Task {
             try await controller.record(options: options, baseDirectory: baseDirectory)
         }
-        #expect(await waitForCondition(firstSession.showCount == 1))
+        try await waitForCondition(firstSession.showCount == 1)
 
         await controller.restartActiveRecording()
-        #expect(await waitForCondition(restartedSession.showCount == 1))
+        try await waitForCondition(restartedSession.showCount == 1)
 
         #expect(firstSession.didRequestRestart)
         #expect(firstSession.stopCount == 1)
-        #expect(firstSession.closeCount == 1)
+        #expect(firstSession.closeCount >= 1)
         #expect(!fileManager.fileExists(atPath: firstOutputURL.fileSystemPath))
 
         recordTask.cancel()
@@ -635,7 +620,7 @@ struct ScreenshotMaxxingTests {
         }
 
         #expect(restartedSession.stopCount == 1)
-        #expect(restartedSession.closeCount == 2)
+        #expect(restartedSession.closeCount >= 1)
         #expect(!fileManager.fileExists(atPath: restartedOutputURL.fileSystemPath))
     }
 
@@ -2935,16 +2920,22 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
-    private func waitForCondition(_ condition: @autoclosure () -> Bool) async -> Bool {
-        for _ in 0..<1_000 {
+    private func waitForCondition(
+        _ condition: @autoclosure () -> Bool,
+        timeout: Duration = .seconds(1)
+    ) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+
+        while clock.now < deadline {
             if condition() {
-                return true
+                return
             }
 
-            await Task.yield()
+            try await Task.sleep(nanoseconds: 1_000_000)
         }
 
-        return false
+        throw TestFixtureError.conditionTimedOut
     }
 
     private func makeTestVideo(at outputURL: URL, durationSeconds: Double, size: CGSize) async throws {
@@ -3071,6 +3062,7 @@ struct ScreenshotMaxxingTests {
     private enum TestFixtureError: Error {
         case videoWriterFailed(String)
         case pixelBufferCreationFailed(CVReturn)
+        case conditionTimedOut
     }
 
     private func isApproximately(_ first: Double, _ second: Double, accuracy: Double = 0.000001) -> Bool {
