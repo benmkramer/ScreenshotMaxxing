@@ -7,6 +7,7 @@
 
 import Testing
 import AppKit
+@preconcurrency import AVFoundation
 import Carbon
 import Foundation
 import SwiftData
@@ -511,6 +512,176 @@ struct ScreenshotMaxxingTests {
         #expect(RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: false).outputContainer == .mov)
         #expect(RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: true).outputContainer == .mov)
         #expect(RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: true).outputContainer.fileExtension == "mov")
+    }
+
+    @MainActor
+    @Test func recordingControllerStopRecoversCompletedFileAndReturnsResult() async throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let outputURL = baseDirectory.appendingPathComponent("recording.mp4")
+        let thumbnailURL = baseDirectory.appendingPathComponent("recording-thumbnail.png")
+        let options = RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: true)
+        let session = SpyRecordingSession(
+            options: options,
+            outputURL: outputURL,
+            dimensions: CGSize(width: 1280, height: 720),
+            thumbnailBaseDirectory: baseDirectory
+        )
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        let controller = RecordingController(
+            fileManager: fileManager,
+            sessionFactory: { requestedOptions, requestedBaseDirectory in
+                #expect(requestedOptions == options)
+                #expect(requestedBaseDirectory == baseDirectory)
+                return session
+            },
+            recordingResultFactory: { activeSession in
+                #expect(activeSession === session)
+                return RecordingResult(
+                    mode: activeSession.mode,
+                    fileURL: activeSession.outputURL,
+                    durationSeconds: 2.5,
+                    width: Int(activeSession.dimensions.width),
+                    height: Int(activeSession.dimensions.height),
+                    thumbnailURL: thumbnailURL,
+                    microphoneEnabled: activeSession.options.microphoneEnabled,
+                    systemAudioEnabled: activeSession.options.systemAudioEnabled
+                )
+            },
+            recoveryRetryCount: 1,
+            recoveryRetryDelayNanoseconds: 0,
+            completionFallbackDelayNanoseconds: 0,
+            sleep: { _ in }
+        )
+
+        let recordTask = Task {
+            try await controller.record(options: options, baseDirectory: baseDirectory)
+        }
+        #expect(await waitForCondition(session.showCount == 1))
+        try Data("recording".utf8).write(to: outputURL)
+
+        await controller.stopActiveRecording()
+        let result = try await recordTask.value
+
+        #expect(session.didRequestStop)
+        #expect(session.stopCount == 1)
+        #expect(session.closeCount == 2)
+        #expect(result == RecordingResult(
+            mode: .area,
+            fileURL: outputURL,
+            durationSeconds: 2.5,
+            width: 1280,
+            height: 720,
+            thumbnailURL: thumbnailURL,
+            microphoneEnabled: false,
+            systemAudioEnabled: true
+        ))
+    }
+
+    @MainActor
+    @Test func recordingControllerRestartReplacesSessionAndCancellationCleansUpFiles() async throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let firstOutputURL = baseDirectory.appendingPathComponent("first-recording.mp4")
+        let restartedOutputURL = baseDirectory.appendingPathComponent("restarted-recording.mp4")
+        let options = RecordingOptions(mode: .fullscreen, microphoneEnabled: false)
+        let firstSession = SpyRecordingSession(options: options, outputURL: firstOutputURL)
+        let restartedSession = SpyRecordingSession(options: options, outputURL: restartedOutputURL)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try Data("first".utf8).write(to: firstOutputURL)
+        try Data("restarted".utf8).write(to: restartedOutputURL)
+
+        let controller = RecordingController(
+            fileManager: fileManager,
+            sessionFactory: { _, _ in
+                firstSession
+            },
+            restartSessionFactory: { activeSession in
+                #expect(activeSession === firstSession)
+                return restartedSession
+            },
+            sleep: { _ in }
+        )
+        let recordTask = Task {
+            try await controller.record(options: options, baseDirectory: baseDirectory)
+        }
+        #expect(await waitForCondition(firstSession.showCount == 1))
+
+        await controller.restartActiveRecording()
+        #expect(await waitForCondition(restartedSession.showCount == 1))
+
+        #expect(firstSession.didRequestRestart)
+        #expect(firstSession.stopCount == 1)
+        #expect(firstSession.closeCount == 1)
+        #expect(!fileManager.fileExists(atPath: firstOutputURL.fileSystemPath))
+
+        recordTask.cancel()
+
+        do {
+            _ = try await recordTask.value
+            Issue.record("Expected canceled recording task to throw")
+        } catch RecordingSelectionError.cancelled {
+        } catch is CancellationError {
+        }
+
+        #expect(restartedSession.stopCount == 1)
+        #expect(restartedSession.closeCount == 2)
+        #expect(!fileManager.fileExists(atPath: restartedOutputURL.fileSystemPath))
+    }
+
+    @MainActor
+    private final class SpyRecordingSession: RecordingSessionControlling {
+        let options: RecordingOptions
+        let outputURL: URL
+        let mode: RecordingMode
+        let dimensions: CGSize
+        let thumbnailBaseDirectory: URL?
+        var didRequestStop = false
+        var didRequestRestart = false
+        var completionFallbackTask: Task<Void, Never>?
+        var showCount = 0
+        var closeCount = 0
+        var stopCount = 0
+        var stopError: Error?
+
+        init(
+            options: RecordingOptions,
+            outputURL: URL,
+            dimensions: CGSize = CGSize(width: 640, height: 360),
+            thumbnailBaseDirectory: URL? = nil
+        ) {
+            self.options = options
+            self.outputURL = outputURL
+            self.mode = options.mode
+            self.dimensions = dimensions
+            self.thumbnailBaseDirectory = thumbnailBaseDirectory
+        }
+
+        func showChrome() {
+            showCount += 1
+        }
+
+        func closeChrome() {
+            closeCount += 1
+        }
+
+        func stopCapture() async throws {
+            stopCount += 1
+
+            if let stopError {
+                throw stopError
+            }
+        }
     }
 
     @Test func screenCapturePermissionPreflightsGrantedAccess() {
@@ -2725,8 +2896,181 @@ struct ScreenshotMaxxingTests {
         #expect(plan.outputDurationSeconds == 7)
     }
 
+    @MainActor
+    @Test func videoExporterWritesTrimmedCutFixtureAndOverwritesOutput() async throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let inputURL = baseDirectory.appendingPathComponent("source.mp4")
+        let outputURL = baseDirectory.appendingPathComponent("edited.mp4")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try await makeTestVideo(at: inputURL, durationSeconds: 3, size: CGSize(width: 96, height: 64))
+        try Data("old output".utf8).write(to: outputURL)
+
+        let result = try await VideoExporter(fileManager: fileManager).export(
+            videoURL: inputURL,
+            editState: VideoEditState(
+                durationSeconds: 3,
+                trimStart: 0.5,
+                trimEnd: 2.5,
+                removedRanges: [VideoTimeRange(start: 1, end: 1.5)]
+            ),
+            outputURL: outputURL
+        )
+        let exportedVideoTracks = try await AVURLAsset(url: outputURL).loadTracks(withMediaType: .video)
+
+        #expect(result.fileURL == outputURL)
+        #expect(isApproximately(result.durationSeconds, 1.5, accuracy: 0.08))
+        #expect(result.dimensions == CGSize(width: 96, height: 64))
+        #expect(try Data(contentsOf: outputURL) != Data("old output".utf8))
+        #expect(!exportedVideoTracks.isEmpty)
+    }
+
     private func rangePairs(_ ranges: [VideoTimeRange]) -> [[Double]] {
         ranges.map { [$0.start, $0.end] }
+    }
+
+    @MainActor
+    private func waitForCondition(_ condition: @autoclosure () -> Bool) async -> Bool {
+        for _ in 0..<1_000 {
+            if condition() {
+                return true
+            }
+
+            await Task.yield()
+        }
+
+        return false
+    }
+
+    private func makeTestVideo(at outputURL: URL, durationSeconds: Double, size: CGSize) async throws {
+        let width = Int(size.width)
+        let height = Int(size.height)
+        let frameRate: Int32 = 30
+        let frameCount = max(Int(durationSeconds * Double(frameRate)), 1)
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+        let videoInput = AVAssetWriterInput(
+            mediaType: .video,
+            outputSettings: [
+                AVVideoCodecKey: AVVideoCodecType.h264,
+                AVVideoWidthKey: width,
+                AVVideoHeightKey: height
+            ]
+        )
+        videoInput.expectsMediaDataInRealTime = false
+
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: videoInput,
+            sourcePixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                kCVPixelBufferWidthKey as String: width,
+                kCVPixelBufferHeightKey as String: height
+            ]
+        )
+
+        guard writer.canAdd(videoInput) else {
+            throw TestFixtureError.videoWriterFailed("Could not add video input")
+        }
+
+        writer.add(videoInput)
+
+        guard writer.startWriting() else {
+            throw writer.error ?? TestFixtureError.videoWriterFailed("Could not start writing")
+        }
+
+        writer.startSession(atSourceTime: .zero)
+
+        for frameIndex in 0..<frameCount {
+            while !videoInput.isReadyForMoreMediaData {
+                try await Task.sleep(nanoseconds: 1_000_000)
+            }
+
+            let pixelBuffer = try makePixelBuffer(
+                width: width,
+                height: height,
+                red: UInt8((frameIndex * 5) % 255),
+                green: 64,
+                blue: UInt8(255 - ((frameIndex * 3) % 255))
+            )
+            let presentationTime = CMTime(value: CMTimeValue(frameIndex), timescale: frameRate)
+
+            guard adaptor.append(pixelBuffer, withPresentationTime: presentationTime) else {
+                throw writer.error ?? TestFixtureError.videoWriterFailed("Could not append frame")
+            }
+        }
+
+        videoInput.markAsFinished()
+        try finishWriting(writer)
+    }
+
+    private func makePixelBuffer(width: Int, height: Int, red: UInt8, green: UInt8, blue: UInt8) throws -> CVPixelBuffer {
+        var pixelBuffer: CVPixelBuffer?
+        let status = CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            width,
+            height,
+            kCVPixelFormatType_32BGRA,
+            [
+                kCVPixelBufferCGImageCompatibilityKey as String: true,
+                kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+            ] as CFDictionary,
+            &pixelBuffer
+        )
+
+        guard status == kCVReturnSuccess, let pixelBuffer else {
+            throw TestFixtureError.pixelBufferCreationFailed(status)
+        }
+
+        CVPixelBufferLockBaseAddress(pixelBuffer, [])
+        defer {
+            CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+        }
+
+        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
+            throw TestFixtureError.pixelBufferCreationFailed(kCVReturnInvalidPixelBufferAttributes)
+        }
+
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        let bytes = baseAddress.assumingMemoryBound(to: UInt8.self)
+
+        for y in 0..<height {
+            let row = bytes.advanced(by: y * bytesPerRow)
+
+            for x in 0..<width {
+                let pixel = row.advanced(by: x * 4)
+                pixel[0] = blue
+                pixel[1] = green
+                pixel[2] = red
+                pixel[3] = 255
+            }
+        }
+
+        return pixelBuffer
+    }
+
+    private func finishWriting(_ writer: AVAssetWriter) throws {
+        let semaphore = DispatchSemaphore(value: 0)
+        writer.finishWriting {
+            semaphore.signal()
+        }
+        semaphore.wait()
+
+        if let error = writer.error {
+            throw error
+        }
+
+        guard writer.status == .completed else {
+            throw TestFixtureError.videoWriterFailed("Writer ended with status \(writer.status.rawValue)")
+        }
+    }
+
+    private enum TestFixtureError: Error {
+        case videoWriterFailed(String)
+        case pixelBufferCreationFailed(CVReturn)
     }
 
     private func isApproximately(_ first: Double, _ second: Double, accuracy: Double = 0.000001) -> Bool {
