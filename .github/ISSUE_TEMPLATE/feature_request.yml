@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest an improvement that fits ScreenshotMaxxing's local-first direction.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ScreenshotMaxxing is intentionally local-first: no accounts, telemetry, hosted capture library, subscriptions, or cloud sync.
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow
+      description: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: current_gap
+    attributes:
+      label: Current gap
+      description: What does the current app make hard, slow, or impossible?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest behavior change that would solve the problem.
+    validations:
+      required: true
+  - type: checkboxes
+    id: fit
+    attributes:
+      label: Product fit
+      options:
+        - label: This can work without accounts.
+        - label: This can work without telemetry.
+        - label: This can keep captures and recordings local by default.
+        - label: This does not require hosted screenshot/video sharing.
