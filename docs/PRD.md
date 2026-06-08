@@ -1,8 +1,12 @@
-# ScreenshotMaxxing PRD / Build Plan
+# ScreenshotMaxxing Product Plan
+
+## Document Status
+
+This document began as the V1 build plan. The top sections reflect the current app direction; the implementation checklist below preserves the original screenshot-first build chunks for project history.
 
 ## Product Summary
 
-ScreenshotMaxxing is a native macOS screenshot utility. It lives in the menu bar, supports keyboard shortcuts, captures areas/windows/fullscreen, opens screenshots in a lightweight editor, supports adjustable blur-based obscuration, and stores captures locally with metadata.
+ScreenshotMaxxing is a local-first native macOS capture utility. It lives in the menu bar, supports keyboard shortcuts, captures screenshots and screen recordings, opens captures in lightweight editors, supports adjustable blur-based obscuration for screenshots, and stores captures locally with metadata.
 
 ## Technical Direction
 
@@ -12,21 +16,22 @@ ScreenshotMaxxing is a native macOS screenshot utility. It lives in the menu bar
 - Interface: SwiftUI
 - System integration: AppKit
 - Persistence: SwiftData for metadata
-- Image files: stored on disk
+- Media files: stored on disk
 - Image rendering: CoreImage / CoreGraphics
-- Initial capture mechanism: macOS `screencapture`
-- Later capture mechanism: custom overlay or ScreenCaptureKit if needed
+- Screenshot capture mechanism: macOS `screencapture`
+- Recording mechanism: ScreenCaptureKit
+- Video/media support: AVFoundation
 
 ## Product Principles
 
 - Fast capture comes before feature depth.
 - The app should feel like a Mac utility, not a document editor.
-- Screenshots are local-first.
-- Image files stay on disk; metadata stays in SwiftData.
+- Screenshots and recordings are local-first.
+- Media files stay on disk; metadata stays in SwiftData.
 - Blur/obscuration must modify exported pixels, not just overlay a visual effect. Stronger blur settings are recommended for sensitive content; blur is not certified irreversible redaction.
 - Prefer small working vertical slices over broad unfinished systems.
 
-## V1 Scope
+## Current Scope
 
 ### In Scope
 
@@ -39,15 +44,21 @@ ScreenshotMaxxing is a native macOS screenshot utility. It lives in the menu bar
 - Basic annotation primitives
 - Copy edited image
 - Save edited image
+- Record area
+- Record window
+- Record fullscreen
+- Optional microphone audio for recordings
+- Optional system audio for recordings
+- Video playback/editing window
+- Video thumbnails in history
 - Local capture history
 - SwiftData metadata
 - Configurable capture shortcut, at least for area capture
 
-### Out Of Scope For V1
+### Out Of Scope
 
 - Cloud sync
 - Accounts
-- Video recording
 - GIF recording
 - Scrolling capture
 - OCR
@@ -102,7 +113,7 @@ final class Capture {
 
 ### File Storage
 
-Store image files outside SwiftData.
+Store media files outside SwiftData.
 
 Recommended location:
 
@@ -110,6 +121,7 @@ Recommended location:
 ~/Library/Application Support/ScreenshotMaxxing/Captures/
   originals/
   edited/
+  thumbnails/
 ```
 
 ## Suggested Project Structure

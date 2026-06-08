@@ -1,0 +1,93 @@
+name: Bug report
+description: Report a reproducible ScreenshotMaxxing bug.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not attach screenshots or recordings that contain private information.
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: "Example: 2.0.4, latest main, or commit SHA."
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      description: "Example: macOS 26.2."
+    validations:
+      required: true
+  - type: dropdown
+    id: build
+    attributes:
+      label: Build type
+      options:
+        - Official DMG
+        - Local Debug build
+        - Local Release build
+        - Fork or modified build
+    validations:
+      required: true
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Affected workflow
+      options:
+        - Screenshot area capture
+        - Screenshot window capture
+        - Screenshot fullscreen capture
+        - Video area recording
+        - Video window recording
+        - Video fullscreen recording
+        - Screenshot editor
+        - Video editor
+        - History
+        - Preferences or shortcuts
+        - Permissions
+        - Release or install
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: permissions
+    attributes:
+      label: Relevant permissions/options
+      options:
+        - label: Screen Recording is granted in System Settings.
+        - label: Microphone was enabled for this workflow.
+        - label: System audio was enabled for this workflow.
+        - label: This happens after resetting permissions with `scripts/reset-permissions.sh`.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include enough detail to reproduce the behavior.
+      placeholder: |
+        1. Open ScreenshotMaxxing...
+        2. Choose...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include exact error text if the app shows one.
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Add logs, non-sensitive sample files, or other details.
