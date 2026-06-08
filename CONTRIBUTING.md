@@ -61,6 +61,11 @@ xcodebuild test \
 
 UI tests may require a local GUI session and macOS automation permissions. If the full scheme is blocked by automation setup, run the unit tests first and include the UI-test limitation in your PR notes.
 
+Follow-up testing coverage to add separately:
+
+- App-level orchestration tests for permission denial, capture success, editor reuse, and cancellation/error routing.
+- Reliable UI smoke coverage for opening capture options, History, and Preferences through app actions.
+
 ## Resetting Local Permissions
 
 To reset both Debug and Release permission identities on a development machine:

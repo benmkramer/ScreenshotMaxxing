@@ -10,13 +10,54 @@ import AVFoundation
 import ScreenCaptureKit
 
 @MainActor
+protocol RecordingSessionControlling: AnyObject {
+    var options: RecordingOptions { get }
+    var outputURL: URL { get }
+    var mode: RecordingMode { get }
+    var dimensions: CGSize { get }
+    var thumbnailBaseDirectory: URL? { get }
+    var didRequestStop: Bool { get set }
+    var didRequestRestart: Bool { get set }
+    var completionFallbackTask: Task<Void, Never>? { get set }
+
+    func showChrome()
+    func closeChrome()
+    func stopCapture() async throws
+}
+
+@MainActor
 final class RecordingController {
     private let fileManager: FileManager
-    private var activeSession: ActiveRecordingSession?
+    private let sessionFactory: (@MainActor (RecordingOptions, URL?) async throws -> any RecordingSessionControlling)?
+    private let restartSessionFactory: (@MainActor (any RecordingSessionControlling) async throws -> any RecordingSessionControlling)?
+    private let recordingResultFactory: (@MainActor (any RecordingSessionControlling) throws -> RecordingResult)?
+    private let recoveryRetryCount: Int
+    private let recoveryRetryDelayNanoseconds: UInt64
+    private let completionFallbackDelayNanoseconds: UInt64
+    private let sleep: (UInt64) async -> Void
+    private var activeSession: (any RecordingSessionControlling)?
     private var continuation: CheckedContinuation<RecordingResult, Error>?
 
-    init(fileManager: FileManager = .default) {
+    init(
+        fileManager: FileManager = .default,
+        sessionFactory: (@MainActor (RecordingOptions, URL?) async throws -> any RecordingSessionControlling)? = nil,
+        restartSessionFactory: (@MainActor (any RecordingSessionControlling) async throws -> any RecordingSessionControlling)? = nil,
+        recordingResultFactory: (@MainActor (any RecordingSessionControlling) throws -> RecordingResult)? = nil,
+        recoveryRetryCount: Int = 20,
+        recoveryRetryDelayNanoseconds: UInt64 = 250_000_000,
+        completionFallbackDelayNanoseconds: UInt64 = 8_000_000_000,
+        sleep: @escaping (UInt64) async -> Void = { nanoseconds in
+            try? await Task.sleep(nanoseconds: nanoseconds)
+        }
+    ) {
         self.fileManager = fileManager
+        self.sessionFactory = sessionFactory
+        self.restartSessionFactory = restartSessionFactory
+        self.recordingResultFactory = recordingResultFactory
+        self.recoveryRetryCount = recoveryRetryCount
+        self.recoveryRetryDelayNanoseconds = recoveryRetryDelayNanoseconds
+        self.completionFallbackDelayNanoseconds = completionFallbackDelayNanoseconds
+        self.sleep = sleep
     }
 
     func record(options: RecordingOptions, baseDirectory: URL? = nil) async throws -> RecordingResult {
@@ -45,11 +86,10 @@ final class RecordingController {
         }
 
         activeSession.didRequestStop = true
-        activeSession.toolbar.close()
-        activeSession.focusOverlay?.close()
+        activeSession.closeChrome()
 
         do {
-            try await stopCapture(activeSession.stream)
+            try await activeSession.stopCapture()
             scheduleRecordingCompletionFallback(for: activeSession)
         } catch {
             if await recoverCompletedRecordingIfPossible() {
@@ -68,23 +108,17 @@ final class RecordingController {
         }
 
         activeSession.didRequestRestart = true
-        activeSession.toolbar.close()
-        activeSession.focusOverlay?.close()
+        activeSession.closeChrome()
 
         do {
-            try await stopCapture(activeSession.stream)
+            try await activeSession.stopCapture()
             try? fileManager.removeItem(at: activeSession.outputURL)
 
-            let restartedSession = try await makeActiveSession(
-                options: activeSession.options,
-                target: activeSession.target,
-                baseDirectory: activeSession.thumbnailBaseDirectory
-            )
+            let restartedSession = try await makeRestartedSession(from: activeSession)
 
             guard self.activeSession === activeSession else {
-                restartedSession.toolbar.close()
-                restartedSession.focusOverlay?.close()
-                try? await stopCapture(restartedSession.stream)
+                restartedSession.closeChrome()
+                try? await restartedSession.stopCapture()
                 try? fileManager.removeItem(at: restartedSession.outputURL)
                 return
             }
@@ -104,6 +138,13 @@ final class RecordingController {
             throw RecordingError.alreadyRecording
         }
 
+        if let sessionFactory {
+            let activeSession = try await sessionFactory(options, baseDirectory)
+            self.activeSession = activeSession
+            activeSession.showChrome()
+            return
+        }
+
         if options.microphoneEnabled {
             try await requestMicrophoneAccessIfNeeded()
         }
@@ -118,6 +159,24 @@ final class RecordingController {
 
         self.activeSession = activeSession
         activeSession.showChrome()
+    }
+
+    private func makeRestartedSession(
+        from activeSession: any RecordingSessionControlling
+    ) async throws -> any RecordingSessionControlling {
+        if let restartSessionFactory {
+            return try await restartSessionFactory(activeSession)
+        }
+
+        guard let activeSession = activeSession as? ActiveRecordingSession else {
+            throw RecordingError.recordingDidNotFinish
+        }
+
+        return try await makeActiveSession(
+            options: activeSession.options,
+            target: activeSession.target,
+            baseDirectory: activeSession.thumbnailBaseDirectory
+        )
     }
 
     private func makeActiveSession(
@@ -185,8 +244,11 @@ final class RecordingController {
             return
         }
 
-        if let recordingOutput, activeSession.recordingOutput !== recordingOutput {
-            return
+        if let recordingOutput {
+            guard let activeSession = activeSession as? ActiveRecordingSession,
+                  activeSession.recordingOutput === recordingOutput else {
+                return
+            }
         }
 
         Task { @MainActor in
@@ -199,7 +261,7 @@ final class RecordingController {
     }
 
     private func handleRecordingOutputFailure(_ error: Error, from recordingOutput: SCRecordingOutput) {
-        guard let activeSession,
+        guard let activeSession = activeSession as? ActiveRecordingSession,
               activeSession.recordingOutput === recordingOutput else {
             return
         }
@@ -222,13 +284,16 @@ final class RecordingController {
         }
     }
 
-    private func scheduleRecordingCompletionFallback(for activeSession: ActiveRecordingSession) {
+    private func scheduleRecordingCompletionFallback(for activeSession: any RecordingSessionControlling) {
         activeSession.completionFallbackTask?.cancel()
         activeSession.completionFallbackTask = Task { @MainActor [weak self, weak activeSession] in
-            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            guard let self else {
+                return
+            }
 
-            guard let self,
-                  let activeSession,
+            await sleep(completionFallbackDelayNanoseconds)
+
+            guard let activeSession,
                   self.activeSession === activeSession,
                   activeSession.didRequestStop else {
                 return
@@ -243,7 +308,7 @@ final class RecordingController {
     }
 
     private func recoverCompletedRecordingIfPossible() async -> Bool {
-        for _ in 0..<20 {
+        for _ in 0..<recoveryRetryCount {
             guard let activeSession, !activeSession.didRequestRestart else {
                 return true
             }
@@ -254,13 +319,17 @@ final class RecordingController {
                 return true
             }
 
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            await sleep(recoveryRetryDelayNanoseconds)
         }
 
         return false
     }
 
-    private func makeRecordingResult(for activeSession: ActiveRecordingSession) throws -> RecordingResult {
+    private func makeRecordingResult(for activeSession: any RecordingSessionControlling) throws -> RecordingResult {
+        if let recordingResultFactory {
+            return try recordingResultFactory(activeSession)
+        }
+
         let metadata = try VideoMetadataReader.metadata(for: activeSession.outputURL)
         let thumbnailURL = try VideoThumbnailGenerator(fileManager: fileManager).writeThumbnail(
             for: activeSession.outputURL,
@@ -289,9 +358,8 @@ final class RecordingController {
             return
         }
 
-        activeSession.toolbar.close()
-        activeSession.focusOverlay?.close()
-        try? await stopCapture(activeSession.stream)
+        activeSession.closeChrome()
+        try? await activeSession.stopCapture()
         try? fileManager.removeItem(at: activeSession.outputURL)
         completeWithError(RecordingSelectionError.cancelled)
     }
@@ -299,8 +367,7 @@ final class RecordingController {
     private func completeWithResult(_ result: RecordingResult) {
         let continuation = continuation
         activeSession?.completionFallbackTask?.cancel()
-        activeSession?.toolbar.close()
-        activeSession?.focusOverlay?.close()
+        activeSession?.closeChrome()
         activeSession = nil
         self.continuation = nil
         continuation?.resume(returning: result)
@@ -309,8 +376,7 @@ final class RecordingController {
     private func completeWithError(_ error: Error) {
         let continuation = continuation
         activeSession?.completionFallbackTask?.cancel()
-        activeSession?.toolbar.close()
-        activeSession?.focusOverlay?.close()
+        activeSession?.closeChrome()
         activeSession = nil
         self.continuation = nil
         continuation?.resume(throwing: error)
@@ -436,18 +502,6 @@ final class RecordingController {
         }
     }
 
-    private func stopCapture(_ stream: SCStream) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            stream.stopCapture { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume(returning: ())
-                }
-            }
-        }
-    }
-
     private func recordingFailureError(_ error: Error, options: RecordingOptions) -> RecordingError {
         let nsError = error as NSError
         if nsError.domain == SCStreamErrorDomain {
@@ -546,7 +600,7 @@ final class RecordingController {
     }
 }
 
-private final class ActiveRecordingSession {
+private final class ActiveRecordingSession: RecordingSessionControlling {
     let options: RecordingOptions
     let target: RecordingTarget
     let stream: SCStream
@@ -591,6 +645,23 @@ private final class ActiveRecordingSession {
     func showChrome() {
         focusOverlay?.show()
         toolbar.show(on: target.screen)
+    }
+
+    func closeChrome() {
+        toolbar.close()
+        focusOverlay?.close()
+    }
+
+    func stopCapture() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            stream.stopCapture { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: ())
+                }
+            }
+        }
     }
 }
 
