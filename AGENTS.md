@@ -1,0 +1,19 @@
+# Agent Instructions
+
+Before changing behavior, read the docs that define the relevant contract:
+
+- User-facing and privacy claims: `README.md`, `PRIVACY.md`
+- Contributions and local development: `CONTRIBUTING.md`
+- Security-sensitive behavior: `SECURITY.md`
+- Support expectations and issue routing: `SUPPORT.md`
+- Architecture and module boundaries: `docs/ARCHITECTURE.md`
+- Release behavior: `docs/RELEASING.md`
+- User-visible changes: `CHANGELOG.md`
+
+Keep docs and behavior in sync. If a change affects capture, recording, permissions, local storage, deletion, privacy, redaction/blur semantics, release signing, updates, or contributor workflow, update the relevant docs in the same PR.
+
+Do not add accounts, telemetry, hosted capture storage, cloud sync, or broader network behavior unless explicitly requested.
+
+Do not strengthen redaction, privacy, or security claims beyond what the code actually guarantees.
+
+When editing GitHub issue forms, validate the YAML.

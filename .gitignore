@@ -7,3 +7,26 @@ releases/
 *.tar.gz
 *.aar
 site/release.json
+
+# Local credentials and signing material.
+.env
+.env.*
+*.local
+*.secret
+*.token
+*.p12
+*.pfx
+*.p8
+*.pem
+*.key
+*.cer
+*.cert
+*.crt
+*.mobileprovision
+*.provisionprofile
+*.keychain
+*.keychain-db
+AuthKey_*.p8
+DeveloperIDApplication*.p12
+sparkle_private_key*
+dsa_priv.pem

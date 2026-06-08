@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security or privacy report
+    url: https://github.com/benmkramer/ScreenshotMaxxing/security/advisories/new
+    about: Please do not open public issues for vulnerabilities, exposed secrets, or privacy-sensitive reports.
