@@ -6,3 +6,4 @@ releases/
 *.zip
 *.tar.gz
 *.aar
+site/release.json

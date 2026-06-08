@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ScreenshotMaxxing is an offline Mac screenshot utility with local-first capture, editing, redaction, and export.">
+    <meta property="og:title" content="ScreenshotMaxxing">
+    <meta property="og:description" content="An offline Mac screenshot utility. No accounts, no subscription, no usage tracking, no cloud sync.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://benmkramer.github.io/ScreenshotMaxxing/">
+    <meta name="twitter:card" content="summary">
+    <title>ScreenshotMaxxing</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="ScreenshotMaxxing home">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>ScreenshotMaxxing</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#privacy">Privacy</a>
+        <a href="#features">Features</a>
+        <a href="https://github.com/benmkramer/ScreenshotMaxxing">Source</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <h1 id="hero-title">Offline screenshots for Mac.</h1>
+          <p class="lede">ScreenshotMaxxing is an offline Mac screenshot utility. Capture, redact, annotate, copy, and save screenshots without accounts, subscriptions, usage tracking, or cloud sync.</p>
+          <div class="hero-actions" aria-label="Download links">
+            <a id="download-link" class="button primary" href="https://github.com/benmkramer/ScreenshotMaxxing/releases/latest">Download latest DMG</a>
+            <a class="button secondary" href="https://github.com/benmkramer/ScreenshotMaxxing/releases">View releases</a>
+          </div>
+          <p class="release-line" id="release-summary">Latest release metadata appears here when available.</p>
+        </div>
+
+        <div class="app-preview" aria-label="ScreenshotMaxxing interface preview">
+          <div class="preview-window">
+            <div class="window-chrome" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="preview-toolbar">
+              <span>Area Capture</span>
+              <span>Local</span>
+            </div>
+            <div class="preview-canvas">
+              <div class="desktop-sidebar" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="desktop-card primary-card" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="desktop-card detail-card" aria-hidden="true">
+                <span></span>
+                <span></span>
+              </div>
+              <div class="selection-box" aria-label="Selected area preview">
+                <span class="capture-badge">884 x 496</span>
+                <span class="capture-handle handle-nw"></span>
+                <span class="capture-handle handle-ne"></span>
+                <span class="capture-handle handle-sw"></span>
+                <span class="capture-handle handle-se"></span>
+                <span class="redaction-box"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="privacy" class="privacy-band" aria-labelledby="privacy-title">
+        <div>
+          <h2 id="privacy-title">No accounts. No subscription. No usage tracking. No cloud sync.</h2>
+          <p>Captures and edits stay local unless you choose to share or export them. The app is built as an offline Mac utility, not a service.</p>
+        </div>
+        <ul class="privacy-list" aria-label="Privacy promises">
+          <li>No sign in</li>
+          <li>No payment flow</li>
+          <li>No telemetry</li>
+          <li>No hosted screenshot library</li>
+        </ul>
+      </section>
+
+      <section id="features" class="features" aria-labelledby="features-title">
+        <div class="section-heading">
+          <h2 id="features-title">Focused screenshot workflow</h2>
+          <p>Small, local-first tools for the parts of screenshot work that should stay fast.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature">
+            <h3>Menu bar capture</h3>
+            <p>Keep common screenshot actions close without turning capture into a full document workflow.</p>
+          </article>
+          <article class="feature">
+            <h3>Redaction before export</h3>
+            <p>Blur or pixelate sensitive areas so exported pixels do not carry private information forward.</p>
+          </article>
+          <article class="feature">
+            <h3>Local history</h3>
+            <p>Store captures on your Mac with local metadata, instead of sending a library to a hosted account.</p>
+          </article>
+          <article class="feature">
+            <h3>Copy and save</h3>
+            <p>Move edited screenshots into the next app quickly, or save files when you need a durable copy.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="download-panel" aria-labelledby="download-title">
+        <div>
+          <h2 id="download-title">Download the current release</h2>
+          <p id="release-details">Use the latest GitHub Release for the public DMG. If release metadata is unavailable, the button falls back to the latest release page.</p>
+          <p class="digest" id="release-digest" hidden></p>
+        </div>
+        <a id="download-link-secondary" class="button primary" href="https://github.com/benmkramer/ScreenshotMaxxing/releases/latest">Download latest DMG</a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p><a href="https://github.com/benmkramer/ScreenshotMaxxing">GitHub</a> / <a href="https://github.com/benmkramer/ScreenshotMaxxing/releases">Releases</a></p>
+    </footer>
+
+    <script src="site.js" defer></script>
+  </body>
+</html>
