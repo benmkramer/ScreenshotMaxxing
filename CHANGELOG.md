@@ -6,7 +6,7 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 
 ## Unreleased
 
-- Added open-source readiness documentation: privacy, contributing, security, support, architecture, changelog, and issue templates.
+- Added open-source readiness documentation: privacy, contributing, security, support, architecture, changelog, agent instructions, and issue templates.
 - Documented local storage, Screen Recording permission, optional microphone audio, optional system audio, and blur/redaction limitations.
 
 ## 2.0.4
