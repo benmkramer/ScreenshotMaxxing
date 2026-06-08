@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    name: Build and Test
+    name: Xcode CI
     runs-on: macos-26
 
     steps:
