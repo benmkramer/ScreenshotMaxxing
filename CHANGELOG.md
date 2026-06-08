@@ -6,7 +6,15 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 
 ## Unreleased
 
-- Added open-source readiness documentation: privacy, contributing, security, support, architecture, changelog, agent instructions, and issue templates.
+## 2.0.5
+
+- Open sourced the repository with MIT licensing guidance and added open-source readiness docs: privacy, contributing, security, support, architecture, changelog, agent instructions, and issue templates.
+- Added a static project website with GitHub Pages deployment.
+- Added rectangle and text annotation tools to the screenshot editor.
+- Added a global keyboard shortcut for opening capture history.
+- Fixed duplicate screenshot and video editor windows when reopening the same capture.
+- Fixed capture deletion to move local files to Trash.
+- Hardened local-secret ignores and enabled Xcode CI on pull requests.
 - Documented local storage, Screen Recording permission, optional microphone audio, optional system audio, and blur/redaction limitations.
 
 ## 2.0.4
