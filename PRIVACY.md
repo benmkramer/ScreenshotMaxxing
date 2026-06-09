@@ -49,6 +49,8 @@ Blur is a pixelated obscuration tool, not certified irreversible redaction. Stro
 
 When you delete captures from history, ScreenshotMaxxing attempts to remove the related local files and metadata. macOS Trash, backups, sync tools, file recovery tools, or manually copied files may retain separate copies outside the app's control.
 
+If a History entry points to a local capture file that is already missing, ScreenshotMaxxing can remove that stale History metadata without moving any files to the Trash.
+
 ## Networking
 
 The app is intended to work offline. It does not send captures, recordings, metadata, usage events, or diagnostics to a hosted service.

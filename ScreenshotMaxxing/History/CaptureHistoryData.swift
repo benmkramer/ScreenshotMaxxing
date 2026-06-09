@@ -9,7 +9,8 @@ import Foundation
 import SwiftData
 
 enum CaptureHistoryData {
-    static let deleteConfirmationMessage = "Deleting from the history view removes the file and any edited versions from history and moves them to the Trash."
+    static let deleteConfirmationMessage = "Deleting from the History view removes captures and any edited versions from History. Local files that still exist are moved to the Trash."
+    static let removeMissingConfirmationMessage = "Removing a missing capture only deletes its History metadata. ScreenshotMaxxing will not move any files to the Trash."
 
     static var newestFirstSortDescriptors: [SortDescriptor<Capture>] {
         [SortDescriptor(\Capture.createdAt, order: .reverse)]
@@ -41,6 +42,24 @@ enum CaptureHistoryData {
 
     static func fileExists(for capture: Capture, fileManager: FileManager = .default) -> Bool {
         fileManager.fileExists(atPath: contentFilePath(for: capture))
+    }
+
+    static func lastKnownPath(for capture: Capture) -> String {
+        contentFilePath(for: capture)
+    }
+
+    static func storageFolderURL(for capture: Capture, fileManager: FileManager = .default) -> URL? {
+        for filePath in lastKnownFilePaths(for: capture) {
+            let folderURL = URL(fileURLWithPath: filePath).deletingLastPathComponent()
+            var isDirectory: ObjCBool = false
+
+            if fileManager.fileExists(atPath: folderURL.fileSystemPath, isDirectory: &isDirectory),
+               isDirectory.boolValue {
+                return folderURL
+            }
+        }
+
+        return nil
     }
 
     static func filteredCaptures(
@@ -159,6 +178,18 @@ enum CaptureHistoryData {
     }
 
     @MainActor
+    static func removeCapturesFromHistoryOnly(
+        _ capturesToRemove: [Capture],
+        from modelContext: ModelContext
+    ) throws {
+        for capture in capturesToRemove {
+            modelContext.delete(capture)
+        }
+
+        try modelContext.save()
+    }
+
+    @MainActor
     static func fileURLsToDelete(
         for capturesToDelete: [Capture],
         allCaptures: [Capture],
@@ -261,6 +292,18 @@ enum CaptureHistoryData {
     private static func filePaths(for capture: Capture) -> [String] {
         [capture.originalFilePath, capture.editedFilePath]
             .compactMap { $0 }
+    }
+
+    private static func lastKnownFilePaths(for capture: Capture) -> [String] {
+        var filePaths = [contentFilePath(for: capture)]
+
+        for filePath in [capture.originalFilePath, capture.editedFilePath].compactMap({ $0 }) {
+            if !filePaths.contains(filePath) {
+                filePaths.append(filePath)
+            }
+        }
+
+        return filePaths
     }
 
     private static func editedVersionFileURLs(for capture: Capture, fileManager: FileManager) throws -> [URL] {
