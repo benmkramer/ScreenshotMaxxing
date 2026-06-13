@@ -60,14 +60,10 @@ The script stops any running `ScreenshotMaxxing` process, builds into an ignored
 Run the main test suite:
 
 ```sh
-xcodebuild test \
-  -project ScreenshotMaxxing.xcodeproj \
-  -scheme ScreenshotMaxxing \
-  -destination 'platform=macOS' \
-  CODE_SIGNING_ALLOWED=NO
+scripts/test.sh
 ```
 
-UI tests may require a local GUI session and macOS automation permissions. If the full scheme is blocked by automation setup, run the unit tests first and include the UI-test limitation in your PR notes.
+The default runs the deterministic unit test target. Use `scripts/test.sh --all` for the full scheme, including UI tests. UI tests may require a local GUI session and macOS automation permissions. If the full scheme is blocked by automation setup, run the unit tests first and include the UI-test limitation in your PR notes.
 
 Follow-up testing coverage to add separately:
 
