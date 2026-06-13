@@ -89,10 +89,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKeyManager = HotKeyManager { [weak self] action in
             self?.handleHotKeyAction(action)
         }
-        registerGlobalHotKeys()
-        if !isRunningUnderTests {
+        if !isRunningUITests {
+            registerGlobalHotKeys()
+        }
+        if !isRunningUnderTests && !isRunningUITests {
             DispatchQueue.main.async { [weak self] in
                 self?.showPermissionOnboardingIfNeeded()
+            }
+        }
+        if isRunningUITests {
+            DispatchQueue.main.async { [weak self] in
+                self?.handleUITestLaunchAction()
             }
         }
     }
@@ -124,6 +131,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var isRunningUnderTests: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    private var isRunningUITests: Bool {
+        ProcessInfo.processInfo.arguments.contains("--screenshotmaxxing-ui-testing")
+    }
+
+    private func handleUITestLaunchAction() {
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--screenshotmaxxing-ui-test-open-capture-options") {
+            let selectedPane: CaptureOptionsPane? = arguments.contains("--screenshotmaxxing-ui-test-record-pane") ? .record : nil
+            openCaptureOptions(selectedPane: selectedPane)
+        } else if arguments.contains("--screenshotmaxxing-ui-test-open-history") {
+            openHistory()
+        } else if arguments.contains("--screenshotmaxxing-ui-test-open-preferences") {
+            openPreferences()
+        }
     }
 
     private func handleMenuBarAction(_ action: MenuBarAction) {
@@ -416,14 +439,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func openCaptureOptions() {
+    private func openCaptureOptions(selectedPane: CaptureOptionsPane? = nil) {
         if let window = captureOptionsWindowController?.window {
             activateForUserFacingWindow(window)
             return
         }
 
         let controller = CaptureOptionsWindowController(
-            selectedPane: recordingSettingsStore.captureOptionsPane(),
+            selectedPane: selectedPane ?? recordingSettingsStore.captureOptionsPane(),
             microphoneEnabled: recordingSettingsStore.microphoneEnabled(),
             systemAudioEnabled: recordingSettingsStore.systemAudioEnabled(),
             onSelectCapture: { [weak self] mode in

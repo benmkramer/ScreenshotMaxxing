@@ -45,7 +45,7 @@ struct PreferencesView: View {
 
     var body: some View {
         Form {
-            Section("Startup") {
+            Section {
                 Toggle("Open at Login", isOn: Binding(
                     get: { preferences.launchAtLoginEnabled },
                     set: { isEnabled in
@@ -56,9 +56,12 @@ struct PreferencesView: View {
                         preferences = preferences.updatingLaunchAtLoginEnabled(isEnabled)
                     }
                 ))
+            } header: {
+                Text("Startup")
+                    .accessibilityIdentifier("preferences-startup-section")
             }
 
-            Section("Capture") {
+            Section {
                 LabeledContent("Area capture shortcut") {
                     ShortcutRecorderView(shortcut: preferences.areaCaptureShortcut) { shortcut in
                         guard onAreaCaptureShortcutChange(shortcut) else {
@@ -110,9 +113,12 @@ struct PreferencesView: View {
                 Text("Command-Shift-3, Command-Shift-4, and Command-Shift-5 stay reserved for macOS screenshots unless changed in System Settings.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            } header: {
+                Text("Capture")
+                    .accessibilityIdentifier("preferences-shortcuts-section")
             }
 
-            Section("Storage") {
+            Section {
                 LabeledContent("Original captures") {
                     storageFolderRow(path: preferences.originalsFolderPath)
                 }
@@ -120,11 +126,15 @@ struct PreferencesView: View {
                 LabeledContent("Edited captures") {
                     storageFolderRow(path: preferences.editedFolderPath)
                 }
+            } header: {
+                Text("Storage")
+                    .accessibilityIdentifier("preferences-storage-section")
             }
         }
         .formStyle(.grouped)
         .padding(20)
         .frame(minWidth: 540, minHeight: 360)
+        .accessibilityIdentifier("preferences-root")
     }
 
     private func storageFolderRow(path: String) -> some View {

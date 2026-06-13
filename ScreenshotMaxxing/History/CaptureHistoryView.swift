@@ -47,6 +47,7 @@ struct CaptureHistoryView: View {
         }
         .frame(minWidth: 640, minHeight: 420)
         .navigationTitle("History")
+        .accessibilityIdentifier("history-root")
         .confirmationDialog(
             "Delete selected captures?",
             isPresented: $showingDeleteConfirmation,
@@ -270,6 +271,7 @@ struct CaptureHistoryView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(32)
+        .accessibilityIdentifier("history-empty-state")
     }
 
     private var noResultsState: some View {
