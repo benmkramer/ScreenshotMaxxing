@@ -62,9 +62,9 @@ jobs:
           fi
 
           git switch -C "$BRANCH" origin/main
-          scripts/set-release-version.sh "$RELEASE_VERSION" "$BUILD_NUMBER"
+          scripts/prepare-release.sh "$RELEASE_VERSION" "$BUILD_NUMBER"
 
-          git add ScreenshotMaxxing.xcodeproj/project.pbxproj
+          git add ScreenshotMaxxing.xcodeproj/project.pbxproj CHANGELOG.md
           if git diff --cached --quiet; then
             echo "No version changes to commit."
             exit 0
@@ -79,8 +79,10 @@ jobs:
           fi
 
           {
-            printf 'Bumps ScreenshotMaxxing to version `%s`.\n\n' "$RELEASE_VERSION"
-            printf 'Merging this PR updates the Xcode project version settings on `main`, '
+            printf 'Prepares ScreenshotMaxxing `%s` for release.\n\n' "$RELEASE_VERSION"
+            printf 'This bumps the Xcode project version settings and moves `CHANGELOG.md` '
+            printf '`Unreleased` notes into the `%s` release section.\n\n' "$RELEASE_VERSION"
+            printf 'Merging this PR updates the version settings on `main`, '
             printf 'which triggers the notarized DMG release workflow.\n'
           } > "$BODY_PATH"
 
