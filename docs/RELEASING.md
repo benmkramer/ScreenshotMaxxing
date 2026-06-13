@@ -77,10 +77,10 @@ The release flow is controlled by version changes instead of every merge to `mai
 To prepare a release, run the `Prepare Release PR` workflow manually in GitHub Actions. Enter the new marketing version, for example `1.0.1`. The workflow runs:
 
 ```sh
-scripts/set-release-version.sh <marketing-version> [build-number]
+scripts/prepare-release.sh <marketing-version> [build-number]
 ```
 
-If no build number is provided, the script sets `CURRENT_PROJECT_VERSION` to the current maximum build number plus one. The workflow opens or updates a `release/v<version>` pull request with the Xcode project version changes.
+If no build number is provided, the script sets `CURRENT_PROJECT_VERSION` to the current maximum build number plus one. It also moves the current `CHANGELOG.md` `Unreleased` entries into a dated `## <version> - <date>` section and fails if there are no release notes to move. The workflow opens or updates a `release/v<version>` pull request with the Xcode project version and changelog changes.
 
 When that pull request merges to `main`, the `Release DMG` workflow checks whether `MARKETING_VERSION` or `CURRENT_PROJECT_VERSION` changed in `ScreenshotMaxxing.xcodeproj/project.pbxproj`. If either changed, it builds the app, exports the Developer ID-signed app, notarizes and staples the DMG, uploads the DMG as a workflow artifact, and creates or updates the matching GitHub Release tag.
 
