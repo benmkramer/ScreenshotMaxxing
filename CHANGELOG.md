@@ -6,6 +6,8 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 
 ## Unreleased
 
+## 2.0.6 - 2026-06-13
+
 - Improved the project website download section with clearer latest-release metadata, GitHub Release links, and official-build signing/notarization context.
 - Added compact History filters for capture type and date ranges that compose with search.
 - Remember the last selected Capture Options pane so the panel reopens on Screenshot or Record.
