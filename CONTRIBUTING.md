@@ -47,6 +47,14 @@ xcodebuild build \
   -destination 'platform=macOS'
 ```
 
+To build and launch the Debug app without opening Xcode:
+
+```sh
+scripts/build-and-run.sh
+```
+
+The script stops any running `ScreenshotMaxxing` process, builds into an ignored project-local DerivedData directory, finds the built `.app`, and launches it with `/usr/bin/open -n`. Use `scripts/build-and-run.sh --verify` to also check that the process starts after launch.
+
 ## Testing
 
 Run the main test suite:
