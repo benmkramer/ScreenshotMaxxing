@@ -8,6 +8,71 @@
 import Foundation
 import SwiftData
 
+enum CaptureHistoryTypeFilter: String, CaseIterable, Identifiable {
+    case all
+    case screenshots
+    case recordings
+    case edited
+    case missingFiles
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .all:
+            "All"
+        case .screenshots:
+            "Screenshots"
+        case .recordings:
+            "Recordings"
+        case .edited:
+            "Edited"
+        case .missingFiles:
+            "Missing"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .all:
+            "tray.full"
+        case .screenshots:
+            "photo"
+        case .recordings:
+            "video"
+        case .edited:
+            "pencil"
+        case .missingFiles:
+            "questionmark.folder"
+        }
+    }
+}
+
+enum CaptureHistoryDateFilter: String, CaseIterable, Identifiable {
+    case all
+    case today
+    case yesterday
+    case last7Days
+    case last30Days
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .all:
+            "Any Date"
+        case .today:
+            "Today"
+        case .yesterday:
+            "Yesterday"
+        case .last7Days:
+            "Last 7 Days"
+        case .last30Days:
+            "Last 30 Days"
+        }
+    }
+}
+
 enum CaptureHistoryError: LocalizedError, Equatable {
     case captureFileAvailableAgain(fileName: String)
 
@@ -76,10 +141,16 @@ enum CaptureHistoryData {
     static func filteredCaptures(
         _ captures: [Capture],
         searchText: String,
-        calendar: Calendar = .current
+        typeFilter: CaptureHistoryTypeFilter = .all,
+        dateFilter: CaptureHistoryDateFilter = .all,
+        calendar: Calendar = .current,
+        referenceDate: Date = Date(),
+        fileManager: FileManager = .default
     ) -> [Capture] {
         captures.filter { capture in
-            matchesSearch(capture, searchText: searchText, calendar: calendar)
+            matchesTypeFilter(capture, typeFilter: typeFilter, fileManager: fileManager)
+                && matchesDateFilter(capture, dateFilter: dateFilter, calendar: calendar, referenceDate: referenceDate)
+                && matchesSearch(capture, searchText: searchText, calendar: calendar)
         }
     }
 
@@ -96,6 +167,35 @@ enum CaptureHistoryData {
 
         return searchTokens(for: capture, calendar: calendar)
             .contains { normalize($0).contains(normalizedQuery) }
+    }
+
+    static func captureIDs(in captures: [Capture]) -> Set<UUID> {
+        Set(captures.map(\.id))
+    }
+
+    static func selectedVisibleCaptureIDs(
+        selectedIDs: Set<UUID>,
+        visibleCaptures: [Capture]
+    ) -> Set<UUID> {
+        selectedIDs.intersection(captureIDs(in: visibleCaptures))
+    }
+
+    static func allCaptureIDsSelected(
+        _ captureIDs: Set<UUID>,
+        selectedIDs: Set<UUID>
+    ) -> Bool {
+        !captureIDs.isEmpty && captureIDs.isSubset(of: selectedIDs)
+    }
+
+    static func toggledSelection(
+        selectedIDs: Set<UUID>,
+        filteredCaptureIDs: Set<UUID>
+    ) -> Set<UUID> {
+        if allCaptureIDsSelected(filteredCaptureIDs, selectedIDs: selectedIDs) {
+            return selectedIDs.subtracting(filteredCaptureIDs)
+        }
+
+        return selectedIDs.union(filteredCaptureIDs)
     }
 
     static func detailText(for capture: Capture) -> String {
@@ -252,6 +352,91 @@ enum CaptureHistoryData {
             detailText(for: capture),
             "\(capture.width)x\(capture.height)"
         ] + dateSearchTokens(for: capture.createdAt, calendar: calendar)
+    }
+
+    private static func matchesTypeFilter(
+        _ capture: Capture,
+        typeFilter: CaptureHistoryTypeFilter,
+        fileManager: FileManager
+    ) -> Bool {
+        switch typeFilter {
+        case .all:
+            true
+        case .screenshots:
+            mediaType(for: capture) == .image
+        case .recordings:
+            mediaType(for: capture) == .video
+        case .edited:
+            isEditedCapture(capture)
+        case .missingFiles:
+            !fileExists(for: capture, fileManager: fileManager)
+        }
+    }
+
+    private static func matchesDateFilter(
+        _ capture: Capture,
+        dateFilter: CaptureHistoryDateFilter,
+        calendar: Calendar,
+        referenceDate: Date
+    ) -> Bool {
+        guard let dateRange = dateRange(for: dateFilter, calendar: calendar, referenceDate: referenceDate) else {
+            return dateFilter == .all
+        }
+
+        return dateRange.contains(capture.createdAt)
+    }
+
+    private static func dateRange(
+        for dateFilter: CaptureHistoryDateFilter,
+        calendar: Calendar,
+        referenceDate: Date
+    ) -> Range<Date>? {
+        let referenceDay = calendar.startOfDay(for: referenceDate)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: referenceDay)
+
+        switch dateFilter {
+        case .all:
+            return nil
+        case .today:
+            guard let tomorrow else {
+                return nil
+            }
+
+            return referenceDay..<tomorrow
+        case .yesterday:
+            guard let yesterday = calendar.date(byAdding: .day, value: -1, to: referenceDay) else {
+                return nil
+            }
+
+            return yesterday..<referenceDay
+        case .last7Days:
+            guard let startDate = calendar.date(byAdding: .day, value: -6, to: referenceDay),
+                  let tomorrow else {
+                return nil
+            }
+
+            return startDate..<tomorrow
+        case .last30Days:
+            guard let startDate = calendar.date(byAdding: .day, value: -29, to: referenceDay),
+                  let tomorrow else {
+                return nil
+            }
+
+            return startDate..<tomorrow
+        }
+    }
+
+    private static func isEditedCapture(_ capture: Capture) -> Bool {
+        if capture.editedFilePath != nil || capture.captureMode == "edited" {
+            return true
+        }
+
+        return filePaths(for: capture).contains { filePath in
+            URL(fileURLWithPath: filePath)
+                .deletingPathExtension()
+                .lastPathComponent
+                .contains("-edited-")
+        }
     }
 
     private static func dateSearchTokens(for date: Date, calendar: Calendar) -> [String] {
