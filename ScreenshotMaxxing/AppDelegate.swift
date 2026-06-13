@@ -11,8 +11,8 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
-    private var editorWindowControllers: [ScreenshotEditorWindowController] = []
-    private var videoEditorWindowControllers: [VideoEditorWindowController] = []
+    private let editorWindowControllers = AppWindowControllerStore<ScreenshotEditorWindowController>()
+    private let videoEditorWindowControllers = AppWindowControllerStore<VideoEditorWindowController>()
     private var captureOptionsWindowController: CaptureOptionsWindowController?
     private var historyWindowController: NSWindowController?
     private var preferencesWindowController: NSWindowController?
@@ -26,6 +26,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let permissionController = AppPermissionController()
     private var permissionOnboardingWindowController: PermissionOnboardingWindowController?
     private var accessoryPolicyRefreshWorkItem: DispatchWorkItem?
+    private lazy var captureOrchestrator = AppCaptureOrchestrator(
+        hasRequiredPermissions: { [permissionController] in
+            permissionController.hasAllRequiredPermissions()
+        },
+        capture: { [captureController] mode in
+            switch mode {
+            case .area:
+                return try await captureController.captureArea()
+            case .window:
+                return try await captureController.captureWindow()
+            case .fullscreen:
+                return try await captureController.captureFullscreen()
+            }
+        },
+        record: { [recordingController] options in
+            try await recordingController.record(options: options)
+        },
+        saveCapture: { [metadataStore] result in
+            try metadataStore.saveCapture(result: result)
+        },
+        saveRecording: { [metadataStore] result in
+            try metadataStore.saveCapture(result: result)
+        },
+        openPermissionOnboarding: { [weak self] in
+            self?.openPermissionOnboarding()
+        },
+        openEditor: { [weak self] imageURL, capture in
+            self?.openEditor(for: imageURL, capture: capture)
+        },
+        openVideoEditor: { [weak self] videoURL, capture in
+            self?.openVideoEditor(for: videoURL, capture: capture)
+        },
+        prepareForRecording: { [weak self] in
+            self?.prepareForRecordingPresentation()
+        },
+        restoreAfterRecordingStops: { [weak self] in
+            self?.refreshAccessoryPolicyAfterWindowClose()
+        },
+        presentError: { [weak self] error, title in
+            self?.presentError(error, title: title)
+        }
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureApplicationIcon()
@@ -115,67 +157,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startCapture(_ mode: CaptureMode) {
-        guard hasRequiredPermissionsForCapture() else {
-            return
-        }
-
-        Task {
-            do {
-                let result: CaptureResult
-
-                switch mode {
-                case .area:
-                    result = try await captureController.captureArea()
-                case .window:
-                    result = try await captureController.captureWindow()
-                case .fullscreen:
-                    result = try await captureController.captureFullscreen()
-                }
-
-                let capture = try metadataStore.saveCapture(result: result)
-                openEditor(for: result.fileURL, capture: capture)
-            } catch CaptureError.cancelled {
-                return
-            } catch RecordingSelectionError.cancelled {
-                return
-            } catch {
-                presentError(error, title: "Capture Failed")
-            }
-        }
+        captureOrchestrator.startCapture(mode)
     }
 
     private func startRecording(_ options: RecordingOptions) {
-        guard hasRequiredPermissionsForCapture() else {
-            return
-        }
+        captureOrchestrator.startRecording(options)
+    }
 
+    private func prepareForRecordingPresentation() {
         accessoryPolicyRefreshWorkItem?.cancel()
         accessoryPolicyRefreshWorkItem = nil
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-
-        Task {
-            do {
-                let result = try await recordingController.record(options: options)
-                let capture = try metadataStore.saveCapture(result: result)
-                openVideoEditor(for: result.fileURL, capture: capture)
-            } catch RecordingSelectionError.cancelled {
-                refreshAccessoryPolicyAfterWindowClose()
-                return
-            } catch {
-                refreshAccessoryPolicyAfterWindowClose()
-                presentError(error, title: "Recording Failed")
-            }
-        }
-    }
-
-    private func hasRequiredPermissionsForCapture() -> Bool {
-        guard permissionController.hasAllRequiredPermissions() else {
-            openPermissionOnboarding()
-            return false
-        }
-
-        return true
     }
 
     private func presentError(_ error: Error, title: String) {
@@ -307,8 +300,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var userFacingWindows: [NSWindow] {
-        var windows = editorWindowControllers.compactMap { $0.window }
-        windows.append(contentsOf: videoEditorWindowControllers.compactMap { $0.window })
+        var windows = editorWindowControllers.controllers.compactMap { $0.window }
+        windows.append(contentsOf: videoEditorWindowControllers.controllers.compactMap { $0.window })
 
         if let window = captureOptionsWindowController?.window {
             windows.append(window)
@@ -498,35 +491,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openEditor(for imageURL: URL, capture: Capture?) {
-        if let controller = editorWindowControllers.first(where: { $0.isEditingImage(at: imageURL) }) {
-            controller.show()
-            return
-        }
-
-        let controller = ScreenshotEditorWindowController(imageURL: imageURL, capture: capture)
-        controller.onClose = { [weak self] closedController in
-            self?.editorWindowControllers.removeAll { $0 === closedController }
-            self?.refreshAccessoryPolicyAfterWindowClose()
-        }
-        editorWindowControllers.append(controller)
-        NSApp.setActivationPolicy(.regular)
-        controller.show()
+        editorWindowControllers.open(
+            matching: { $0.isEditingImage(at: imageURL) },
+            makeController: {
+                ScreenshotEditorWindowController(imageURL: imageURL, capture: capture)
+            },
+            installCloseHandler: { [weak self] controller, removeController in
+                controller.onClose = { closedController in
+                    removeController(closedController)
+                    self?.refreshAccessoryPolicyAfterWindowClose()
+                }
+            },
+            showExisting: { controller in
+                controller.show()
+            },
+            showNew: { controller in
+                NSApp.setActivationPolicy(.regular)
+                controller.show()
+            }
+        )
     }
 
     private func openVideoEditor(for videoURL: URL, capture: Capture?) {
-        if let controller = videoEditorWindowControllers.first(where: { $0.isEditingVideo(at: videoURL) }) {
-            controller.show()
-            return
-        }
-
-        let controller = VideoEditorWindowController(videoURL: videoURL, capture: capture)
-        controller.onClose = { [weak self] closedController in
-            self?.videoEditorWindowControllers.removeAll { $0 === closedController }
-            self?.refreshAccessoryPolicyAfterWindowClose()
-        }
-        videoEditorWindowControllers.append(controller)
-        NSApp.setActivationPolicy(.regular)
-        controller.show()
+        videoEditorWindowControllers.open(
+            matching: { $0.isEditingVideo(at: videoURL) },
+            makeController: {
+                VideoEditorWindowController(videoURL: videoURL, capture: capture)
+            },
+            installCloseHandler: { [weak self] controller, removeController in
+                controller.onClose = { closedController in
+                    removeController(closedController)
+                    self?.refreshAccessoryPolicyAfterWindowClose()
+                }
+            },
+            showExisting: { controller in
+                controller.show()
+            },
+            showNew: { controller in
+                NSApp.setActivationPolicy(.regular)
+                controller.show()
+            }
+        )
     }
 
     private func openHistory() {
