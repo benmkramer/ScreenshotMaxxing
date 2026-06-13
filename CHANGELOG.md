@@ -7,6 +7,7 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 ## Unreleased
 
 - Added compact History filters for capture type and date ranges that compose with search.
+- Remember the last selected Capture Options pane so the panel reopens on Screenshot or Record.
 - Added explicit History actions for missing local capture files, including metadata-only removal, storage-folder reveal, and copying the last known path.
 - Changed screenshot blur annotations to render as pixelated mosaic blocks sampled from the underlying image colors.
 
