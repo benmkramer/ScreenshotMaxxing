@@ -625,6 +625,180 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func appCaptureOrchestratorPermissionDenialOpensOnboardingWithoutCapturing() {
+        let probe = AppOrchestrationProbe()
+        probe.hasRequiredPermissions = false
+        let orchestrator = makeAppCaptureOrchestrator(probe: probe)
+
+        let task = orchestrator.startCapture(.area)
+
+        #expect(task == nil)
+        #expect(probe.permissionOnboardingOpenCount == 1)
+        #expect(probe.requestedCaptureModes.isEmpty)
+        #expect(probe.openedEditors.isEmpty)
+        #expect(probe.presentedErrors.isEmpty)
+    }
+
+    @MainActor
+    @Test func appCaptureOrchestratorSuccessfulCaptureSavesMetadataAndOpensEditor() async throws {
+        let probe = AppOrchestrationProbe()
+        let imageURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/success.png")
+        let captureResult = CaptureResult(mode: .window, fileURL: imageURL)
+        let savedCapture = Capture(
+            fileName: imageURL.lastPathComponent,
+            captureMode: CaptureMode.window.rawValue,
+            width: 2,
+            height: 3,
+            originalFilePath: imageURL.fileSystemPath
+        )
+        let orchestrator = makeAppCaptureOrchestrator(
+            probe: probe,
+            capture: { _ in captureResult },
+            saveCapture: { result in
+                #expect(result == captureResult)
+                return savedCapture
+            }
+        )
+
+        let task = try #require(orchestrator.startCapture(.window))
+        await task.value
+
+        #expect(probe.requestedCaptureModes == [.window])
+        #expect(probe.savedCaptureResults == [captureResult])
+        #expect(probe.presentedErrors.isEmpty)
+        let openedEditor = try #require(probe.openedEditors.first)
+        let openedCapture = try #require(openedEditor.capture)
+        #expect(openedEditor.url == imageURL)
+        #expect(openedCapture === savedCapture)
+    }
+
+    @MainActor
+    @Test func appCaptureOrchestratorCancellationDoesNotPresentError() async throws {
+        let probe = AppOrchestrationProbe()
+        let orchestrator = makeAppCaptureOrchestrator(
+            probe: probe,
+            capture: { _ in throw CaptureError.cancelled }
+        )
+
+        let task = try #require(orchestrator.startCapture(.area))
+        await task.value
+
+        #expect(probe.requestedCaptureModes == [.area])
+        #expect(probe.savedCaptureResults.isEmpty)
+        #expect(probe.openedEditors.isEmpty)
+        #expect(probe.presentedErrors.isEmpty)
+    }
+
+    @MainActor
+    @Test func appCaptureOrchestratorFailureRoutesToCaptureErrorPresenter() async throws {
+        let probe = AppOrchestrationProbe()
+        let orchestrator = makeAppCaptureOrchestrator(
+            probe: probe,
+            capture: { _ in throw CaptureError.commandFailed(status: 7) }
+        )
+
+        let task = try #require(orchestrator.startCapture(.fullscreen))
+        await task.value
+
+        #expect(probe.requestedCaptureModes == [.fullscreen])
+        #expect(probe.savedCaptureResults.isEmpty)
+        #expect(probe.openedEditors.isEmpty)
+        #expect(probe.presentedErrors.map(\.title) == ["Capture Failed"])
+        #expect(probe.presentedErrors.first?.message == "Capture failed with status 7.")
+    }
+
+    @MainActor
+    @Test func appCaptureOrchestratorSuccessfulRecordingSavesMetadataAndOpensVideoEditor() async throws {
+        let probe = AppOrchestrationProbe()
+        let options = RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: false)
+        let videoURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/recording.mov")
+        let thumbnailURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/recording-thumbnail.png")
+        let recordingResult = RecordingResult(
+            mode: .window,
+            fileURL: videoURL,
+            durationSeconds: 12,
+            width: 640,
+            height: 360,
+            thumbnailURL: thumbnailURL,
+            microphoneEnabled: true,
+            systemAudioEnabled: false
+        )
+        let savedCapture = Capture(
+            fileName: videoURL.lastPathComponent,
+            captureMode: RecordingMode.window.rawValue,
+            mediaType: CaptureMediaType.video.rawValue,
+            width: 640,
+            height: 360,
+            durationSeconds: 12,
+            microphoneEnabled: true,
+            thumbnailFilePath: thumbnailURL.fileSystemPath,
+            originalFilePath: videoURL.fileSystemPath
+        )
+        let orchestrator = makeAppCaptureOrchestrator(
+            probe: probe,
+            record: { _ in recordingResult },
+            saveRecording: { result in
+                #expect(result == recordingResult)
+                return savedCapture
+            }
+        )
+
+        let task = try #require(orchestrator.startRecording(options))
+        await task.value
+
+        #expect(probe.requestedRecordingOptions == [options])
+        #expect(probe.prepareForRecordingCount == 1)
+        #expect(probe.restoreAfterRecordingStopsCount == 0)
+        #expect(probe.savedRecordingResults == [recordingResult])
+        #expect(probe.presentedErrors.isEmpty)
+        let openedVideoEditor = try #require(probe.openedVideoEditors.first)
+        let openedCapture = try #require(openedVideoEditor.capture)
+        #expect(openedVideoEditor.url == videoURL)
+        #expect(openedCapture === savedCapture)
+    }
+
+    @MainActor
+    @Test func appCaptureOrchestratorRecordingCancellationRestoresWithoutError() async throws {
+        let probe = AppOrchestrationProbe()
+        let options = RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: true)
+        let orchestrator = makeAppCaptureOrchestrator(
+            probe: probe,
+            record: { _ in throw RecordingSelectionError.cancelled }
+        )
+
+        let task = try #require(orchestrator.startRecording(options))
+        await task.value
+
+        #expect(probe.requestedRecordingOptions == [options])
+        #expect(probe.prepareForRecordingCount == 1)
+        #expect(probe.restoreAfterRecordingStopsCount == 1)
+        #expect(probe.savedRecordingResults.isEmpty)
+        #expect(probe.openedVideoEditors.isEmpty)
+        #expect(probe.presentedErrors.isEmpty)
+    }
+
+    @MainActor
+    @Test func appCaptureOrchestratorRecordingFailureRestoresAndPresentsError() async throws {
+        let probe = AppOrchestrationProbe()
+        let options = RecordingOptions(mode: .fullscreen, microphoneEnabled: false)
+        let orchestrator = makeAppCaptureOrchestrator(
+            probe: probe,
+            record: { _ in throw RecordingError.recordingDidNotFinish }
+        )
+
+        let task = try #require(orchestrator.startRecording(options))
+        await task.value
+
+        #expect(probe.requestedRecordingOptions == [options])
+        #expect(probe.prepareForRecordingCount == 1)
+        #expect(probe.restoreAfterRecordingStopsCount == 1)
+        #expect(probe.savedRecordingResults.isEmpty)
+        #expect(probe.openedVideoEditors.isEmpty)
+        #expect(probe.presentedErrors.map(\.title) == ["Recording Failed"])
+        #expect(probe.presentedErrors.first?.message == "ScreenCaptureKit did not finish writing the recording file.")
+    }
+
+    @MainActor
     private final class SpyRecordingSession: RecordingSessionControlling {
         let options: RecordingOptions
         let outputURL: URL
@@ -667,6 +841,107 @@ struct ScreenshotMaxxingTests {
                 throw stopError
             }
         }
+    }
+
+    @MainActor
+    private final class AppOrchestrationProbe {
+        var hasRequiredPermissions = true
+        var permissionOnboardingOpenCount = 0
+        var requestedCaptureModes: [CaptureMode] = []
+        var requestedRecordingOptions: [RecordingOptions] = []
+        var savedCaptureResults: [CaptureResult] = []
+        var savedRecordingResults: [RecordingResult] = []
+        var openedEditors: [(url: URL, capture: Capture?)] = []
+        var openedVideoEditors: [(url: URL, capture: Capture?)] = []
+        var prepareForRecordingCount = 0
+        var restoreAfterRecordingStopsCount = 0
+        var presentedErrors: [(title: String, message: String)] = []
+    }
+
+    @MainActor
+    private func makeAppCaptureOrchestrator(
+        probe: AppOrchestrationProbe,
+        capture: @escaping @MainActor (CaptureMode) async throws -> CaptureResult = { mode in
+            CaptureResult(
+                mode: mode,
+                fileURL: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/\(mode.rawValue).png")
+            )
+        },
+        record: @escaping @MainActor (RecordingOptions) async throws -> RecordingResult = { options in
+            RecordingResult(
+                mode: options.mode,
+                fileURL: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/\(options.mode.rawValue).mp4"),
+                durationSeconds: 1,
+                width: 100,
+                height: 100,
+                thumbnailURL: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/\(options.mode.rawValue)-thumbnail.png"),
+                microphoneEnabled: options.microphoneEnabled,
+                systemAudioEnabled: options.systemAudioEnabled
+            )
+        },
+        saveCapture: @escaping @MainActor (CaptureResult) throws -> Capture = { result in
+            Capture(
+                fileName: result.fileURL.lastPathComponent,
+                captureMode: result.mode.rawValue,
+                width: 1,
+                height: 1,
+                originalFilePath: result.fileURL.fileSystemPath
+            )
+        },
+        saveRecording: @escaping @MainActor (RecordingResult) throws -> Capture = { result in
+            Capture(
+                fileName: result.fileURL.lastPathComponent,
+                captureMode: result.mode.rawValue,
+                mediaType: CaptureMediaType.video.rawValue,
+                width: result.width,
+                height: result.height,
+                durationSeconds: result.durationSeconds,
+                microphoneEnabled: result.microphoneEnabled,
+                systemAudioEnabled: result.systemAudioEnabled,
+                thumbnailFilePath: result.thumbnailURL.fileSystemPath,
+                originalFilePath: result.fileURL.fileSystemPath
+            )
+        }
+    ) -> AppCaptureOrchestrator {
+        AppCaptureOrchestrator(
+            hasRequiredPermissions: {
+                probe.hasRequiredPermissions
+            },
+            capture: { mode in
+                probe.requestedCaptureModes.append(mode)
+                return try await capture(mode)
+            },
+            record: { options in
+                probe.requestedRecordingOptions.append(options)
+                return try await record(options)
+            },
+            saveCapture: { result in
+                probe.savedCaptureResults.append(result)
+                return try saveCapture(result)
+            },
+            saveRecording: { result in
+                probe.savedRecordingResults.append(result)
+                return try saveRecording(result)
+            },
+            openPermissionOnboarding: {
+                probe.permissionOnboardingOpenCount += 1
+            },
+            openEditor: { url, capture in
+                probe.openedEditors.append((url, capture))
+            },
+            openVideoEditor: { url, capture in
+                probe.openedVideoEditors.append((url, capture))
+            },
+            prepareForRecording: {
+                probe.prepareForRecordingCount += 1
+            },
+            restoreAfterRecordingStops: {
+                probe.restoreAfterRecordingStopsCount += 1
+            },
+            presentError: { error, title in
+                probe.presentedErrors.append((title, error.localizedDescription))
+            }
+        )
     }
 
     @Test func screenCapturePermissionPreflightsGrantedAccess() {
@@ -1248,6 +1523,87 @@ struct ScreenshotMaxxingTests {
 
         #expect(controller.isEditingVideo(at: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/example-recording.mp4")))
         #expect(!controller.isEditingVideo(at: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/other-recording.mp4")))
+    }
+
+    @MainActor
+    @Test func appWindowControllerStoreReusesMatchingImageHistoryEditor() {
+        let store = AppWindowControllerStore<SpyEditorController>()
+        let firstURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/current/../example-capture.png")
+        let sameURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/example-capture.png")
+        let otherURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/other-capture.png")
+
+        openSpyEditor(firstURL, in: store)
+        openSpyEditor(sameURL, in: store)
+        openSpyEditor(otherURL, in: store)
+
+        #expect(store.controllers.count == 2)
+        #expect(store.controllers[0].showCount == 2)
+        #expect(store.controllers[0].openedURL == firstURL)
+        #expect(store.controllers[1].showCount == 1)
+
+        store.controllers[0].close()
+
+        #expect(store.controllers.count == 1)
+        #expect(store.controllers[0].openedURL == otherURL)
+    }
+
+    @MainActor
+    @Test func appWindowControllerStoreReusesMatchingVideoHistoryEditor() {
+        let store = AppWindowControllerStore<SpyEditorController>()
+        let firstURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/current/../example-recording.mp4")
+        let sameURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/example-recording.mp4")
+        let otherURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/other-recording.mp4")
+
+        openSpyEditor(firstURL, in: store)
+        openSpyEditor(sameURL, in: store)
+        openSpyEditor(otherURL, in: store)
+
+        #expect(store.controllers.count == 2)
+        #expect(store.controllers[0].showCount == 2)
+        #expect(store.controllers[0].openedURL == firstURL)
+        #expect(store.controllers[1].showCount == 1)
+    }
+
+    @MainActor
+    private final class SpyEditorController {
+        let openedURL: URL
+        var showCount = 0
+        var onClose: ((SpyEditorController) -> Void)?
+
+        init(openedURL: URL) {
+            self.openedURL = openedURL
+        }
+
+        func isEditing(at candidateURL: URL) -> Bool {
+            openedURL.canonicalFileIdentityURL == candidateURL.canonicalFileIdentityURL
+        }
+
+        func show() {
+            showCount += 1
+        }
+
+        func close() {
+            onClose?(self)
+        }
+    }
+
+    @MainActor
+    private func openSpyEditor(_ url: URL, in store: AppWindowControllerStore<SpyEditorController>) {
+        store.open(
+            matching: { $0.isEditing(at: url) },
+            makeController: {
+                SpyEditorController(openedURL: url)
+            },
+            installCloseHandler: { controller, removeController in
+                controller.onClose = removeController
+            },
+            showExisting: { controller in
+                controller.show()
+            },
+            showNew: { controller in
+                controller.show()
+            }
+        )
     }
 
     @Test func imageCanvasFitsImageWithoutDistortion() {
