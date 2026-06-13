@@ -298,27 +298,22 @@ final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate
         self.onMicrophoneChange = onMicrophoneChange
         self.onSystemAudioChange = onSystemAudioChange
 
-        let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: Self.windowSize),
-            styleMask: [.titled, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
+        let panel = Self.makeWindow()
         panel.title = "Capture Options"
-        panel.titleVisibility = .hidden
-        panel.titlebarAppearsTransparent = true
-        panel.isMovableByWindowBackground = true
-        panel.isFloatingPanel = true
-        panel.hidesOnDeactivate = false
-        panel.level = .floating
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.identifier = NSUserInterfaceItemIdentifier("capture-options-window")
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
         panel.isReleasedWhenClosed = false
-        panel.standardWindowButton(.closeButton)?.isHidden = true
-        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
-        panel.standardWindowButton(.zoomButton)?.isHidden = true
+
+        if !Self.isRunningUITests {
+            panel.titleVisibility = .hidden
+            panel.titlebarAppearsTransparent = true
+            panel.isMovableByWindowBackground = true
+            panel.standardWindowButton(.closeButton)?.isHidden = true
+            panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+            panel.standardWindowButton(.zoomButton)?.isHidden = true
+        }
 
         super.init(window: panel)
 
@@ -400,6 +395,35 @@ final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate
             y: visibleFrame.minY + 72
         )
         window.setFrameOrigin(origin)
+    }
+
+    private static var isRunningUITests: Bool {
+        ProcessInfo.processInfo.arguments.contains("--screenshotmaxxing-ui-testing")
+    }
+
+    private static func makeWindow() -> NSWindow {
+        let frame = NSRect(origin: .zero, size: Self.windowSize)
+
+        if isRunningUITests {
+            return NSWindow(
+                contentRect: frame,
+                styleMask: [.titled, .closable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+        }
+
+        let panel = NSPanel(
+            contentRect: frame,
+            styleMask: [.titled, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isFloatingPanel = true
+        panel.hidesOnDeactivate = false
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        return panel
     }
 }
 
