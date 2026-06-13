@@ -16,11 +16,24 @@ const setText = (id, value) => {
   if (element && value) element.textContent = value;
 };
 
+const setHref = (id, url) => {
+  const link = document.getElementById(id);
+  if (link) link.href = url || fallbackReleaseUrl;
+};
+
 const setDownloadHref = (url) => {
   for (const id of ['download-link', 'download-link-secondary']) {
-    const link = document.getElementById(id);
-    if (link) link.href = url || fallbackReleaseUrl;
+    setHref(id, url);
   }
+};
+
+const showDigest = (digest) => {
+  const row = document.getElementById('release-digest-row');
+  const value = document.getElementById('release-digest');
+  if (!row || !value || !digest) return;
+
+  row.hidden = false;
+  value.textContent = digest;
 };
 
 const renderRelease = (release) => {
@@ -30,18 +43,17 @@ const renderRelease = (release) => {
   const downloadUrl = release.downloadUrl || releaseUrl;
   const date = formatDate(release.publishedAt);
   const version = release.tagName || release.name || 'Latest release';
-  const assetName = release.assetName ? ` (${release.assetName})` : '';
+  const assetName = release.assetName || 'Latest release asset';
   const published = date ? ` published ${date}` : '';
 
   setDownloadHref(downloadUrl);
-  setText('release-summary', `${version}${published}${assetName}.`);
-  setText('release-details', `Latest release: ${version}${published}. The primary download link points to ${release.assetName || 'the latest release asset'}.`);
-
-  const digest = document.getElementById('release-digest');
-  if (digest && release.digest) {
-    digest.hidden = false;
-    digest.textContent = release.digest;
-  }
+  setHref('release-page-link', releaseUrl);
+  setText('release-summary', `${version}${published}. Official builds are signed and notarized DMGs from this repository.`);
+  setText('release-details', `The primary download link points to ${assetName}. Inspect the GitHub Release before installing if you want the full release context.`);
+  setText('release-version', version);
+  setText('release-date', date || 'Available on GitHub Releases');
+  setText('release-asset', assetName);
+  showDigest(release.digest);
 };
 
 const loadRelease = async () => {

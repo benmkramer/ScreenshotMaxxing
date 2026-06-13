@@ -459,11 +459,58 @@ a {
   background: #fff;
 }
 
+.download-copy {
+  min-width: 0;
+}
+
+.release-metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0 0;
+}
+
+.release-metadata div {
+  min-width: 0;
+  border: 1px solid var(--soft);
+  border-radius: 8px;
+  background: #fbfcff;
+  padding: 12px 14px;
+}
+
+.release-metadata dt {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.release-metadata dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .digest {
-  max-width: 680px;
   overflow-wrap: anywhere;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.trust-note {
+  max-width: 760px;
+  font-size: 0.95rem;
+}
+
+.release-page-link {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
 }
 
 .site-footer {
@@ -532,6 +579,10 @@ a {
   }
 
   .feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .release-metadata {
     grid-template-columns: 1fr;
   }
 
