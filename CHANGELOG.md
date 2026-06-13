@@ -8,6 +8,7 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 
 - Added compact History filters for capture type and date ranges that compose with search.
 - Remember the last selected Capture Options pane so the panel reopens on Screenshot or Record.
+- Clarified screenshot and video editor copy/save toolbar actions, including a visually distinct `Copy & Trash` action for copying to the clipboard before moving local capture files to Trash and removing History metadata.
 - Added explicit History actions for missing local capture files, including metadata-only removal, storage-folder reveal, and copying the last known path.
 - Changed screenshot blur annotations to render as pixelated mosaic blocks sampled from the underlying image colors.
 

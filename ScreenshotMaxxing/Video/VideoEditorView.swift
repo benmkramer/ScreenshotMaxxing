@@ -279,17 +279,20 @@ struct VideoEditorView: View {
                 }
 
                 guard let capture else {
-                    statusMessage = "Copied video to clipboard"
+                    statusMessage = EditorCopyAndTrashStatus.copiedWithoutCaptureMessage(for: .video)
                     closeAfterShowingSuccess()
                     return
                 }
 
                 do {
                     try CaptureMetadataStore().deleteCaptureFromHistoryAndDisk(capture)
-                    statusMessage = "Copied and deleted capture"
+                    statusMessage = EditorCopyAndTrashStatus.copiedAndMovedToTrashMessage(for: .video)
                     closeAfterShowingSuccess()
                 } catch {
-                    statusMessage = "Copied, but delete failed: \(error.localizedDescription)"
+                    statusMessage = EditorCopyAndTrashStatus.copiedButMoveToTrashFailedMessage(
+                        for: .video,
+                        errorDescription: error.localizedDescription
+                    )
                 }
             } catch {
                 statusMessage = error.localizedDescription
@@ -533,15 +536,13 @@ private struct VideoEditorToolbar: View {
 
             HStack(spacing: 6) {
                 ToolbarIconButton(
-                    systemImageName: "doc.on.doc",
-                    helpText: "Save edited video and copy it to the clipboard",
+                    descriptor: .copyEdited(.video),
                     action: copyAction
                 )
                 .disabled(isBusy)
 
                 ToolbarIconButton(
-                    systemImageName: "square.and.arrow.down",
-                    helpText: "Save edited video, reveal it in Finder, and copy the file path",
+                    descriptor: .saveEdited(.video),
                     action: saveAction
                 )
                 .disabled(isBusy)
@@ -551,8 +552,7 @@ private struct VideoEditorToolbar: View {
                 .frame(height: 22)
 
             ToolbarIconButton(
-                systemImageName: "clipboard",
-                helpText: "Copy video to clipboard and delete it from history and disk",
+                descriptor: .copyAndMoveToTrash(.video),
                 action: copyAndDeleteAction
             )
             .disabled(isBusy)
@@ -1006,18 +1006,55 @@ private struct TimelineHandle: View {
 }
 
 private struct ToolbarIconButton: View {
-    let systemImageName: String
-    let helpText: String
+    let descriptor: EditorToolbarActionDescriptor
     let action: () -> Void
 
+    init(
+        systemImageName: String,
+        helpText: String,
+        action: @escaping () -> Void
+    ) {
+        self.descriptor = EditorToolbarActionDescriptor(
+            systemImageName: systemImageName,
+            visibleTitle: nil,
+            accessibilityLabel: helpText,
+            helpText: helpText,
+            visualRole: .standard
+        )
+        self.action = action
+    }
+
+    init(
+        descriptor: EditorToolbarActionDescriptor,
+        action: @escaping () -> Void
+    ) {
+        self.descriptor = descriptor
+        self.action = action
+    }
+
     var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImageName)
-                .frame(width: 18, height: 18)
+        Button(role: buttonRole, action: action) {
+            if let visibleTitle = descriptor.visibleTitle {
+                Label(visibleTitle, systemImage: descriptor.systemImageName)
+                    .labelStyle(.titleAndIcon)
+                    .font(.caption)
+            } else {
+                Image(systemName: descriptor.systemImageName)
+                    .frame(width: 18, height: 18)
+            }
         }
         .buttonStyle(.bordered)
-        .accessibilityLabel(helpText)
-        .help(helpText)
+        .foregroundStyle(foregroundStyle)
+        .accessibilityLabel(descriptor.accessibilityLabel)
+        .help(descriptor.helpText)
+    }
+
+    private var buttonRole: ButtonRole? {
+        descriptor.visualRole == .destructive ? .destructive : nil
+    }
+
+    private var foregroundStyle: Color {
+        descriptor.visualRole == .destructive ? .red : .primary
     }
 }
 

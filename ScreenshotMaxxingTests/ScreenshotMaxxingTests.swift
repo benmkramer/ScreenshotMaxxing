@@ -367,6 +367,49 @@ struct ScreenshotMaxxingTests {
         #expect(EditorTool.implementedTools == [.select, .blur, .pen, .highlighter, .rectangle, .arrow, .text])
     }
 
+    @Test func editorToolbarActionsDistinguishCopySaveAndCopyTrash() {
+        for mediaType in CaptureMediaType.allCases {
+            let copyAction = EditorToolbarActionDescriptor.copyEdited(mediaType)
+            let saveAction = EditorToolbarActionDescriptor.saveEdited(mediaType)
+            let copyAndTrashAction = EditorToolbarActionDescriptor.copyAndMoveToTrash(mediaType)
+
+            #expect(copyAction.systemImageName == "doc.on.doc")
+            #expect(copyAction.visibleTitle == nil)
+            #expect(copyAction.visualRole == .standard)
+            #expect(!copyAction.helpText.contains("Trash"))
+            #expect(!copyAction.helpText.contains("History"))
+
+            #expect(saveAction.systemImageName == "square.and.arrow.down")
+            #expect(saveAction.visibleTitle == nil)
+            #expect(saveAction.visualRole == .standard)
+            #expect(!saveAction.helpText.contains("Trash"))
+            #expect(!saveAction.helpText.contains("History"))
+
+            #expect(copyAndTrashAction.systemImageName == "trash")
+            #expect(copyAndTrashAction.visibleTitle == "Copy & Trash")
+            #expect(copyAndTrashAction.visualRole == .destructive)
+            #expect(copyAndTrashAction.helpText.contains("move its local capture files to Trash"))
+            #expect(copyAndTrashAction.helpText.contains("remove it from History"))
+        }
+    }
+
+    @Test func copyAndTrashStatusMessagesMentionClipboardAndTrash() {
+        #expect(
+            EditorCopyAndTrashStatus.copiedAndMovedToTrashMessage(for: .image) ==
+            "Copied image; moved files to Trash and removed History entry"
+        )
+        #expect(
+            EditorCopyAndTrashStatus.copiedAndMovedToTrashMessage(for: .video) ==
+            "Copied video; moved files to Trash and removed History entry"
+        )
+        #expect(
+            EditorCopyAndTrashStatus.copiedButMoveToTrashFailedMessage(
+                for: .image,
+                errorDescription: "Permission denied"
+            ) == "Copied image, but moving files to Trash or removing History failed: Permission denied"
+        )
+    }
+
     @Test func editorStrokeToolSettingsUseSeparateDefaultSizes() {
         let settings = StrokeToolSettings.defaultSettings
 
