@@ -262,17 +262,20 @@ struct ScreenshotEditorView: View {
             }
 
             guard let capture else {
-                statusMessage = "Copied image to clipboard"
+                statusMessage = EditorCopyAndTrashStatus.copiedWithoutCaptureMessage(for: .image)
                 closeAfterShowingSuccess()
                 return
             }
 
             do {
                 try CaptureMetadataStore().deleteCaptureFromHistoryAndDisk(capture)
-                statusMessage = "Copied and deleted capture"
+                statusMessage = EditorCopyAndTrashStatus.copiedAndMovedToTrashMessage(for: .image)
                 closeAfterShowingSuccess()
             } catch {
-                statusMessage = "Copied, but delete failed: \(error.localizedDescription)"
+                statusMessage = EditorCopyAndTrashStatus.copiedButMoveToTrashFailedMessage(
+                    for: .image,
+                    errorDescription: error.localizedDescription
+                )
             }
         } catch {
             statusMessage = error.localizedDescription
@@ -1426,14 +1429,12 @@ private struct EditorToolbar: View {
 
             HStack(spacing: 6) {
                 ToolbarIconButton(
-                    systemImageName: "doc.on.doc",
-                    helpText: "Save edited image and copy it to the clipboard",
+                    descriptor: .copyEdited(.image),
                     action: copyAction
                 )
 
                 ToolbarIconButton(
-                    systemImageName: "square.and.arrow.down",
-                    helpText: "Save edited image, reveal it in Finder, and copy the file path",
+                    descriptor: .saveEdited(.image),
                     action: saveAction
                 )
             }
@@ -1442,8 +1443,7 @@ private struct EditorToolbar: View {
                 .frame(height: 22)
 
             ToolbarIconButton(
-                systemImageName: "clipboard",
-                helpText: "Copy image to clipboard and delete it from history and disk",
+                descriptor: .copyAndMoveToTrash(.image),
                 action: copyAndDeleteAction
             )
         }
@@ -1650,18 +1650,55 @@ private struct ColorSwatchButton: View {
 }
 
 private struct ToolbarIconButton: View {
-    let systemImageName: String
-    let helpText: String
+    let descriptor: EditorToolbarActionDescriptor
     let action: () -> Void
 
+    init(
+        systemImageName: String,
+        helpText: String,
+        action: @escaping () -> Void
+    ) {
+        self.descriptor = EditorToolbarActionDescriptor(
+            systemImageName: systemImageName,
+            visibleTitle: nil,
+            accessibilityLabel: helpText,
+            helpText: helpText,
+            visualRole: .standard
+        )
+        self.action = action
+    }
+
+    init(
+        descriptor: EditorToolbarActionDescriptor,
+        action: @escaping () -> Void
+    ) {
+        self.descriptor = descriptor
+        self.action = action
+    }
+
     var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImageName)
-                .frame(width: 18, height: 18)
+        Button(role: buttonRole, action: action) {
+            if let visibleTitle = descriptor.visibleTitle {
+                Label(visibleTitle, systemImage: descriptor.systemImageName)
+                    .labelStyle(.titleAndIcon)
+                    .font(.caption)
+            } else {
+                Image(systemName: descriptor.systemImageName)
+                    .frame(width: 18, height: 18)
+            }
         }
         .buttonStyle(.bordered)
-        .accessibilityLabel(helpText)
-        .help(helpText)
+        .foregroundStyle(foregroundStyle)
+        .accessibilityLabel(descriptor.accessibilityLabel)
+        .help(descriptor.helpText)
+    }
+
+    private var buttonRole: ButtonRole? {
+        descriptor.visualRole == .destructive ? .destructive : nil
+    }
+
+    private var foregroundStyle: Color {
+        descriptor.visualRole == .destructive ? .red : .primary
     }
 }
 
