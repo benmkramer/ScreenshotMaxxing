@@ -2576,6 +2576,226 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "missing", calendar: calendar).isEmpty)
     }
 
+    @MainActor
+    @Test func captureHistoryFiltersByTypeDateAndSearchTogether() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        let directories = try FileLocations.ensureCaptureDirectories(
+            baseDirectory: baseDirectory,
+            fileManager: fileManager
+        )
+        let todayScreenshotURL = directories.originals.appendingPathComponent("area-today.png")
+        let yesterdayRecordingURL = directories.originals.appendingPathComponent("recording-window-yesterday.mp4")
+        let editedScreenshotURL = directories.edited.appendingPathComponent("area-today-edited-aaaaaaaa.png")
+        let missingScreenshotURL = directories.originals.appendingPathComponent("missing-old.png")
+        try [todayScreenshotURL, yesterdayRecordingURL, editedScreenshotURL].forEach { fileURL in
+            try Data("capture".utf8).write(to: fileURL)
+        }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let referenceDate = try #require(calendar.date(from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 6,
+            day: 13,
+            hour: 12
+        )))
+        let today = try #require(calendar.date(from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 6,
+            day: 13,
+            hour: 9
+        )))
+        let yesterday = try #require(calendar.date(from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 6,
+            day: 12,
+            hour: 9
+        )))
+        let weekStart = try #require(calendar.date(from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 6,
+            day: 7,
+            hour: 9
+        )))
+        let oldDate = try #require(calendar.date(from: DateComponents(
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 5,
+            day: 1,
+            hour: 9
+        )))
+        let todayScreenshot = Capture(
+            createdAt: today,
+            fileName: todayScreenshotURL.lastPathComponent,
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: todayScreenshotURL.fileSystemPath
+        )
+        let yesterdayRecording = Capture(
+            createdAt: yesterday,
+            fileName: yesterdayRecordingURL.lastPathComponent,
+            captureMode: "window",
+            mediaType: CaptureMediaType.video.rawValue,
+            width: 1920,
+            height: 1080,
+            durationSeconds: 45,
+            originalFilePath: yesterdayRecordingURL.fileSystemPath
+        )
+        let editedScreenshot = Capture(
+            createdAt: weekStart,
+            fileName: editedScreenshotURL.lastPathComponent,
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: editedScreenshotURL.fileSystemPath
+        )
+        let missingScreenshot = Capture(
+            createdAt: oldDate,
+            fileName: missingScreenshotURL.lastPathComponent,
+            captureMode: "fullscreen",
+            width: 40,
+            height: 30,
+            originalFilePath: missingScreenshotURL.fileSystemPath
+        )
+        let captures = [todayScreenshot, yesterdayRecording, editedScreenshot, missingScreenshot]
+
+        let screenshots = CaptureHistoryData.filteredCaptures(
+            captures,
+            searchText: "",
+            typeFilter: .screenshots,
+            calendar: calendar,
+            referenceDate: referenceDate,
+            fileManager: fileManager
+        )
+        let recordings = CaptureHistoryData.filteredCaptures(
+            captures,
+            searchText: "",
+            typeFilter: .recordings,
+            calendar: calendar,
+            referenceDate: referenceDate,
+            fileManager: fileManager
+        )
+        let edited = CaptureHistoryData.filteredCaptures(
+            captures,
+            searchText: "",
+            typeFilter: .edited,
+            calendar: calendar,
+            referenceDate: referenceDate,
+            fileManager: fileManager
+        )
+        let missing = CaptureHistoryData.filteredCaptures(
+            captures,
+            searchText: "",
+            typeFilter: .missingFiles,
+            calendar: calendar,
+            referenceDate: referenceDate,
+            fileManager: fileManager
+        )
+        let todayResults = CaptureHistoryData.filteredCaptures(
+            captures,
+            searchText: "",
+            dateFilter: .today,
+            calendar: calendar,
+            referenceDate: referenceDate,
+            fileManager: fileManager
+        )
+        let yesterdayRecordingsMatchingSearch = CaptureHistoryData.filteredCaptures(
+            captures,
+            searchText: "window",
+            typeFilter: .recordings,
+            dateFilter: .yesterday,
+            calendar: calendar,
+            referenceDate: referenceDate,
+            fileManager: fileManager
+        )
+        let last7Days = CaptureHistoryData.filteredCaptures(
+            captures,
+            searchText: "",
+            dateFilter: .last7Days,
+            calendar: calendar,
+            referenceDate: referenceDate,
+            fileManager: fileManager
+        )
+
+        #expect(Set(screenshots.map(\.fileName)) == [
+            todayScreenshotURL.lastPathComponent,
+            editedScreenshotURL.lastPathComponent,
+            missingScreenshotURL.lastPathComponent
+        ])
+        #expect(recordings.map(\.fileName) == [yesterdayRecordingURL.lastPathComponent])
+        #expect(edited.map(\.fileName) == [editedScreenshotURL.lastPathComponent])
+        #expect(missing.map(\.fileName) == [missingScreenshotURL.lastPathComponent])
+        #expect(todayResults.map(\.fileName) == [todayScreenshotURL.lastPathComponent])
+        #expect(yesterdayRecordingsMatchingSearch.map(\.fileName) == [yesterdayRecordingURL.lastPathComponent])
+        #expect(Set(last7Days.map(\.fileName)) == [
+            todayScreenshotURL.lastPathComponent,
+            yesterdayRecordingURL.lastPathComponent,
+            editedScreenshotURL.lastPathComponent
+        ])
+    }
+
+    @MainActor
+    @Test func captureHistorySelectionAndDeletionUseFilteredResultSet() throws {
+        let screenshotCapture = Capture(
+            fileName: "area.png",
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: "/tmp/area.png"
+        )
+        let recordingCapture = Capture(
+            fileName: "recording-window.mp4",
+            captureMode: "window",
+            mediaType: CaptureMediaType.video.rawValue,
+            width: 1920,
+            height: 1080,
+            durationSeconds: 60,
+            originalFilePath: "/tmp/recording-window.mp4"
+        )
+        let hiddenSelectedCapture = Capture(
+            fileName: "fullscreen.png",
+            captureMode: "fullscreen",
+            width: 40,
+            height: 30,
+            originalFilePath: "/tmp/fullscreen.png"
+        )
+        let captures = [screenshotCapture, recordingCapture, hiddenSelectedCapture]
+        let filteredRecordings = CaptureHistoryData.filteredCaptures(
+            captures,
+            searchText: "",
+            typeFilter: .recordings
+        )
+        let filteredRecordingIDs = CaptureHistoryData.captureIDs(in: filteredRecordings)
+        let selectedIDs = CaptureHistoryData.toggledSelection(
+            selectedIDs: [hiddenSelectedCapture.id],
+            filteredCaptureIDs: filteredRecordingIDs
+        )
+        let selectedVisibleIDs = CaptureHistoryData.selectedVisibleCaptureIDs(
+            selectedIDs: selectedIDs,
+            visibleCaptures: filteredRecordings
+        )
+        let capturesToDelete = CaptureHistoryData.capturesToDelete(
+            from: captures,
+            selectedIDs: selectedVisibleIDs
+        )
+
+        #expect(filteredRecordings.map(\.fileName) == [recordingCapture.fileName])
+        #expect(selectedIDs == Set([hiddenSelectedCapture.id, recordingCapture.id]))
+        #expect(selectedVisibleIDs == Set([recordingCapture.id]))
+        #expect(capturesToDelete.map(\.fileName) == [recordingCapture.fileName])
+    }
+
     @Test func captureHistoryDeleteConfirmationMentionsTrash() {
         #expect(CaptureHistoryData.deleteConfirmationMessage.contains("Local files that still exist are moved to the Trash"))
         #expect(!CaptureHistoryData.deleteConfirmationMessage.contains("cannot be undone"))

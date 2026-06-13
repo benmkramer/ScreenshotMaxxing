@@ -15,6 +15,8 @@ struct CaptureHistoryView: View {
     private let fileManager: FileManager
     private let openCapture: (Capture) -> Void
     @State private var searchText = ""
+    @State private var typeFilter: CaptureHistoryTypeFilter = .all
+    @State private var dateFilter: CaptureHistoryDateFilter = .all
     @State private var selectedCaptureIDs = Set<UUID>()
     @State private var pendingDeletionIDs = Set<UUID>()
     @State private var pendingMetadataRemovalID: UUID?
@@ -43,7 +45,7 @@ struct CaptureHistoryView: View {
                 }
             }
         }
-        .frame(minWidth: 520, minHeight: 420)
+        .frame(minWidth: 640, minHeight: 420)
         .navigationTitle("History")
         .confirmationDialog(
             "Delete selected captures?",
@@ -93,44 +95,88 @@ struct CaptureHistoryView: View {
     }
 
     private var filteredCaptures: [Capture] {
-        CaptureHistoryData.filteredCaptures(captures, searchText: searchText)
+        CaptureHistoryData.filteredCaptures(
+            captures,
+            searchText: searchText,
+            typeFilter: typeFilter,
+            dateFilter: dateFilter,
+            fileManager: fileManager
+        )
     }
 
     private var historyControls: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                searchField
 
-                TextField("Search by date, file, or type", text: $searchText)
-                    .textFieldStyle(.plain)
-            }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color(nsColor: .textBackgroundColor))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color(nsColor: .separatorColor))
+                dateFilterMenu
             }
 
-            Button {
-                toggleFilteredSelection()
-            } label: {
-                Label(selectAllButtonTitle, systemImage: selectAllSystemImage)
-            }
-            .disabled(filteredCaptures.isEmpty)
+            HStack(spacing: 10) {
+                Picker("Capture Type", selection: $typeFilter) {
+                    ForEach(CaptureHistoryTypeFilter.allCases) { filter in
+                        Text(filter.title)
+                            .tag(filter)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
 
-            Button(role: .destructive) {
-                requestDelete(selectedCaptureIDs)
-            } label: {
-                Label(deleteButtonTitle, systemImage: "trash")
+                Spacer(minLength: 8)
+
+                Button {
+                    toggleFilteredSelection()
+                } label: {
+                    Label(selectAllButtonTitle, systemImage: selectAllSystemImage)
+                }
+                .disabled(filteredCaptures.isEmpty)
+
+                Button(role: .destructive) {
+                    requestDelete(selectedVisibleCaptureIDs)
+                } label: {
+                    Label(deleteButtonTitle, systemImage: "trash")
+                }
+                .disabled(selectedVisibleCaptureIDs.isEmpty)
             }
-            .disabled(selectedCaptureIDs.isEmpty)
         }
         .padding(16)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField("Search files, modes, or typed dates", text: $searchText)
+                .textFieldStyle(.plain)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(nsColor: .textBackgroundColor))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color(nsColor: .separatorColor))
+        }
+    }
+
+    private var dateFilterMenu: some View {
+        Menu {
+            ForEach(CaptureHistoryDateFilter.allCases) { filter in
+                Button {
+                    dateFilter = filter
+                } label: {
+                    Label(filter.title, systemImage: dateFilter == filter ? "checkmark" : "calendar")
+                }
+            }
+        } label: {
+            Label(dateFilter.title, systemImage: "calendar")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .accessibilityLabel("Date filter")
     }
 
     private var historyList: some View {
@@ -236,19 +282,26 @@ struct CaptureHistoryView: View {
             Text("No matching captures")
                 .font(.headline)
 
-            Text("Try another file name, capture type, or date.")
+            Text("Try another search term, type, or date filter.")
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(32)
     }
 
-    private var selectedFilteredCaptureIDs: Set<UUID> {
-        Set(filteredCaptures.map(\.id))
+    private var filteredCaptureIDs: Set<UUID> {
+        CaptureHistoryData.captureIDs(in: filteredCaptures)
+    }
+
+    private var selectedVisibleCaptureIDs: Set<UUID> {
+        CaptureHistoryData.selectedVisibleCaptureIDs(
+            selectedIDs: selectedCaptureIDs,
+            visibleCaptures: filteredCaptures
+        )
     }
 
     private var allFilteredCapturesSelected: Bool {
-        !selectedFilteredCaptureIDs.isEmpty && selectedFilteredCaptureIDs.isSubset(of: selectedCaptureIDs)
+        CaptureHistoryData.allCaptureIDsSelected(filteredCaptureIDs, selectedIDs: selectedCaptureIDs)
     }
 
     private var selectAllButtonTitle: String {
@@ -260,7 +313,7 @@ struct CaptureHistoryView: View {
     }
 
     private var deleteButtonTitle: String {
-        selectedCaptureIDs.isEmpty ? "Delete" : "Delete \(selectedCaptureIDs.count)"
+        selectedVisibleCaptureIDs.isEmpty ? "Delete" : "Delete \(selectedVisibleCaptureIDs.count)"
     }
 
     private var deleteConfirmationButtonTitle: String {
@@ -280,11 +333,10 @@ struct CaptureHistoryView: View {
     }
 
     private func toggleFilteredSelection() {
-        if allFilteredCapturesSelected {
-            selectedCaptureIDs.subtract(selectedFilteredCaptureIDs)
-        } else {
-            selectedCaptureIDs.formUnion(selectedFilteredCaptureIDs)
-        }
+        selectedCaptureIDs = CaptureHistoryData.toggledSelection(
+            selectedIDs: selectedCaptureIDs,
+            filteredCaptureIDs: filteredCaptureIDs
+        )
     }
 
     private func requestDelete(_ captureIDs: Set<UUID>) {
