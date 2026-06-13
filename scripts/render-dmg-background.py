@@ -152,9 +152,9 @@ def main() -> None:
         sys.exit(2)
 
     canvas = bytearray(BACKGROUND * (WIDTH * SCALE * HEIGHT * SCALE))
-    fill_arrow(canvas, 204, 156, 292, ARROW_SHADOW)
-    fill_arrow(canvas, 204, 152, 292, ARROW)
-    fill_rect(canvas, 208, 146, 257, 150, ARROW_HIGHLIGHT)
+    fill_arrow(canvas, 212, 156, 272, ARROW_SHADOW)
+    fill_arrow(canvas, 212, 152, 272, ARROW)
+    fill_rect(canvas, 216, 146, 237, 150, ARROW_HIGHLIGHT)
 
     output_path = Path(sys.argv[1])
     output_path.parent.mkdir(parents=True, exist_ok=True)
