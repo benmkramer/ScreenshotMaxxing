@@ -5,6 +5,7 @@
 //  Created by Codex on 6/12/26.
 //
 
+import AppKit
 import Foundation
 
 @MainActor
@@ -131,5 +132,32 @@ final class AppWindowControllerStore<Controller: AnyObject> {
 
     private func remove(_ controller: Controller) {
         controllers.removeAll { $0 === controller }
+    }
+}
+
+@MainActor
+enum AppWindowPresenter {
+    static func activateAndOrderFront(_ window: NSWindow) {
+        activateAndOrderFront(
+            setRegularActivationPolicy: {
+                NSApp.setActivationPolicy(.regular)
+            },
+            activateIgnoringOtherApps: {
+                NSApp.activate(ignoringOtherApps: true)
+            },
+            makeKeyAndOrderFront: {
+                window.makeKeyAndOrderFront(nil)
+            }
+        )
+    }
+
+    static func activateAndOrderFront(
+        setRegularActivationPolicy: () -> Bool,
+        activateIgnoringOtherApps: () -> Void,
+        makeKeyAndOrderFront: () -> Void
+    ) {
+        _ = setRegularActivationPolicy()
+        activateIgnoringOtherApps()
+        makeKeyAndOrderFront()
     }
 }

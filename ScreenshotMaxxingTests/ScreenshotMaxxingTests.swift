@@ -842,6 +842,26 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func appWindowPresenterPromotesActivatesThenOrdersFront() {
+        var events: [String] = []
+
+        AppWindowPresenter.activateAndOrderFront(
+            setRegularActivationPolicy: {
+                events.append("regular")
+                return true
+            },
+            activateIgnoringOtherApps: {
+                events.append("activate")
+            },
+            makeKeyAndOrderFront: {
+                events.append("front")
+            }
+        )
+
+        #expect(events == ["regular", "activate", "front"])
+    }
+
+    @MainActor
     private final class SpyRecordingSession: RecordingSessionControlling {
         let options: RecordingOptions
         let outputURL: URL
@@ -1575,6 +1595,24 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
+    @Test func screenshotEditorShowUsesForegroundPresenter() throws {
+        var presentedWindows: [NSWindow] = []
+        let imageURL = URL(fileURLWithPath: "/tmp/example-capture.png")
+        let controller = ScreenshotEditorWindowController(imageURL: imageURL) { window in
+            presentedWindows.append(window)
+        }
+        defer {
+            controller.window?.close()
+        }
+
+        controller.show()
+
+        let window = try #require(controller.window)
+        #expect(presentedWindows.count == 1)
+        #expect(presentedWindows.first === window)
+    }
+
+    @MainActor
     @Test func screenshotEditorWindowMatchesCanonicalImageURL() {
         let imageURL = URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/current/../example-capture.png")
         let controller = ScreenshotEditorWindowController(imageURL: imageURL)
@@ -1597,6 +1635,24 @@ struct ScreenshotMaxxingTests {
         controller.window?.contentView?.layoutSubtreeIfNeeded()
 
         #expect(controller.window?.title == "example-recording.mp4 - ScreenshotMaxxing")
+    }
+
+    @MainActor
+    @Test func videoEditorShowUsesForegroundPresenter() throws {
+        var presentedWindows: [NSWindow] = []
+        let videoURL = URL(fileURLWithPath: "/tmp/example-recording.mp4")
+        let controller = VideoEditorWindowController(videoURL: videoURL) { window in
+            presentedWindows.append(window)
+        }
+        defer {
+            controller.window?.close()
+        }
+
+        controller.show()
+
+        let window = try #require(controller.window)
+        #expect(presentedWindows.count == 1)
+        #expect(presentedWindows.first === window)
     }
 
     @MainActor
