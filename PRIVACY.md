@@ -19,6 +19,8 @@ By default, capture files are stored under:
 
 The app stores capture metadata locally with SwiftData. Metadata includes fields such as file name, creation time, media type, capture mode, dimensions, original file path, edited file path, favorite state, video duration, thumbnail path, and whether microphone or system audio was enabled for a recording.
 
+The app also stores local preferences such as global shortcuts, recording audio defaults, and the last selected Capture Options pane in macOS preferences.
+
 Screenshots, videos, edits, thumbnails, and metadata are not uploaded by ScreenshotMaxxing. They leave your Mac only when you explicitly share, copy, save, move, back up, or sync them through macOS or another app.
 
 ## Permissions

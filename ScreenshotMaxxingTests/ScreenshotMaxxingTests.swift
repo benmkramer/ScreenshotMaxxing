@@ -997,6 +997,49 @@ struct ScreenshotMaxxingTests {
         #expect(reloadedStore.systemAudioEnabled())
     }
 
+    @Test func recordingSettingsStoreDefaultsCaptureOptionsPaneToScreenshot() throws {
+        let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = RecordingSettingsStore(userDefaults: userDefaults)
+
+        #expect(store.captureOptionsPane() == .screenshot)
+    }
+
+    @Test func recordingSettingsStorePersistsCaptureOptionsPane() throws {
+        let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let store = RecordingSettingsStore(userDefaults: userDefaults)
+        try store.saveCaptureOptionsPane(.record)
+        let reloadedStore = RecordingSettingsStore(userDefaults: userDefaults)
+
+        #expect(reloadedStore.captureOptionsPane() == .record)
+
+        try reloadedStore.saveCaptureOptionsPane(.screenshot)
+
+        #expect(RecordingSettingsStore(userDefaults: userDefaults).captureOptionsPane() == .screenshot)
+    }
+
+    @Test func recordingSettingsStoreFallsBackToScreenshotForInvalidCaptureOptionsPane() throws {
+        let suiteName = "ScreenshotMaxxingTests-\(UUID().uuidString)"
+        let userDefaults = try #require(UserDefaults(suiteName: suiteName))
+        defer {
+            userDefaults.removePersistentDomain(forName: suiteName)
+        }
+        userDefaults.set("invalid", forKey: "captureOptions.selectedPane")
+
+        let store = RecordingSettingsStore(userDefaults: userDefaults)
+
+        #expect(store.captureOptionsPane() == .screenshot)
+    }
+
     @Test func shortcutCanBeRecordedFromModifiedKeyEvent() throws {
         let event = try #require(NSEvent.keyEvent(
             with: .keyDown,
