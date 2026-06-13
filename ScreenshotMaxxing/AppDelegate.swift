@@ -354,9 +354,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func activateForUserFacingWindow(_ window: NSWindow) {
         accessoryPolicyRefreshWorkItem?.cancel()
         accessoryPolicyRefreshWorkItem = nil
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        AppWindowPresenter.activateAndOrderFront(window)
     }
 
     private func activateForUserFacingWindowController(_ windowController: NSWindowController) {
@@ -366,10 +364,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         accessoryPolicyRefreshWorkItem?.cancel()
         accessoryPolicyRefreshWorkItem = nil
-        NSApp.setActivationPolicy(.regular)
         windowController.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        AppWindowPresenter.activateAndOrderFront(window)
     }
 
     private func refreshAccessoryPolicyAfterWindowClose() {
@@ -525,12 +521,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.refreshAccessoryPolicyAfterWindowClose()
                 }
             },
-            showExisting: { controller in
-                controller.show()
+            showExisting: { [weak self] controller in
+                guard let window = controller.window else {
+                    return
+                }
+                self?.activateForUserFacingWindow(window)
             },
-            showNew: { controller in
-                NSApp.setActivationPolicy(.regular)
-                controller.show()
+            showNew: { [weak self] controller in
+                guard let window = controller.window else {
+                    return
+                }
+                self?.activateForUserFacingWindow(window)
             }
         )
     }
@@ -547,12 +548,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.refreshAccessoryPolicyAfterWindowClose()
                 }
             },
-            showExisting: { controller in
-                controller.show()
+            showExisting: { [weak self] controller in
+                guard let window = controller.window else {
+                    return
+                }
+                self?.activateForUserFacingWindow(window)
             },
-            showNew: { controller in
-                NSApp.setActivationPolicy(.regular)
-                controller.show()
+            showNew: { [weak self] controller in
+                guard let window = controller.window else {
+                    return
+                }
+                self?.activateForUserFacingWindow(window)
             }
         )
     }

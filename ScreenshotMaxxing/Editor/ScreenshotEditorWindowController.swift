@@ -12,12 +12,18 @@ import SwiftUI
 final class ScreenshotEditorWindowController: NSObject, NSWindowDelegate {
     private let imageURL: URL
     private let capture: Capture?
+    private let presentWindow: @MainActor (NSWindow) -> Void
     private(set) var window: NSWindow?
     var onClose: ((ScreenshotEditorWindowController) -> Void)?
 
-    init(imageURL: URL, capture: Capture? = nil) {
+    init(
+        imageURL: URL,
+        capture: Capture? = nil,
+        presentWindow: @escaping @MainActor (NSWindow) -> Void = AppWindowPresenter.activateAndOrderFront
+    ) {
         self.imageURL = imageURL
         self.capture = capture
+        self.presentWindow = presentWindow
         super.init()
         self.window = makeWindow(imageURL: imageURL, capture: capture)
         self.window?.delegate = self
@@ -32,8 +38,11 @@ final class ScreenshotEditorWindowController: NSObject, NSWindowDelegate {
     }
 
     func show() {
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        guard let window else {
+            return
+        }
+
+        presentWindow(window)
     }
 
     func windowWillClose(_ notification: Notification) {
