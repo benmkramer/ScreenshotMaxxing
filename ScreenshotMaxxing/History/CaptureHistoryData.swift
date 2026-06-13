@@ -8,6 +8,17 @@
 import Foundation
 import SwiftData
 
+enum CaptureHistoryError: LocalizedError, Equatable {
+    case captureFileAvailableAgain(fileName: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .captureFileAvailableAgain(let fileName):
+            "The file for \(fileName) is available again. Use Delete if you want to move it to the Trash."
+        }
+    }
+}
+
 enum CaptureHistoryData {
     static let deleteConfirmationMessage = "Deleting from the History view removes captures and any edited versions from History. Local files that still exist are moved to the Trash."
     static let removeMissingConfirmationMessage = "Removing a missing capture only deletes its History metadata. ScreenshotMaxxing will not move any files to the Trash."
@@ -155,8 +166,18 @@ enum CaptureHistoryData {
         fileManager: FileManager = .default,
         fileTrash: CaptureFileTrashing = FileManager.default
     ) throws {
+        let capturesWithExistingContent = capturesToDelete.filter {
+            Self.fileExists(for: $0, fileManager: fileManager)
+        }
+        let missingCapturesToRemove = capturesToDelete.filter {
+            !Self.fileExists(for: $0, fileManager: fileManager)
+        }
+        let expandedCapturesToDelete = Self.capturesToDelete(
+            from: allCaptures,
+            selectedIDs: Set(capturesWithExistingContent.map(\.id))
+        )
         let fileURLs = try fileURLsToDelete(
-            for: capturesToDelete,
+            for: expandedCapturesToDelete,
             allCaptures: allCaptures,
             fileManager: fileManager
         )
@@ -165,12 +186,10 @@ enum CaptureHistoryData {
             try fileTrash.moveItemToTrash(at: fileURL)
         }
 
-        let expandedCapturesToDelete = Self.capturesToDelete(
-            from: allCaptures,
-            selectedIDs: Set(capturesToDelete.map(\.id))
-        )
+        let idsToDelete = Set(expandedCapturesToDelete.map(\.id))
+            .union(missingCapturesToRemove.map(\.id))
 
-        for capture in expandedCapturesToDelete {
+        for capture in allCaptures where idsToDelete.contains(capture.id) {
             modelContext.delete(capture)
         }
 
@@ -180,8 +199,13 @@ enum CaptureHistoryData {
     @MainActor
     static func removeCapturesFromHistoryOnly(
         _ capturesToRemove: [Capture],
-        from modelContext: ModelContext
+        from modelContext: ModelContext,
+        fileManager: FileManager = .default
     ) throws {
+        for capture in capturesToRemove where Self.fileExists(for: capture, fileManager: fileManager) {
+            throw CaptureHistoryError.captureFileAvailableAgain(fileName: capture.fileName)
+        }
+
         for capture in capturesToRemove {
             modelContext.delete(capture)
         }

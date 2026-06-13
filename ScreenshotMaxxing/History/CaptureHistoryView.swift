@@ -298,19 +298,16 @@ struct CaptureHistoryView: View {
     }
 
     private func deletePendingCaptures() {
-        let capturesToDelete = CaptureHistoryData.capturesToDelete(
-            from: captures,
-            selectedIDs: pendingDeletionIDs
-        )
+        let selectedCaptures = captures.filter { pendingDeletionIDs.contains($0.id) }
 
         do {
             try CaptureHistoryData.deleteCaptures(
-                capturesToDelete,
+                selectedCaptures,
                 from: modelContext,
                 allCaptures: captures,
                 fileManager: fileManager
             )
-            selectedCaptureIDs.subtract(Set(capturesToDelete.map(\.id)))
+            selectedCaptureIDs.subtract(pendingDeletionIDs)
             pendingDeletionIDs.removeAll()
         } catch {
             deleteErrorMessage = error.localizedDescription
@@ -325,7 +322,11 @@ struct CaptureHistoryView: View {
         }
 
         do {
-            try CaptureHistoryData.removeCapturesFromHistoryOnly([capture], from: modelContext)
+            try CaptureHistoryData.removeCapturesFromHistoryOnly(
+                [capture],
+                from: modelContext,
+                fileManager: fileManager
+            )
             selectedCaptureIDs.remove(capture.id)
             self.pendingMetadataRemovalID = nil
         } catch {
