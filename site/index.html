@@ -37,7 +37,7 @@
             <a id="download-link" class="button primary" href="https://github.com/benmkramer/ScreenshotMaxxing/releases/latest">Download latest DMG</a>
             <a class="button secondary" href="https://github.com/benmkramer/ScreenshotMaxxing/releases">View releases</a>
           </div>
-          <p class="release-line" id="release-summary">Latest release metadata appears here when available.</p>
+          <p class="release-line" id="release-summary">Official builds are signed and notarized DMGs published from this repository. Release metadata appears here when available.</p>
         </div>
 
         <div class="app-preview" aria-label="ScreenshotMaxxing interface preview">
@@ -118,10 +118,29 @@
       </section>
 
       <section class="download-panel" aria-labelledby="download-title">
-        <div>
+        <div class="download-copy">
           <h2 id="download-title">Download the current release</h2>
-          <p id="release-details">Use the latest GitHub Release for the public DMG. If release metadata is unavailable, the button falls back to the latest release page.</p>
-          <p class="digest" id="release-digest" hidden></p>
+          <p id="release-details">Use the latest GitHub Release for the public DMG. If release metadata is unavailable, the download links fall back to the latest release page.</p>
+          <dl class="release-metadata" aria-label="Latest release metadata">
+            <div>
+              <dt>Version</dt>
+              <dd id="release-version">Latest release</dd>
+            </div>
+            <div>
+              <dt>Published</dt>
+              <dd id="release-date">Available on GitHub Releases</dd>
+            </div>
+            <div>
+              <dt>DMG asset</dt>
+              <dd id="release-asset">Latest release asset</dd>
+            </div>
+            <div id="release-digest-row" hidden>
+              <dt>Digest</dt>
+              <dd class="digest" id="release-digest"></dd>
+            </div>
+          </dl>
+          <p class="trust-note">Official builds are signed and notarized DMGs published by Ben Kramer from this repository. A checksum can help identify an asset, but macOS code signing and notarization are the install trust path.</p>
+          <p><a id="release-page-link" class="release-page-link" href="https://github.com/benmkramer/ScreenshotMaxxing/releases/latest">Open GitHub Release</a></p>
         </div>
         <a id="download-link-secondary" class="button primary" href="https://github.com/benmkramer/ScreenshotMaxxing/releases/latest">Download latest DMG</a>
       </section>
