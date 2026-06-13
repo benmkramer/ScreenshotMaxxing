@@ -430,6 +430,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let controller = CaptureOptionsWindowController(
+            selectedPane: recordingSettingsStore.captureOptionsPane(),
             microphoneEnabled: recordingSettingsStore.microphoneEnabled(),
             systemAudioEnabled: recordingSettingsStore.systemAudioEnabled(),
             onSelectCapture: { [weak self] mode in
@@ -437,6 +438,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onSelectRecording: { [weak self] options in
                 self?.startRecording(options)
+            },
+            onPaneChange: { [weak self] pane in
+                do {
+                    try self?.recordingSettingsStore.saveCaptureOptionsPane(pane)
+                } catch {
+                    self?.presentError(error, title: "Capture Setting Failed")
+                }
             },
             onMicrophoneChange: { [weak self] isEnabled in
                 do {

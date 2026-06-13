@@ -8,9 +8,11 @@
 import AppKit
 import SwiftUI
 
-private enum CaptureOptionsPane: String, CaseIterable {
+enum CaptureOptionsPane: String, CaseIterable {
     case screenshot
     case record
+
+    static let defaultPane: CaptureOptionsPane = .screenshot
 
     var displayName: String {
         switch self {
@@ -26,29 +28,34 @@ struct CaptureOptionsView: View {
     static let availableModes = CaptureMode.allCases
     static let availableRecordingModes = RecordingMode.allCases
 
-    @State private var selectedPane: CaptureOptionsPane = .screenshot
+    @State private var selectedPane: CaptureOptionsPane
     @State private var microphoneEnabled: Bool
     @State private var systemAudioEnabled: Bool
 
     let onSelectCapture: (CaptureMode) -> Void
     let onSelectRecording: (RecordingOptions) -> Void
+    let onPaneChange: (CaptureOptionsPane) -> Void
     let onMicrophoneChange: (Bool) -> Void
     let onSystemAudioChange: (Bool) -> Void
     let onDismiss: () -> Void
 
     init(
+        selectedPane: CaptureOptionsPane = .defaultPane,
         microphoneEnabled: Bool = false,
         systemAudioEnabled: Bool = false,
         onSelectCapture: @escaping (CaptureMode) -> Void,
         onSelectRecording: @escaping (RecordingOptions) -> Void,
+        onPaneChange: @escaping (CaptureOptionsPane) -> Void = { _ in },
         onMicrophoneChange: @escaping (Bool) -> Void = { _ in },
         onSystemAudioChange: @escaping (Bool) -> Void = { _ in },
         onDismiss: @escaping () -> Void
     ) {
+        self._selectedPane = State(initialValue: selectedPane)
         self._microphoneEnabled = State(initialValue: microphoneEnabled)
         self._systemAudioEnabled = State(initialValue: systemAudioEnabled)
         self.onSelectCapture = onSelectCapture
         self.onSelectRecording = onSelectRecording
+        self.onPaneChange = onPaneChange
         self.onMicrophoneChange = onMicrophoneChange
         self.onSystemAudioChange = onSystemAudioChange
         self.onDismiss = onDismiss
@@ -56,7 +63,7 @@ struct CaptureOptionsView: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Picker("Capture type", selection: $selectedPane) {
+            Picker("Capture type", selection: paneSelection) {
                 ForEach(CaptureOptionsPane.allCases, id: \.self) { pane in
                     Text(pane.displayName)
                         .tag(pane)
@@ -95,6 +102,20 @@ struct CaptureOptionsView: View {
         }
         .fixedSize()
         .onExitCommand(perform: onDismiss)
+    }
+
+    private var paneSelection: Binding<CaptureOptionsPane> {
+        Binding(
+            get: { selectedPane },
+            set: { pane in
+                guard selectedPane != pane else {
+                    return
+                }
+
+                selectedPane = pane
+                onPaneChange(pane)
+            }
+        )
     }
 
     @ViewBuilder
@@ -257,19 +278,23 @@ final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate
 
     private let onSelectCapture: (CaptureMode) -> Void
     private let onSelectRecording: (RecordingOptions) -> Void
+    private let onPaneChange: (CaptureOptionsPane) -> Void
     private let onMicrophoneChange: (Bool) -> Void
     private let onSystemAudioChange: (Bool) -> Void
 
     init(
+        selectedPane: CaptureOptionsPane = .defaultPane,
         microphoneEnabled: Bool = false,
         systemAudioEnabled: Bool = false,
         onSelectCapture: @escaping (CaptureMode) -> Void,
         onSelectRecording: @escaping (RecordingOptions) -> Void,
+        onPaneChange: @escaping (CaptureOptionsPane) -> Void = { _ in },
         onMicrophoneChange: @escaping (Bool) -> Void = { _ in },
         onSystemAudioChange: @escaping (Bool) -> Void = { _ in }
     ) {
         self.onSelectCapture = onSelectCapture
         self.onSelectRecording = onSelectRecording
+        self.onPaneChange = onPaneChange
         self.onMicrophoneChange = onMicrophoneChange
         self.onSystemAudioChange = onSystemAudioChange
 
@@ -300,6 +325,7 @@ final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate
         panel.delegate = self
         panel.contentViewController = NSHostingController(
             rootView: CaptureOptionsView(
+                selectedPane: selectedPane,
                 microphoneEnabled: microphoneEnabled,
                 systemAudioEnabled: systemAudioEnabled,
                 onSelectCapture: { [weak self] mode in
@@ -307,6 +333,9 @@ final class CaptureOptionsWindowController: NSWindowController, NSWindowDelegate
                 },
                 onSelectRecording: { [weak self] options in
                     self?.selectRecording(options)
+                },
+                onPaneChange: { [weak self] pane in
+                    self?.onPaneChange(pane)
                 },
                 onMicrophoneChange: { [weak self] isEnabled in
                     self?.onMicrophoneChange(isEnabled)

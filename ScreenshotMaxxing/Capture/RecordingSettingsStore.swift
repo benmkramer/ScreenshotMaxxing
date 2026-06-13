@@ -9,6 +9,7 @@ import Foundation
 
 struct RecordingSettingsStore {
     private enum Keys {
+        static let captureOptionsPane = "captureOptions.selectedPane"
         static let microphoneEnabled = "recording.microphoneEnabled"
         static let systemAudioEnabled = "recording.systemAudioEnabled"
     }
@@ -17,6 +18,19 @@ struct RecordingSettingsStore {
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
+    }
+
+    func captureOptionsPane() -> CaptureOptionsPane {
+        guard let rawValue = userDefaults.string(forKey: Keys.captureOptionsPane),
+              let pane = CaptureOptionsPane(rawValue: rawValue) else {
+            return .defaultPane
+        }
+
+        return pane
+    }
+
+    func saveCaptureOptionsPane(_ pane: CaptureOptionsPane) throws {
+        userDefaults.set(pane.rawValue, forKey: Keys.captureOptionsPane)
     }
 
     func microphoneEnabled() -> Bool {

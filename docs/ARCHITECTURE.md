@@ -22,6 +22,7 @@ Screenshot capture code lives in `Capture/`.
 
 - `CaptureController` invokes `/usr/sbin/screencapture` for area, window, and fullscreen screenshots.
 - `CaptureMode` maps user-facing capture modes to file naming and `screencapture` arguments.
+- `CaptureOptionsView` renders the Screenshot/Record chooser and capture-option controls.
 - `FileLocations` creates local capture directories and unique file names.
 - Successful captures are persisted through `CaptureMetadataStore` and then opened in the screenshot editor.
 
@@ -36,7 +37,7 @@ Screen recording code also lives in `Capture/`.
 - `RecordingWindowSelectionController` handles window selection for recording.
 - `RecordingToolbarWindowController` shows stop/restart controls while recording.
 - `RecordingSelectionOverlays` draws the selected area focus overlay.
-- `RecordingSettingsStore` persists the user's microphone and system-audio recording options.
+- `RecordingSettingsStore` persists the user's microphone and system-audio recording options, plus the last selected Capture Options pane.
 
 Recordings are saved locally as MP4 or MOV files. Microphone-enabled recordings use MOV output. Video thumbnails are generated for local history.
 
