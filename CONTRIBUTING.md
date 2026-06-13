@@ -47,19 +47,23 @@ xcodebuild build \
   -destination 'platform=macOS'
 ```
 
+To build and launch the Debug app without opening Xcode:
+
+```sh
+scripts/build-and-run.sh
+```
+
+The script stops any running `ScreenshotMaxxing` process, builds into an ignored project-local DerivedData directory, finds the built `.app`, and launches it with `/usr/bin/open -n`. Use `scripts/build-and-run.sh --verify` to also check that the process starts after launch.
+
 ## Testing
 
 Run the main test suite:
 
 ```sh
-xcodebuild test \
-  -project ScreenshotMaxxing.xcodeproj \
-  -scheme ScreenshotMaxxing \
-  -destination 'platform=macOS' \
-  CODE_SIGNING_ALLOWED=NO
+scripts/test.sh
 ```
 
-UI tests may require a local GUI session and macOS automation permissions. If the full scheme is blocked by automation setup, run the unit tests first and include the UI-test limitation in your PR notes.
+The default runs the deterministic unit test target. Use `scripts/test.sh --all` for the full scheme, including UI tests. UI tests may require a local GUI session and macOS automation permissions. If the full scheme is blocked by automation setup, run the unit tests first and include the UI-test limitation in your PR notes.
 
 Follow-up testing coverage to add separately:
 

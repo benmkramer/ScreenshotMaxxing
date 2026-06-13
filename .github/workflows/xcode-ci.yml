@@ -27,10 +27,6 @@ jobs:
           swift --version
 
       - name: Run tests
-        run: |
-          xcodebuild test \
-            -project ScreenshotMaxxing.xcodeproj \
-            -scheme ScreenshotMaxxing \
-            -destination 'platform=macOS' \
-            -derivedDataPath "$RUNNER_TEMP/ScreenshotMaxxingDerivedData" \
-            CODE_SIGNING_ALLOWED=NO
+        run: scripts/test.sh --all
+        env:
+          DERIVED_DATA_PATH: ${{ runner.temp }}/ScreenshotMaxxingDerivedData
