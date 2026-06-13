@@ -7,6 +7,7 @@
 
 import SwiftData
 import SwiftUI
+import AppKit
 
 struct CaptureHistoryView: View {
     @Environment(\.modelContext) private var modelContext
@@ -16,7 +17,9 @@ struct CaptureHistoryView: View {
     @State private var searchText = ""
     @State private var selectedCaptureIDs = Set<UUID>()
     @State private var pendingDeletionIDs = Set<UUID>()
+    @State private var pendingMetadataRemovalID: UUID?
     @State private var showingDeleteConfirmation = false
+    @State private var showingMetadataRemovalConfirmation = false
     @State private var deleteErrorMessage: String?
 
     init(fileManager: FileManager = .default, openCapture: @escaping (Capture) -> Void = { _ in }) {
@@ -57,8 +60,23 @@ struct CaptureHistoryView: View {
         } message: {
             Text(CaptureHistoryData.deleteConfirmationMessage)
         }
+        .confirmationDialog(
+            "Remove missing capture from History?",
+            isPresented: $showingMetadataRemovalConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Remove Metadata Only", role: .destructive) {
+                removePendingMissingCapture()
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingMetadataRemovalID = nil
+            }
+        } message: {
+            Text(CaptureHistoryData.removeMissingConfirmationMessage)
+        }
         .alert(
-            "Could not delete captures",
+            "Could not update History",
             isPresented: Binding(
                 get: { deleteErrorMessage != nil },
                 set: { isPresented in
@@ -134,12 +152,56 @@ struct CaptureHistoryView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!fileExists)
+
+                if !fileExists {
+                    MissingCaptureActionsMenu(
+                        capture: capture,
+                        storageFolderURL: CaptureHistoryData.storageFolderURL(
+                            for: capture,
+                            fileManager: fileManager
+                        ),
+                        removeFromHistory: {
+                            requestMetadataRemoval(for: capture)
+                        },
+                        revealStorageFolder: { folderURL in
+                            revealStorageFolder(folderURL)
+                        },
+                        copyLastKnownPath: {
+                            copyLastKnownPath(for: capture)
+                        }
+                    )
+                }
             }
             .contextMenu {
-                Button(role: .destructive) {
-                    requestDelete([capture.id])
-                } label: {
-                    Label("Delete", systemImage: "trash")
+                if fileExists {
+                    Button(role: .destructive) {
+                        requestDelete([capture.id])
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } else {
+                    Button(role: .destructive) {
+                        requestMetadataRemoval(for: capture)
+                    } label: {
+                        Label("Remove from History", systemImage: "minus.circle")
+                    }
+
+                    if let folderURL = CaptureHistoryData.storageFolderURL(
+                        for: capture,
+                        fileManager: fileManager
+                    ) {
+                        Button {
+                            revealStorageFolder(folderURL)
+                        } label: {
+                            Label("Reveal Storage Folder", systemImage: "folder")
+                        }
+                    }
+
+                    Button {
+                        copyLastKnownPath(for: capture)
+                    } label: {
+                        Label("Copy Last Known Path", systemImage: "doc.on.doc")
+                    }
                 }
             }
             .listRowSeparator(.visible)
@@ -230,24 +292,88 @@ struct CaptureHistoryView: View {
         showingDeleteConfirmation = !captureIDs.isEmpty
     }
 
+    private func requestMetadataRemoval(for capture: Capture) {
+        pendingMetadataRemovalID = capture.id
+        showingMetadataRemovalConfirmation = true
+    }
+
     private func deletePendingCaptures() {
-        let capturesToDelete = CaptureHistoryData.capturesToDelete(
-            from: captures,
-            selectedIDs: pendingDeletionIDs
-        )
+        let selectedCaptures = captures.filter { pendingDeletionIDs.contains($0.id) }
 
         do {
             try CaptureHistoryData.deleteCaptures(
-                capturesToDelete,
+                selectedCaptures,
                 from: modelContext,
                 allCaptures: captures,
                 fileManager: fileManager
             )
-            selectedCaptureIDs.subtract(Set(capturesToDelete.map(\.id)))
+            selectedCaptureIDs.subtract(pendingDeletionIDs)
             pendingDeletionIDs.removeAll()
         } catch {
             deleteErrorMessage = error.localizedDescription
         }
+    }
+
+    private func removePendingMissingCapture() {
+        guard let pendingMetadataRemovalID,
+              let capture = captures.first(where: { $0.id == pendingMetadataRemovalID }) else {
+            self.pendingMetadataRemovalID = nil
+            return
+        }
+
+        do {
+            try CaptureHistoryData.removeCapturesFromHistoryOnly(
+                [capture],
+                from: modelContext,
+                fileManager: fileManager
+            )
+            selectedCaptureIDs.remove(capture.id)
+            self.pendingMetadataRemovalID = nil
+        } catch {
+            deleteErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func revealStorageFolder(_ folderURL: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([folderURL])
+    }
+
+    private func copyLastKnownPath(for capture: Capture) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(CaptureHistoryData.lastKnownPath(for: capture), forType: .string)
+    }
+}
+
+private struct MissingCaptureActionsMenu: View {
+    let capture: Capture
+    let storageFolderURL: URL?
+    let removeFromHistory: () -> Void
+    let revealStorageFolder: (URL) -> Void
+    let copyLastKnownPath: () -> Void
+
+    var body: some View {
+        Menu {
+            Button(role: .destructive, action: removeFromHistory) {
+                Label("Remove from History", systemImage: "minus.circle")
+            }
+
+            if let storageFolderURL {
+                Button {
+                    revealStorageFolder(storageFolderURL)
+                } label: {
+                    Label("Reveal Storage Folder", systemImage: "folder")
+                }
+            }
+
+            Button(action: copyLastKnownPath) {
+                Label("Copy Last Known Path", systemImage: "doc.on.doc")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .accessibilityLabel("Missing file actions for \(capture.fileName)")
     }
 }
 

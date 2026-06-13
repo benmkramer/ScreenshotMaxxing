@@ -2499,6 +2499,41 @@ struct ScreenshotMaxxingTests {
         #expect(CaptureHistoryData.detailText(for: newerCapture) == "Fullscreen - 40x30")
     }
 
+    @Test func captureHistoryDetectsMissingContentAndFindsExistingStorageFolder() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        let directories = try FileLocations.ensureCaptureDirectories(
+            baseDirectory: baseDirectory,
+            fileManager: fileManager
+        )
+        let originalURL = directories.originals.appendingPathComponent("area.png")
+        let editedURL = directories.edited.appendingPathComponent("area-edited.png")
+        let capture = Capture(
+            fileName: originalURL.lastPathComponent,
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: originalURL.fileSystemPath,
+            editedFilePath: editedURL.fileSystemPath
+        )
+
+        try Data("png".utf8).write(to: originalURL)
+
+        #expect(!CaptureHistoryData.fileExists(for: capture, fileManager: fileManager))
+        #expect(CaptureHistoryData.lastKnownPath(for: capture) == editedURL.fileSystemPath)
+        #expect(CaptureHistoryData.storageFolderURL(for: capture, fileManager: fileManager) == directories.edited)
+
+        try Data("png".utf8).write(to: editedURL)
+
+        #expect(CaptureHistoryData.fileExists(for: capture, fileManager: fileManager))
+        #expect(CaptureHistoryData.storageFolderURL(for: capture, fileManager: fileManager) == directories.edited)
+    }
+
     @MainActor
     @Test func captureHistorySearchMatchesDatesAndMetadata() throws {
         var calendar = Calendar(identifier: .gregorian)
@@ -2542,8 +2577,10 @@ struct ScreenshotMaxxingTests {
     }
 
     @Test func captureHistoryDeleteConfirmationMentionsTrash() {
-        #expect(CaptureHistoryData.deleteConfirmationMessage.contains("moves them to the Trash"))
+        #expect(CaptureHistoryData.deleteConfirmationMessage.contains("Local files that still exist are moved to the Trash"))
         #expect(!CaptureHistoryData.deleteConfirmationMessage.contains("cannot be undone"))
+        #expect(CaptureHistoryData.removeMissingConfirmationMessage.contains("only deletes its History metadata"))
+        #expect(CaptureHistoryData.removeMissingConfirmationMessage.contains("will not move any files to the Trash"))
     }
 
     @MainActor
@@ -2638,6 +2675,162 @@ struct ScreenshotMaxxingTests {
         #expect(fileManager.fileExists(atPath: diskOnlyEditedURL.fileSystemPath))
         #expect(fileManager.fileExists(atPath: thumbnailURL.fileSystemPath))
         #expect(fileManager.fileExists(atPath: unrelatedURL.fileSystemPath))
+    }
+
+    @MainActor
+    @Test func captureHistoryRemovesMissingCaptureMetadataWithoutTrashingFiles() throws {
+        let fileTrash = SpyFileTrash()
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let missingCapture = Capture(
+            fileName: "missing.png",
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: "/tmp/ScreenshotMaxxingTests-missing-\(UUID().uuidString).png"
+        )
+        let unrelatedCapture = Capture(
+            fileName: "unrelated.png",
+            captureMode: "window",
+            width: 40,
+            height: 30,
+            originalFilePath: "/tmp/ScreenshotMaxxingTests-unrelated-\(UUID().uuidString).png"
+        )
+
+        modelContainer.mainContext.insert(missingCapture)
+        modelContainer.mainContext.insert(unrelatedCapture)
+        try modelContainer.mainContext.save()
+
+        try CaptureHistoryData.removeCapturesFromHistoryOnly(
+            [missingCapture],
+            from: modelContainer.mainContext
+        )
+        let remainingCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+
+        #expect(remainingCaptures.map(\.fileName) == ["unrelated.png"])
+        #expect(fileTrash.trashedFileURLs.isEmpty)
+    }
+
+    @MainActor
+    @Test func captureHistoryDeletionOfMissingCaptureKeepsLinkedExistingEditedCapture() throws {
+        let fileManager = FileManager.default
+        let fileTrash = SpyFileTrash()
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        let directories = try FileLocations.ensureCaptureDirectories(
+            baseDirectory: baseDirectory,
+            fileManager: fileManager
+        )
+        let missingOriginalURL = directories.originals.appendingPathComponent("area-20260526-101500-aaaaaaaa.png")
+        let editedURL = directories.edited.appendingPathComponent("area-20260526-101500-aaaaaaaa-edited-bbbbbbbb.png")
+        try Data("png".utf8).write(to: editedURL)
+
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let missingOriginalCapture = Capture(
+            fileName: missingOriginalURL.lastPathComponent,
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: missingOriginalURL.fileSystemPath
+        )
+        let editedCapture = Capture(
+            fileName: editedURL.lastPathComponent,
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: editedURL.fileSystemPath
+        )
+
+        modelContainer.mainContext.insert(missingOriginalCapture)
+        modelContainer.mainContext.insert(editedCapture)
+        try modelContainer.mainContext.save()
+
+        let allCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+        try CaptureHistoryData.deleteCaptures(
+            [missingOriginalCapture],
+            from: modelContainer.mainContext,
+            allCaptures: allCaptures,
+            fileManager: fileManager,
+            fileTrash: fileTrash
+        )
+        let remainingCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+
+        #expect(remainingCaptures.map(\.fileName) == [editedURL.lastPathComponent])
+        #expect(fileTrash.trashedFileURLs.isEmpty)
+        #expect(fileManager.fileExists(atPath: editedURL.fileSystemPath))
+    }
+
+    @MainActor
+    @Test func captureHistoryMetadataOnlyRemovalRefusesAvailableFiles() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let existingURL = baseDirectory.appendingPathComponent("available.png")
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try Data("png".utf8).write(to: existingURL)
+
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let availableCapture = Capture(
+            fileName: existingURL.lastPathComponent,
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: existingURL.fileSystemPath
+        )
+
+        modelContainer.mainContext.insert(availableCapture)
+        try modelContainer.mainContext.save()
+
+        do {
+            try CaptureHistoryData.removeCapturesFromHistoryOnly(
+                [availableCapture],
+                from: modelContainer.mainContext
+            )
+            Issue.record("Expected metadata-only removal to reject captures whose files are available")
+        } catch {
+            #expect(error.localizedDescription.contains("available again"))
+        }
+
+        let remainingCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+
+        #expect(remainingCaptures.map(\.fileName) == [existingURL.lastPathComponent])
+        #expect(fileManager.fileExists(atPath: existingURL.fileSystemPath))
+    }
+
+    @MainActor
+    @Test func captureHistoryDeletionSkipsTrashForNonexistentFiles() throws {
+        let fileManager = FileManager.default
+        let fileTrash = SpyFileTrash()
+        let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
+        let missingCapture = Capture(
+            fileName: "missing.png",
+            captureMode: "area",
+            width: 20,
+            height: 10,
+            originalFilePath: "/tmp/ScreenshotMaxxingTests-missing-\(UUID().uuidString).png"
+        )
+
+        modelContainer.mainContext.insert(missingCapture)
+        try modelContainer.mainContext.save()
+
+        try CaptureHistoryData.deleteCaptures(
+            [missingCapture],
+            from: modelContainer.mainContext,
+            allCaptures: [missingCapture],
+            fileManager: fileManager,
+            fileTrash: fileTrash
+        )
+        let remainingCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
+
+        #expect(remainingCaptures.isEmpty)
+        #expect(fileTrash.trashedFileURLs.isEmpty)
     }
 
     private func canonicalFileSystemPath(for fileURL: URL) -> String {
