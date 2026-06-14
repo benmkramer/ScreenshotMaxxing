@@ -45,7 +45,8 @@ struct EditorToolbarActionDescriptor: Equatable {
 
     static func copyAndMoveToTrash(_ mediaType: CaptureMediaType) -> EditorToolbarActionDescriptor {
         let mediaName = mediaType.editorMediaName
-        let label = "Copy \(mediaName) to clipboard, then move its local capture files to Trash and remove it from History"
+        let label =
+            "Copy \(mediaName) to clipboard, then move its local capture files to Trash and remove it from History"
 
         return EditorToolbarActionDescriptor(
             systemImageName: "trash",

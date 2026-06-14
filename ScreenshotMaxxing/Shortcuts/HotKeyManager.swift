@@ -182,7 +182,7 @@ final class HotKeyManager {
     static let areaCaptureHotKeyID = HotKeyAction.captureArea.rawValue
     static let captureOptionsHotKeyID = HotKeyAction.showCaptureOptions.rawValue
     static let openHistoryHotKeyID = HotKeyAction.openHistory.rawValue
-    private static let hotKeySignature = OSType(0x534D6178) // SMax
+    private static let hotKeySignature = OSType(0x534D6178)  // SMax
 
     private let actionHandler: (HotKeyAction) -> Void
     private var eventHandlerRef: EventHandlerRef?

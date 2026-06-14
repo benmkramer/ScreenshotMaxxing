@@ -11,9 +11,11 @@ import Foundation
 struct SavedFilePresenter {
     private let revealFile: @MainActor (URL) -> Void
 
-    init(revealFile: @escaping @MainActor (URL) -> Void = { fileURL in
-        NSWorkspace.shared.activateFileViewerSelecting([fileURL])
-    }) {
+    init(
+        revealFile: @escaping @MainActor (URL) -> Void = { fileURL in
+            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+        }
+    ) {
         self.revealFile = revealFile
     }
 

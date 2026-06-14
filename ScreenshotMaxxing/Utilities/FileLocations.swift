@@ -49,7 +49,9 @@ enum FileLocations {
             .appendingPathComponent(applicationSupportFolderName, isDirectory: true)
     }
 
-    static func captureDirectories(baseDirectory: URL? = nil, fileManager: FileManager = .default) throws -> CaptureDirectories {
+    static func captureDirectories(baseDirectory: URL? = nil, fileManager: FileManager = .default) throws
+        -> CaptureDirectories
+    {
         let appSupport = try baseDirectory ?? applicationSupportDirectory(fileManager: fileManager)
         let root = appSupport.appendingPathComponent("Captures", isDirectory: true)
 
@@ -93,7 +95,8 @@ enum FileLocations {
         fileExtension: String = "png"
     ) -> URL {
         let baseName = URL(fileURLWithPath: originalFileName).deletingPathExtension().lastPathComponent
-        return directories.edited.appendingPathComponent("\(baseName)-edited-\(uuid.uuidString.prefix(8)).\(fileExtension)")
+        return directories.edited.appendingPathComponent(
+            "\(baseName)-edited-\(uuid.uuidString.prefix(8)).\(fileExtension)")
     }
 
     static func uniqueThumbnailFileURL(
@@ -106,7 +109,8 @@ enum FileLocations {
     }
 
     private static func uniqueFileName(prefix: String, date: Date, uuid: UUID, fileExtension: String) -> String {
-        let safePrefix = prefix
+        let safePrefix =
+            prefix
             .lowercased()
             .replacingOccurrences(of: " ", with: "-")
         let timestamp = utcTimestamp(from: date)

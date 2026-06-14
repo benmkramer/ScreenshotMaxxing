@@ -29,9 +29,10 @@ struct ScreenshotMaxxingTests {
     @MainActor
     @Test func menuBarHistoryItemAdvertisesGlobalHistoryShortcut() throws {
         let menu = MenuBarController.makeMenu(target: nil)
-        let historyItem = try #require(menu.items.first {
-            $0.title == "Open History (Control-Option-Command-H)"
-        })
+        let historyItem = try #require(
+            menu.items.first {
+                $0.title == "Open History (Control-Option-Command-H)"
+            })
 
         #expect(historyItem.keyEquivalent == "h")
         #expect(historyItem.keyEquivalentModifierMask == [.control, .option, .command])
@@ -200,9 +201,18 @@ struct ScreenshotMaxxingTests {
     @Test func captureModesBuildExpectedScreencaptureArguments() {
         let outputURL = URL(fileURLWithPath: "/tmp/Application Support/screenshot.png")
 
-        #expect(CaptureMode.area.screencaptureArguments(outputURL: outputURL) == ["-i", "-s", "-x", "/tmp/Application Support/screenshot.png"])
-        #expect(CaptureMode.window.screencaptureArguments(outputURL: outputURL) == ["-i", "-w", "-x", "/tmp/Application Support/screenshot.png"])
-        #expect(CaptureMode.fullscreen.screencaptureArguments(outputURL: outputURL) == ["-x", "/tmp/Application Support/screenshot.png"])
+        #expect(
+            CaptureMode.area.screencaptureArguments(outputURL: outputURL) == [
+                "-i", "-s", "-x", "/tmp/Application Support/screenshot.png",
+            ])
+        #expect(
+            CaptureMode.window.screencaptureArguments(outputURL: outputURL) == [
+                "-i", "-w", "-x", "/tmp/Application Support/screenshot.png",
+            ])
+        #expect(
+            CaptureMode.fullscreen.screencaptureArguments(outputURL: outputURL) == [
+                "-x", "/tmp/Application Support/screenshot.png",
+            ])
     }
 
     @Test func recordingAreaFocusOverlayConvertsScreenRectToLocalCoordinates() {
@@ -354,10 +364,12 @@ struct ScreenshotMaxxingTests {
             item.isSeparatorItem ? nil : item.title
         }
 
-        #expect(visibleTitles == MenuBarController.visibleMenuTitles(
-            areaCaptureShortcut: areaCaptureShortcut,
-            captureOptionsShortcut: captureOptionsShortcut
-        ))
+        #expect(
+            visibleTitles
+                == MenuBarController.visibleMenuTitles(
+                    areaCaptureShortcut: areaCaptureShortcut,
+                    captureOptionsShortcut: captureOptionsShortcut
+                ))
         #expect(visibleTitles.first == "Capture Area (Option-Command-A)")
         #expect(visibleTitles[1] == "Capture Options (Control-Option-B)")
         #expect(visibleTitles[4] == "Open History (Control-Option-Command-H)")
@@ -395,12 +407,12 @@ struct ScreenshotMaxxingTests {
 
     @Test func copyAndTrashStatusMessagesMentionClipboardAndTrash() {
         #expect(
-            EditorCopyAndTrashStatus.copiedAndMovedToTrashMessage(for: .image) ==
-            "Copied image; moved files to Trash and removed History entry"
+            EditorCopyAndTrashStatus.copiedAndMovedToTrashMessage(for: .image)
+                == "Copied image; moved files to Trash and removed History entry"
         )
         #expect(
-            EditorCopyAndTrashStatus.copiedAndMovedToTrashMessage(for: .video) ==
-            "Copied video; moved files to Trash and removed History entry"
+            EditorCopyAndTrashStatus.copiedAndMovedToTrashMessage(for: .video)
+                == "Copied video; moved files to Trash and removed History entry"
         )
         #expect(
             EditorCopyAndTrashStatus.copiedButMoveToTrashFailedMessage(
@@ -472,9 +484,13 @@ struct ScreenshotMaxxingTests {
         #expect(preferences.openHistoryShortcut.displayString == "Control-Option-Command-H")
         #expect(preferences.launchAtLoginEnabled)
         #expect(URL(fileURLWithPath: preferences.originalsFolderPath).lastPathComponent == "originals")
-        #expect(URL(fileURLWithPath: preferences.originalsFolderPath).deletingLastPathComponent().lastPathComponent == "Captures")
+        #expect(
+            URL(fileURLWithPath: preferences.originalsFolderPath).deletingLastPathComponent().lastPathComponent
+                == "Captures")
         #expect(URL(fileURLWithPath: preferences.editedFolderPath).lastPathComponent == "edited")
-        #expect(URL(fileURLWithPath: preferences.editedFolderPath).deletingLastPathComponent().lastPathComponent == "Captures")
+        #expect(
+            URL(fileURLWithPath: preferences.editedFolderPath).deletingLastPathComponent().lastPathComponent
+                == "Captures")
         #expect(fileManager.fileExists(atPath: preferences.originalsFolderPath))
         #expect(fileManager.fileExists(atPath: preferences.editedFolderPath))
     }
@@ -546,15 +562,23 @@ struct ScreenshotMaxxingTests {
     }
 
     @Test func recordingOptionsKeepMp4ContainerWithoutMicrophone() {
-        #expect(RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: false).outputContainer == .mp4)
-        #expect(RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: true).outputContainer == .mp4)
-        #expect(RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: true).outputContainer.fileExtension == "mp4")
+        #expect(
+            RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: false).outputContainer == .mp4)
+        #expect(
+            RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: true).outputContainer == .mp4)
+        #expect(
+            RecordingOptions(mode: .area, microphoneEnabled: false, systemAudioEnabled: true).outputContainer
+                .fileExtension == "mp4")
     }
 
     @Test func recordingOptionsUseMovContainerWithMicrophone() {
-        #expect(RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: false).outputContainer == .mov)
-        #expect(RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: true).outputContainer == .mov)
-        #expect(RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: true).outputContainer.fileExtension == "mov")
+        #expect(
+            RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: false).outputContainer == .mov)
+        #expect(
+            RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: true).outputContainer == .mov)
+        #expect(
+            RecordingOptions(mode: .window, microphoneEnabled: true, systemAudioEnabled: true).outputContainer
+                .fileExtension == "mov")
     }
 
     @MainActor
@@ -937,7 +961,8 @@ struct ScreenshotMaxxingTests {
                 durationSeconds: 1,
                 width: 100,
                 height: 100,
-                thumbnailURL: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/\(options.mode.rawValue)-thumbnail.png"),
+                thumbnailURL: URL(
+                    fileURLWithPath: "/tmp/ScreenshotMaxxingTests/\(options.mode.rawValue)-thumbnail.png"),
                 microphoneEnabled: options.microphoneEnabled,
                 systemAudioEnabled: options.systemAudioEnabled
             )
@@ -1010,13 +1035,15 @@ struct ScreenshotMaxxingTests {
     @Test func screenCapturePermissionPreflightsGrantedAccess() {
         var preflightCount = 0
         var requestCount = 0
-        let controller = ScreenCapturePermissionController(preflightAccess: {
-            preflightCount += 1
-            return true
-        }, requestAccess: {
-            requestCount += 1
-            return false
-        })
+        let controller = ScreenCapturePermissionController(
+            preflightAccess: {
+                preflightCount += 1
+                return true
+            },
+            requestAccess: {
+                requestCount += 1
+                return false
+            })
 
         let granted = controller.hasAccess()
 
@@ -1028,13 +1055,15 @@ struct ScreenshotMaxxingTests {
     @Test func screenCapturePermissionRequestsAccessWhenMissing() {
         var preflightCount = 0
         var requestCount = 0
-        let controller = ScreenCapturePermissionController(preflightAccess: {
-            preflightCount += 1
-            return false
-        }, requestAccess: {
-            requestCount += 1
-            return true
-        })
+        let controller = ScreenCapturePermissionController(
+            preflightAccess: {
+                preflightCount += 1
+                return false
+            },
+            requestAccess: {
+                requestCount += 1
+                return true
+            })
 
         let granted = controller.requestAccessIfNeeded()
 
@@ -1044,7 +1073,8 @@ struct ScreenshotMaxxingTests {
     }
 
     @Test func screenCapturePermissionTargetsScreenRecordingSettings() {
-        let expectedURL = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture")
+        let expectedURL = URL(
+            string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture")
 
         #expect(AppPermission.screenCapture.settingsURL == expectedURL)
         #expect(AppPermission.screenCapture.settingsURL?.absoluteString.contains("Privacy_Accessibility") == false)
@@ -1083,10 +1113,11 @@ struct ScreenshotMaxxingTests {
             }
         )
 
-        #expect(controller.permissionStates() == [
-            AppPermissionState(permission: .screenCapture, isGranted: true, isSetupEnabled: true),
-            AppPermissionState(permission: .directScreenAccess, isGranted: false, isSetupEnabled: true)
-        ])
+        #expect(
+            controller.permissionStates() == [
+                AppPermissionState(permission: .screenCapture, isGranted: true, isSetupEnabled: true),
+                AppPermissionState(permission: .directScreenAccess, isGranted: false, isSetupEnabled: true),
+            ])
         #expect(!controller.hasAllRequiredPermissions())
     }
 
@@ -1094,12 +1125,14 @@ struct ScreenshotMaxxingTests {
         var screenCaptureRequestCount = 0
         var directScreenAccessRequestCount = 0
         let controller = AppPermissionController(
-            screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
-                false
-            }, requestAccess: {
-                screenCaptureRequestCount += 1
-                return true
-            }),
+            screenCapturePermissionController: ScreenCapturePermissionController(
+                preflightAccess: {
+                    false
+                },
+                requestAccess: {
+                    screenCaptureRequestCount += 1
+                    return true
+                }),
             directScreenAccessController: DirectScreenAccessController {
                 false
             } requestApproval: {
@@ -1130,10 +1163,11 @@ struct ScreenshotMaxxingTests {
             }
         )
 
-        #expect(controller.permissionStates() == [
-            AppPermissionState(permission: .screenCapture, isGranted: false, isSetupEnabled: true),
-            AppPermissionState(permission: .directScreenAccess, isGranted: false, isSetupEnabled: false)
-        ])
+        #expect(
+            controller.permissionStates() == [
+                AppPermissionState(permission: .screenCapture, isGranted: false, isSetupEnabled: true),
+                AppPermissionState(permission: .directScreenAccess, isGranted: false, isSetupEnabled: false),
+            ])
         #expect(clearApprovalCount == 1)
     }
 
@@ -1143,12 +1177,14 @@ struct ScreenshotMaxxingTests {
         var openedURLs: [URL] = []
         var relaunchCount = 0
         let controller = AppPermissionController(
-            screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
-                false
-            }, requestAccess: {
-                requestCount += 1
-                return false
-            }),
+            screenCapturePermissionController: ScreenCapturePermissionController(
+                preflightAccess: {
+                    false
+                },
+                requestAccess: {
+                    requestCount += 1
+                    return false
+                }),
             directScreenAccessController: DirectScreenAccessController {
                 false
             } requestApproval: {
@@ -1178,10 +1214,11 @@ struct ScreenshotMaxxingTests {
 
         #expect(model.needsRelaunch)
         #expect(relaunchCount == 1)
-        #expect(model.states == [
-            AppPermissionState(permission: .screenCapture, isGranted: false, isSetupEnabled: true),
-            AppPermissionState(permission: .directScreenAccess, isGranted: false, isSetupEnabled: false)
-        ])
+        #expect(
+            model.states == [
+                AppPermissionState(permission: .screenCapture, isGranted: false, isSetupEnabled: true),
+                AppPermissionState(permission: .directScreenAccess, isGranted: false, isSetupEnabled: false),
+            ])
     }
 
     @MainActor
@@ -1207,10 +1244,11 @@ struct ScreenshotMaxxingTests {
 
         #expect(requestCount == 1)
         #expect(model.allGranted)
-        #expect(model.states == [
-            AppPermissionState(permission: .screenCapture, isGranted: true, isSetupEnabled: true),
-            AppPermissionState(permission: .directScreenAccess, isGranted: true, isSetupEnabled: true)
-        ])
+        #expect(
+            model.states == [
+                AppPermissionState(permission: .screenCapture, isGranted: true, isSetupEnabled: true),
+                AppPermissionState(permission: .directScreenAccess, isGranted: true, isSetupEnabled: true),
+            ])
     }
 
     @MainActor
@@ -1379,38 +1417,42 @@ struct ScreenshotMaxxingTests {
     }
 
     @Test func shortcutCanBeRecordedFromModifiedKeyEvent() throws {
-        let event = try #require(NSEvent.keyEvent(
-            with: .keyDown,
-            location: .zero,
-            modifierFlags: [.control, .shift],
-            timestamp: 0,
-            windowNumber: 0,
-            context: nil,
-            characters: "7",
-            charactersIgnoringModifiers: "7",
-            isARepeat: false,
-            keyCode: UInt16(kVK_ANSI_7)
-        ))
+        let event = try #require(
+            NSEvent.keyEvent(
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: [.control, .shift],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                characters: "7",
+                charactersIgnoringModifiers: "7",
+                isARepeat: false,
+                keyCode: UInt16(kVK_ANSI_7)
+            ))
 
-        #expect(GlobalKeyboardShortcut(event: event) == GlobalKeyboardShortcut(
-            keyCode: UInt32(kVK_ANSI_7),
-            carbonModifiers: UInt32(controlKey | shiftKey)
-        ))
+        #expect(
+            GlobalKeyboardShortcut(event: event)
+                == GlobalKeyboardShortcut(
+                    keyCode: UInt32(kVK_ANSI_7),
+                    carbonModifiers: UInt32(controlKey | shiftKey)
+                ))
     }
 
     @Test func shortcutRecordingRejectsUnmodifiedKeyEvent() throws {
-        let event = try #require(NSEvent.keyEvent(
-            with: .keyDown,
-            location: .zero,
-            modifierFlags: [],
-            timestamp: 0,
-            windowNumber: 0,
-            context: nil,
-            characters: "7",
-            charactersIgnoringModifiers: "7",
-            isARepeat: false,
-            keyCode: UInt16(kVK_ANSI_7)
-        ))
+        let event = try #require(
+            NSEvent.keyEvent(
+                with: .keyDown,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                characters: "7",
+                charactersIgnoringModifiers: "7",
+                isARepeat: false,
+                keyCode: UInt16(kVK_ANSI_7)
+            ))
 
         #expect(GlobalKeyboardShortcut(event: event) == nil)
     }
@@ -1482,11 +1524,12 @@ struct ScreenshotMaxxingTests {
         let captures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
 
         #expect(captures.isEmpty)
-        #expect(Set(fileTrash.trashedFileURLs.map(\.fileSystemPath)) == [
-            originalURL.fileSystemPath,
-            editedURL.fileSystemPath,
-            thumbnailURL.fileSystemPath
-        ])
+        #expect(
+            Set(fileTrash.trashedFileURLs.map(\.fileSystemPath)) == [
+                originalURL.fileSystemPath,
+                editedURL.fileSystemPath,
+                thumbnailURL.fileSystemPath,
+            ])
         #expect(fileManager.fileExists(atPath: originalURL.fileSystemPath))
         #expect(fileManager.fileExists(atPath: editedURL.fileSystemPath))
         #expect(fileManager.fileExists(atPath: thumbnailURL.fileSystemPath))
@@ -1515,16 +1558,17 @@ struct ScreenshotMaxxingTests {
         let videoURL = URL(fileURLWithPath: "/tmp/recording-area.mp4")
         let thumbnailURL = URL(fileURLWithPath: "/tmp/recording-area-thumbnail.png")
 
-        let capture = try store.saveCapture(result: RecordingResult(
-            mode: .area,
-            fileURL: videoURL,
-            durationSeconds: 12.5,
-            width: 1920,
-            height: 1080,
-            thumbnailURL: thumbnailURL,
-            microphoneEnabled: true,
-            systemAudioEnabled: true
-        ))
+        let capture = try store.saveCapture(
+            result: RecordingResult(
+                mode: .area,
+                fileURL: videoURL,
+                durationSeconds: 12.5,
+                width: 1920,
+                height: 1080,
+                thumbnailURL: thumbnailURL,
+                microphoneEnabled: true,
+                systemAudioEnabled: true
+            ))
         let captures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
 
         #expect(capture.fileName == "recording-area.mp4")
@@ -1591,7 +1635,8 @@ struct ScreenshotMaxxingTests {
     @Test func editorWindowTitleUsesCapturedFileName() {
         let imageURL = URL(fileURLWithPath: "/tmp/example-capture.png")
 
-        #expect(ScreenshotEditorWindowController.windowTitle(for: imageURL) == "example-capture.png - ScreenshotMaxxing")
+        #expect(
+            ScreenshotEditorWindowController.windowTitle(for: imageURL) == "example-capture.png - ScreenshotMaxxing")
     }
 
     @MainActor
@@ -1663,7 +1708,8 @@ struct ScreenshotMaxxingTests {
             controller.window?.close()
         }
 
-        #expect(controller.isEditingVideo(at: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/example-recording.mp4")))
+        #expect(
+            controller.isEditingVideo(at: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/example-recording.mp4")))
         #expect(!controller.isEditingVideo(at: URL(fileURLWithPath: "/tmp/ScreenshotMaxxingTests/other-recording.mp4")))
     }
 
@@ -1842,7 +1888,6 @@ struct ScreenshotMaxxingTests {
         #expect(zoomedGeometry.viewDistance(forImageDistance: ImageRenderer.defaultBlurRadius) == 24)
     }
 
-
     @MainActor
     @Test func editorStateStoresBlurRectAnnotationsInImageCoordinates() throws {
         let imageURL = URL(fileURLWithPath: "/tmp/capture.png")
@@ -1855,11 +1900,13 @@ struct ScreenshotMaxxingTests {
         #expect(state.originalImageURL == imageURL)
         #expect(state.selectedTool == .select)
         #expect(state.selectedAnnotationID == annotationID)
-        #expect(annotation == Annotation(
-            id: annotationID,
-            type: .blur(AnnotationBlur()),
-            rect: CGRect(x: 20, y: 30, width: 40, height: 50)
-        ))
+        #expect(
+            annotation
+                == Annotation(
+                    id: annotationID,
+                    type: .blur(AnnotationBlur()),
+                    rect: CGRect(x: 20, y: 30, width: 40, height: 50)
+                ))
         #expect(state.annotations == [annotation])
     }
 
@@ -1873,11 +1920,13 @@ struct ScreenshotMaxxingTests {
         let addedAnnotation = state.addBlurRect(CGRect(x: 20, y: 30, width: 40, height: 50), id: annotationID)
         let annotation = try #require(addedAnnotation)
 
-        #expect(annotation == Annotation(
-            id: annotationID,
-            type: .blur(AnnotationBlur(radius: 36)),
-            rect: CGRect(x: 20, y: 30, width: 40, height: 50)
-        ))
+        #expect(
+            annotation
+                == Annotation(
+                    id: annotationID,
+                    type: .blur(AnnotationBlur(radius: 36)),
+                    rect: CGRect(x: 20, y: 30, width: 40, height: 50)
+                ))
         #expect(state.selectedBlurRadius == 36)
     }
 
@@ -1917,7 +1966,10 @@ struct ScreenshotMaxxingTests {
         #expect(state.selectedStrokeColor == .blue)
         #expect(state.selectedStrokeLineWidth == 10)
         #expect(state.strokeStyle(for: .pen) == AnnotationStrokeStyle(color: .blue, lineWidth: 10))
-        #expect(annotation == Annotation(id: annotationID, type: .stroke(stroke), rect: CGRect(x: 5, y: 15, width: 50, height: 10)))
+        #expect(
+            annotation
+                == Annotation(id: annotationID, type: .stroke(stroke), rect: CGRect(x: 5, y: 15, width: 50, height: 10))
+        )
     }
 
     @MainActor
@@ -2095,11 +2147,13 @@ struct ScreenshotMaxxingTests {
         let annotation = try #require(addedAnnotation)
 
         #expect(state.selectedAnnotationID == annotationID)
-        #expect(annotation == Annotation(
-            id: annotationID,
-            type: .rectangle(AnnotationRectangle()),
-            rect: CGRect(x: 20, y: 30, width: 40, height: 50)
-        ))
+        #expect(
+            annotation
+                == Annotation(
+                    id: annotationID,
+                    type: .rectangle(AnnotationRectangle()),
+                    rect: CGRect(x: 20, y: 30, width: 40, height: 50)
+                ))
         #expect(state.selectAnnotation(containing: CGPoint(x: 30, y: 40)) == annotationID)
     }
 
@@ -2132,16 +2186,19 @@ struct ScreenshotMaxxingTests {
         let annotationID = UUID(uuidString: "00000000-0000-0000-0000-000000000031")!
         var state = ScreenshotEditorState(originalImageURL: imageURL, selectedTool: .text)
 
-        let addedAnnotation = state.addText("  Ship it  ", rect: CGRect(x: 20, y: 30, width: 80, height: 40), id: annotationID)
+        let addedAnnotation = state.addText(
+            "  Ship it  ", rect: CGRect(x: 20, y: 30, width: 80, height: 40), id: annotationID)
         let annotation = try #require(addedAnnotation)
 
         #expect(state.selectedAnnotationID == annotationID)
         #expect(state.selectedAnnotationUsesTextContent)
-        #expect(annotation == Annotation(
-            id: annotationID,
-            type: .text(AnnotationText(content: "Ship it")),
-            rect: CGRect(x: 20, y: 30, width: 80, height: 40)
-        ))
+        #expect(
+            annotation
+                == Annotation(
+                    id: annotationID,
+                    type: .text(AnnotationText(content: "Ship it")),
+                    rect: CGRect(x: 20, y: 30, width: 80, height: 40)
+                ))
 
         state.updateSelectedText("Done now ")
 
@@ -2186,12 +2243,14 @@ struct ScreenshotMaxxingTests {
             within: CGSize(width: 200, height: 100)
         )
 
-        #expect(rect == CGRect(
-            x: 40,
-            y: 52,
-            width: AnnotationText.defaultSize.width,
-            height: AnnotationText.defaultSize.height
-        ))
+        #expect(
+            rect
+                == CGRect(
+                    x: 40,
+                    y: 52,
+                    width: AnnotationText.defaultSize.width,
+                    height: AnnotationText.defaultSize.height
+                ))
     }
 
     @MainActor
@@ -2441,12 +2500,14 @@ struct ScreenshotMaxxingTests {
 
         let resizedAnnotation = try #require(state.annotation(id: annotationID))
 
-        #expect(resizedAnnotation.rect == CGRect(
-            x: 20,
-            y: 30,
-            width: 80,
-            height: ScreenshotEditorState.minimumAnnotationSideLength
-        ))
+        #expect(
+            resizedAnnotation.rect
+                == CGRect(
+                    x: 20,
+                    y: 30,
+                    width: 80,
+                    height: ScreenshotEditorState.minimumAnnotationSideLength
+                ))
     }
 
     @Test func imageCanvasConvertsDragToImageRect() throws {
@@ -2766,7 +2827,9 @@ struct ScreenshotMaxxingTests {
         let renderer = ImageRenderer()
         let renderedPNGData = try renderer.renderPNG(
             imageURL: imageURL,
-            annotations: [Annotation(type: .rectangle(AnnotationRectangle()), rect: CGRect(x: 1, y: 1, width: 10, height: 6))]
+            annotations: [
+                Annotation(type: .rectangle(AnnotationRectangle()), rect: CGRect(x: 1, y: 1, width: 10, height: 6))
+            ]
         )
         let renderedColor = try color(in: renderedPNGData, x: 1, y: 1)
 
@@ -2824,7 +2887,10 @@ struct ScreenshotMaxxingTests {
         let uneditedPNGData = try renderer.renderPNG(imageURL: imageURL, annotations: [])
         let renderedPNGData = try renderer.renderPNG(
             imageURL: imageURL,
-            annotations: [Annotation(type: .text(AnnotationText(content: "Text")), rect: CGRect(x: 2, y: 2, width: 76, height: 36))]
+            annotations: [
+                Annotation(
+                    type: .text(AnnotationText(content: "Text")), rect: CGRect(x: 2, y: 2, width: 76, height: 36))
+            ]
         )
 
         #expect(renderedPNGData != uneditedPNGData)
@@ -3066,11 +3132,23 @@ struct ScreenshotMaxxingTests {
         )
         let captures = [mayCapture, juneCapture]
 
-        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "2026-05-26", calendar: calendar).map(\.fileName) == ["may.png"])
-        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "May 26", calendar: calendar).map(\.fileName) == ["may.png"])
-        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "05/26/26", calendar: calendar).map(\.fileName) == ["may.png"])
-        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "10:15", calendar: calendar).map(\.fileName) == ["may.png"])
-        #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "fullscreen", calendar: calendar).map(\.fileName) == ["june.png"])
+        #expect(
+            CaptureHistoryData.filteredCaptures(captures, searchText: "2026-05-26", calendar: calendar).map(\.fileName)
+                == ["may.png"])
+        #expect(
+            CaptureHistoryData.filteredCaptures(captures, searchText: "May 26", calendar: calendar).map(\.fileName) == [
+                "may.png"
+            ])
+        #expect(
+            CaptureHistoryData.filteredCaptures(captures, searchText: "05/26/26", calendar: calendar).map(\.fileName)
+                == ["may.png"])
+        #expect(
+            CaptureHistoryData.filteredCaptures(captures, searchText: "10:15", calendar: calendar).map(\.fileName) == [
+                "may.png"
+            ])
+        #expect(
+            CaptureHistoryData.filteredCaptures(captures, searchText: "fullscreen", calendar: calendar).map(\.fileName)
+                == ["june.png"])
         #expect(CaptureHistoryData.filteredCaptures(captures, searchText: "missing", calendar: calendar).isEmpty)
     }
 
@@ -3097,41 +3175,51 @@ struct ScreenshotMaxxingTests {
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let referenceDate = try #require(calendar.date(from: DateComponents(
-            timeZone: calendar.timeZone,
-            year: 2026,
-            month: 6,
-            day: 13,
-            hour: 12
-        )))
-        let today = try #require(calendar.date(from: DateComponents(
-            timeZone: calendar.timeZone,
-            year: 2026,
-            month: 6,
-            day: 13,
-            hour: 9
-        )))
-        let yesterday = try #require(calendar.date(from: DateComponents(
-            timeZone: calendar.timeZone,
-            year: 2026,
-            month: 6,
-            day: 12,
-            hour: 9
-        )))
-        let weekStart = try #require(calendar.date(from: DateComponents(
-            timeZone: calendar.timeZone,
-            year: 2026,
-            month: 6,
-            day: 7,
-            hour: 9
-        )))
-        let oldDate = try #require(calendar.date(from: DateComponents(
-            timeZone: calendar.timeZone,
-            year: 2026,
-            month: 5,
-            day: 1,
-            hour: 9
-        )))
+        let referenceDate = try #require(
+            calendar.date(
+                from: DateComponents(
+                    timeZone: calendar.timeZone,
+                    year: 2026,
+                    month: 6,
+                    day: 13,
+                    hour: 12
+                )))
+        let today = try #require(
+            calendar.date(
+                from: DateComponents(
+                    timeZone: calendar.timeZone,
+                    year: 2026,
+                    month: 6,
+                    day: 13,
+                    hour: 9
+                )))
+        let yesterday = try #require(
+            calendar.date(
+                from: DateComponents(
+                    timeZone: calendar.timeZone,
+                    year: 2026,
+                    month: 6,
+                    day: 12,
+                    hour: 9
+                )))
+        let weekStart = try #require(
+            calendar.date(
+                from: DateComponents(
+                    timeZone: calendar.timeZone,
+                    year: 2026,
+                    month: 6,
+                    day: 7,
+                    hour: 9
+                )))
+        let oldDate = try #require(
+            calendar.date(
+                from: DateComponents(
+                    timeZone: calendar.timeZone,
+                    year: 2026,
+                    month: 5,
+                    day: 1,
+                    hour: 9
+                )))
         let todayScreenshot = Capture(
             createdAt: today,
             fileName: todayScreenshotURL.lastPathComponent,
@@ -3226,21 +3314,23 @@ struct ScreenshotMaxxingTests {
             fileManager: fileManager
         )
 
-        #expect(Set(screenshots.map(\.fileName)) == [
-            todayScreenshotURL.lastPathComponent,
-            editedScreenshotURL.lastPathComponent,
-            missingScreenshotURL.lastPathComponent
-        ])
+        #expect(
+            Set(screenshots.map(\.fileName)) == [
+                todayScreenshotURL.lastPathComponent,
+                editedScreenshotURL.lastPathComponent,
+                missingScreenshotURL.lastPathComponent,
+            ])
         #expect(recordings.map(\.fileName) == [yesterdayRecordingURL.lastPathComponent])
         #expect(edited.map(\.fileName) == [editedScreenshotURL.lastPathComponent])
         #expect(missing.map(\.fileName) == [missingScreenshotURL.lastPathComponent])
         #expect(todayResults.map(\.fileName) == [todayScreenshotURL.lastPathComponent])
         #expect(yesterdayRecordingsMatchingSearch.map(\.fileName) == [yesterdayRecordingURL.lastPathComponent])
-        #expect(Set(last7Days.map(\.fileName)) == [
-            todayScreenshotURL.lastPathComponent,
-            yesterdayRecordingURL.lastPathComponent,
-            editedScreenshotURL.lastPathComponent
-        ])
+        #expect(
+            Set(last7Days.map(\.fileName)) == [
+                todayScreenshotURL.lastPathComponent,
+                yesterdayRecordingURL.lastPathComponent,
+                editedScreenshotURL.lastPathComponent,
+            ])
     }
 
     @MainActor
@@ -3295,7 +3385,9 @@ struct ScreenshotMaxxingTests {
     }
 
     @Test func captureHistoryDeleteConfirmationMentionsTrash() {
-        #expect(CaptureHistoryData.deleteConfirmationMessage.contains("Local files that still exist are moved to the Trash"))
+        #expect(
+            CaptureHistoryData.deleteConfirmationMessage.contains("Local files that still exist are moved to the Trash")
+        )
         #expect(!CaptureHistoryData.deleteConfirmationMessage.contains("cannot be undone"))
         #expect(CaptureHistoryData.removeMissingConfirmationMessage.contains("only deletes its History metadata"))
         #expect(CaptureHistoryData.removeMissingConfirmationMessage.contains("will not move any files to the Trash"))
@@ -3317,9 +3409,11 @@ struct ScreenshotMaxxingTests {
         )
         let originalURL = directories.originals.appendingPathComponent("area-20260526-101500-aaaaaaaa.png")
         let editedURL = directories.edited.appendingPathComponent("area-20260526-101500-aaaaaaaa-edited-bbbbbbbb.png")
-        let diskOnlyEditedURL = directories.edited.appendingPathComponent("area-20260526-101500-aaaaaaaa-edited-cccccccc.png")
+        let diskOnlyEditedURL = directories.edited.appendingPathComponent(
+            "area-20260526-101500-aaaaaaaa-edited-cccccccc.png")
         let thumbnailURL = directories.thumbnails.appendingPathComponent("area-20260526-101500-aaaaaaaa-thumbnail.png")
-        let unrelatedURL = directories.edited.appendingPathComponent("window-20260526-101500-dddddddd-edited-eeeeeeee.png")
+        let unrelatedURL = directories.edited.appendingPathComponent(
+            "window-20260526-101500-dddddddd-edited-eeeeeeee.png")
 
         try [originalURL, editedURL, diskOnlyEditedURL, thumbnailURL, unrelatedURL].forEach { fileURL in
             try Data("png".utf8).write(to: fileURL)
@@ -3359,11 +3453,12 @@ struct ScreenshotMaxxingTests {
             from: allCaptures,
             selectedIDs: [originalCapture.id]
         )
-        let filePathsToDelete = try Set(CaptureHistoryData.fileURLsToDelete(
-            for: capturesToDelete,
-            allCaptures: allCaptures,
-            fileManager: fileManager
-        ).map { canonicalFileSystemPath(for: $0) })
+        let filePathsToDelete = try Set(
+            CaptureHistoryData.fileURLsToDelete(
+                for: capturesToDelete,
+                allCaptures: allCaptures,
+                fileManager: fileManager
+            ).map { canonicalFileSystemPath(for: $0) })
 
         #expect(Set(capturesToDelete.map(\.fileName)) == [originalURL.lastPathComponent, editedURL.lastPathComponent])
         #expect(filePathsToDelete.contains(canonicalFileSystemPath(for: originalURL)))
@@ -3382,12 +3477,13 @@ struct ScreenshotMaxxingTests {
         let remainingCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
 
         #expect(remainingCaptures.map(\.fileName) == [unrelatedURL.lastPathComponent])
-        #expect(Set(fileTrash.trashedFileURLs.map(\.fileSystemPath)) == [
-            originalURL.fileSystemPath,
-            editedURL.fileSystemPath,
-            diskOnlyEditedURL.fileSystemPath,
-            thumbnailURL.fileSystemPath
-        ])
+        #expect(
+            Set(fileTrash.trashedFileURLs.map(\.fileSystemPath)) == [
+                originalURL.fileSystemPath,
+                editedURL.fileSystemPath,
+                diskOnlyEditedURL.fileSystemPath,
+                thumbnailURL.fileSystemPath,
+            ])
         #expect(fileManager.fileExists(atPath: originalURL.fileSystemPath))
         #expect(fileManager.fileExists(atPath: editedURL.fileSystemPath))
         #expect(fileManager.fileExists(atPath: diskOnlyEditedURL.fileSystemPath))
@@ -3581,7 +3677,7 @@ struct ScreenshotMaxxingTests {
                 VideoSilenceDetector.AudioLevelWindow(start: 0.4, end: 0.9, rmsAmplitude: 0.001),
                 VideoSilenceDetector.AudioLevelWindow(start: 0.9, end: 1, rmsAmplitude: 0.02),
                 VideoSilenceDetector.AudioLevelWindow(start: 1, end: 1.6, rmsAmplitude: 0.001),
-                VideoSilenceDetector.AudioLevelWindow(start: 1.6, end: 2.2, rmsAmplitude: 0.001)
+                VideoSilenceDetector.AudioLevelWindow(start: 1.6, end: 2.2, rmsAmplitude: 0.001),
             ],
             configuration: VideoSilenceDetectionConfiguration(
                 minimumSilenceDuration: 1,
@@ -3600,7 +3696,7 @@ struct ScreenshotMaxxingTests {
             from: [
                 VideoSilenceDetector.AudioLevelWindow(start: 0, end: 0.55, rmsAmplitude: 0.001),
                 VideoSilenceDetector.AudioLevelWindow(start: 0.55, end: 0.62, rmsAmplitude: 0.02),
-                VideoSilenceDetector.AudioLevelWindow(start: 0.62, end: 1.3, rmsAmplitude: 0.001)
+                VideoSilenceDetector.AudioLevelWindow(start: 0.62, end: 1.3, rmsAmplitude: 0.001),
             ],
             configuration: VideoSilenceDetectionConfiguration(
                 minimumSilenceDuration: 1,
@@ -3634,7 +3730,7 @@ struct ScreenshotMaxxingTests {
             durationSeconds: 10,
             removedRanges: [
                 VideoTimeRange(start: 6, end: 7),
-                VideoTimeRange(start: 2, end: 3)
+                VideoTimeRange(start: 2, end: 3),
             ]
         )
 
@@ -3646,7 +3742,7 @@ struct ScreenshotMaxxingTests {
             durationSeconds: 10,
             removedRanges: [
                 VideoTimeRange(start: 2, end: 5),
-                VideoTimeRange(start: 4, end: 8)
+                VideoTimeRange(start: 4, end: 8),
             ]
         )
 
@@ -3667,7 +3763,7 @@ struct ScreenshotMaxxingTests {
             durationSeconds: 10,
             removedRanges: [
                 VideoTimeRange(start: 2, end: 5),
-                VideoTimeRange(start: 4, end: 8, source: .detectedSilence)
+                VideoTimeRange(start: 4, end: 8, source: .detectedSilence),
             ]
         )
 
@@ -3681,7 +3777,7 @@ struct ScreenshotMaxxingTests {
             durationSeconds: 10,
             removedRanges: [
                 VideoTimeRange(start: 3, end: 3),
-                VideoTimeRange(start: 8, end: 7)
+                VideoTimeRange(start: 8, end: 7),
             ]
         )
 
@@ -3695,7 +3791,7 @@ struct ScreenshotMaxxingTests {
             trimEnd: 8,
             removedRanges: [
                 VideoTimeRange(start: 0, end: 3),
-                VideoTimeRange(start: 7, end: 10)
+                VideoTimeRange(start: 7, end: 10),
             ]
         )
 
@@ -3717,7 +3813,7 @@ struct ScreenshotMaxxingTests {
             durationSeconds: 10,
             removedRanges: [
                 VideoTimeRange(start: 2, end: 3),
-                VideoTimeRange(start: 6, end: 7)
+                VideoTimeRange(start: 6, end: 7),
             ]
         )
         state.selectRemovedRange(id: state.removedRanges[0].id)
@@ -3825,7 +3921,7 @@ struct ScreenshotMaxxingTests {
             durationSeconds: 10,
             removedRanges: [
                 VideoTimeRange(start: 4, end: 5),
-                VideoTimeRange(start: 5.02, end: 6)
+                VideoTimeRange(start: 5.02, end: 6),
             ]
         )
 
@@ -3848,7 +3944,7 @@ struct ScreenshotMaxxingTests {
             durationSeconds: 10,
             removedRanges: [
                 VideoTimeRange(start: 2, end: 3),
-                VideoTimeRange(start: 6, end: 8)
+                VideoTimeRange(start: 6, end: 8),
             ]
         )
         let plan = VideoExportPlanner.plan(for: state)
@@ -3925,7 +4021,7 @@ struct ScreenshotMaxxingTests {
             outputSettings: [
                 AVVideoCodecKey: AVVideoCodecType.h264,
                 AVVideoWidthKey: width,
-                AVVideoHeightKey: height
+                AVVideoHeightKey: height,
             ]
         )
         videoInput.expectsMediaDataInRealTime = false
@@ -3935,7 +4031,7 @@ struct ScreenshotMaxxingTests {
             sourcePixelBufferAttributes: [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
                 kCVPixelBufferWidthKey as String: width,
-                kCVPixelBufferHeightKey as String: height
+                kCVPixelBufferHeightKey as String: height,
             ]
         )
 
@@ -3974,7 +4070,8 @@ struct ScreenshotMaxxingTests {
         try finishWriting(writer)
     }
 
-    private func makePixelBuffer(width: Int, height: Int, red: UInt8, green: UInt8, blue: UInt8) throws -> CVPixelBuffer {
+    private func makePixelBuffer(width: Int, height: Int, red: UInt8, green: UInt8, blue: UInt8) throws -> CVPixelBuffer
+    {
         var pixelBuffer: CVPixelBuffer?
         let status = CVPixelBufferCreate(
             kCFAllocatorDefault,
@@ -3983,7 +4080,7 @@ struct ScreenshotMaxxingTests {
             kCVPixelFormatType_32BGRA,
             [
                 kCVPixelBufferCGImageCompatibilityKey as String: true,
-                kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
+                kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
             ] as CFDictionary,
             &pixelBuffer
         )
@@ -4153,7 +4250,8 @@ struct ScreenshotMaxxingTests {
 
     private func color(in pngData: Data, x: Int, y: Int) throws -> NSColor {
         guard let imageRep = NSBitmapImageRep(data: pngData),
-              let color = imageRep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+            let color = imageRep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+        else {
             throw ImageRendererError.renderFailed
         }
 

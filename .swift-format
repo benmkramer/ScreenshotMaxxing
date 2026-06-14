@@ -1,0 +1,22 @@
+{
+  "version" : 1,
+  "indentation" : {
+    "spaces" : 4
+  },
+  "lineLength" : 120,
+  "maximumBlankLines" : 1,
+  "respectsExistingLineBreaks" : true,
+  "rules" : {
+    "AllPublicDeclarationsHaveDocumentation" : false,
+    "BeginDocumentationCommentWithOneLineSummary" : false,
+    "FileScopedDeclarationPrivacy" : false,
+    "GroupNumericLiterals" : false,
+    "NeverForceUnwrap" : false,
+    "NeverUseForceTry" : false,
+    "NeverUseImplicitlyUnwrappedOptionals" : false,
+    "OmitExplicitReturns" : false,
+    "UseEarlyExits" : false,
+    "UseWhereClausesInForLoops" : false,
+    "ValidateDocumentationComments" : false
+  }
+}

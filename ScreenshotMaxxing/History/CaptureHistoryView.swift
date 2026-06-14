@@ -266,9 +266,11 @@ struct CaptureHistoryView: View {
             Text("No captures yet")
                 .font(.headline)
 
-            Text("Capture an area, window, or full screen from the menu bar. Recent screenshots stay local on this Mac.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            Text(
+                "Capture an area, window, or full screen from the menu bar. Recent screenshots stay local on this Mac."
+            )
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
         }
         .padding(32)
         .accessibilityIdentifier("history-empty-state")
@@ -370,7 +372,8 @@ struct CaptureHistoryView: View {
 
     private func removePendingMissingCapture() {
         guard let pendingMetadataRemovalID,
-              let capture = captures.first(where: { $0.id == pendingMetadataRemovalID }) else {
+            let capture = captures.first(where: { $0.id == pendingMetadataRemovalID })
+        else {
             self.pendingMetadataRemovalID = nil
             return
         }

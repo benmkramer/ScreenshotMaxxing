@@ -21,5 +21,6 @@ When editing GitHub issue forms, validate the YAML.
 For local verification, prefer the project scripts over long inline commands:
 
 - Build and launch the Debug app with `scripts/build-and-run.sh`.
+- Format Swift code with `scripts/format.sh`; check formatting with `scripts/lint.sh`.
 - Run deterministic unit tests with `scripts/test.sh`.
 - Run the full Xcode scheme, including UI tests, with `scripts/test.sh --all` only when UI automation is intended.

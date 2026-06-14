@@ -65,7 +65,8 @@ struct VideoThumbnailGenerator {
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
         let duration = asset.duration.seconds
-        let midpoint = duration.isFinite && duration > 1 ? CMTime(seconds: min(duration / 2, 1), preferredTimescale: 600) : .zero
+        let midpoint =
+            duration.isFinite && duration > 1 ? CMTime(seconds: min(duration / 2, 1), preferredTimescale: 600) : .zero
         let image = try generator.copyCGImage(at: midpoint, actualTime: nil)
         let imageRep = NSBitmapImageRep(cgImage: image)
 

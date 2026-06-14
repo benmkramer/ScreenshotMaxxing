@@ -85,8 +85,10 @@ enum CaptureHistoryError: LocalizedError, Equatable {
 }
 
 enum CaptureHistoryData {
-    static let deleteConfirmationMessage = "Deleting from the History view removes captures and any edited versions from History. Local files that still exist are moved to the Trash."
-    static let removeMissingConfirmationMessage = "Removing a missing capture only deletes its History metadata. ScreenshotMaxxing will not move any files to the Trash."
+    static let deleteConfirmationMessage =
+        "Deleting from the History view removes captures and any edited versions from History. Local files that still exist are moved to the Trash."
+    static let removeMissingConfirmationMessage =
+        "Removing a missing capture only deletes its History metadata. ScreenshotMaxxing will not move any files to the Trash."
 
     static var newestFirstSortDescriptors: [SortDescriptor<Capture>] {
         [SortDescriptor(\Capture.createdAt, order: .reverse)]
@@ -130,7 +132,8 @@ enum CaptureHistoryData {
             var isDirectory: ObjCBool = false
 
             if fileManager.fileExists(atPath: folderURL.fileSystemPath, isDirectory: &isDirectory),
-               isDirectory.boolValue {
+                isDirectory.boolValue
+            {
                 return folderURL
             }
         }
@@ -350,7 +353,7 @@ enum CaptureHistoryData {
             displayMode(for: capture.captureMode),
             capture.captureMode,
             detailText(for: capture),
-            "\(capture.width)x\(capture.height)"
+            "\(capture.width)x\(capture.height)",
         ] + dateSearchTokens(for: capture.createdAt, calendar: calendar)
     }
 
@@ -411,14 +414,16 @@ enum CaptureHistoryData {
             return yesterday..<referenceDay
         case .last7Days:
             guard let startDate = calendar.date(byAdding: .day, value: -6, to: referenceDay),
-                  let tomorrow else {
+                let tomorrow
+            else {
                 return nil
             }
 
             return startDate..<tomorrow
         case .last30Days:
             guard let startDate = calendar.date(byAdding: .day, value: -29, to: referenceDay),
-                  let tomorrow else {
+                let tomorrow
+            else {
                 return nil
             }
 
@@ -442,10 +447,11 @@ enum CaptureHistoryData {
     private static func dateSearchTokens(for date: Date, calendar: Calendar) -> [String] {
         let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
         guard let year = components.year,
-              let month = components.month,
-              let day = components.day,
-              let hour = components.hour,
-              let minute = components.minute else {
+            let month = components.month,
+            let day = components.day,
+            let hour = components.hour,
+            let minute = components.minute
+        else {
             return []
         }
 
@@ -456,7 +462,7 @@ enum CaptureHistoryData {
             String(format: "%02d/%02d/%02d", month, day, year % 100),
             String(format: "%d/%d/%04d", month, day, year),
             String(format: "%d/%d/%02d", month, day, year % 100),
-            String(format: "%02d:%02d", hour, minute)
+            String(format: "%02d:%02d", hour, minute),
         ] + monthNameDateSearchTokens(month: month, day: day, year: year)
     }
 
@@ -465,7 +471,8 @@ enum CaptureHistoryData {
         formatter.locale = Locale(identifier: "en_US_POSIX")
 
         guard formatter.monthSymbols.indices.contains(month - 1),
-              formatter.shortMonthSymbols.indices.contains(month - 1) else {
+            formatter.shortMonthSymbols.indices.contains(month - 1)
+        else {
             return []
         }
 
@@ -476,7 +483,7 @@ enum CaptureHistoryData {
             "\(fullMonth) \(day)",
             "\(fullMonth) \(day) \(year)",
             "\(shortMonth) \(day)",
-            "\(shortMonth) \(day) \(year)"
+            "\(shortMonth) \(day) \(year)",
         ]
     }
 
@@ -528,9 +535,10 @@ enum CaptureHistoryData {
             )
             let editedPrefixes = editedVersionPrefixes(for: capture)
 
-            fileURLs.append(contentsOf: editedFileURLs.filter { editedFileURL in
-                editedPrefixes.contains { editedFileURL.lastPathComponent.hasPrefix($0) }
-            })
+            fileURLs.append(
+                contentsOf: editedFileURLs.filter { editedFileURL in
+                    editedPrefixes.contains { editedFileURL.lastPathComponent.hasPrefix($0) }
+                })
         }
 
         return fileURLs
@@ -542,7 +550,8 @@ enum CaptureHistoryData {
             let containingDirectory = fileURL.deletingLastPathComponent()
 
             if containingDirectory.lastPathComponent == "originals" {
-                return containingDirectory
+                return
+                    containingDirectory
                     .deletingLastPathComponent()
                     .appendingPathComponent("edited", isDirectory: true)
             }
