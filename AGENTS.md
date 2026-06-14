@@ -16,6 +16,8 @@ Do not add accounts, telemetry, hosted capture storage, cloud sync, or broader n
 
 Do not strengthen redaction, privacy, or security claims beyond what the code actually guarantees.
 
+For local-only ScreenshotMaxxing security reviews, do not over-rank issues that only produce visible local output the user can inspect and delete. Treat wrong-window or wrong-region capture outcomes as product correctness or privacy UX bugs unless there is a path to silent persistence, disclosure outside the Mac, or misleading deletion/redaction behavior.
+
 When editing GitHub issue forms, validate the YAML.
 
 For local verification, prefer the project scripts over long inline commands:
