@@ -41,10 +41,11 @@ struct ScreenshotEditorView: View {
         self.savedFilePresenter = savedFilePresenter
         self.closeAction = closeAction
         self.image = NSImage(contentsOf: imageURL)
-        self._editorState = State(initialValue: ScreenshotEditorState(
-            originalImageURL: imageURL,
-            strokeToolSettings: editorSettingsStore.strokeToolSettings()
-        ))
+        self._editorState = State(
+            initialValue: ScreenshotEditorState(
+                originalImageURL: imageURL,
+                strokeToolSettings: editorSettingsStore.strokeToolSettings()
+            ))
     }
 
     var body: some View {
@@ -71,10 +72,14 @@ struct ScreenshotEditorView: View {
                             get: { editorState.selectedBlurRadius },
                             set: { editorState.updateSelectedBlurRadius($0) }
                         ),
-                        showsStrokeControls: editorState.selectedTool.showsStrokeControls || editorState.selectedAnnotationUsesStrokeStyle,
-                        showsBlurControls: editorState.selectedTool == .blur || editorState.selectedAnnotationUsesBlurStyle,
-                        showsTextControls: editorState.selectedTool == .text || editorState.selectedAnnotationUsesTextContent,
-                        showsRectangleControls: editorState.selectedTool == .rectangle || editorState.selectedAnnotationUsesRectangleStyle,
+                        showsStrokeControls: editorState.selectedTool.showsStrokeControls
+                            || editorState.selectedAnnotationUsesStrokeStyle,
+                        showsBlurControls: editorState.selectedTool == .blur
+                            || editorState.selectedAnnotationUsesBlurStyle,
+                        showsTextControls: editorState.selectedTool == .text
+                            || editorState.selectedAnnotationUsesTextContent,
+                        showsRectangleControls: editorState.selectedTool == .rectangle
+                            || editorState.selectedAnnotationUsesRectangleStyle,
                         selectedAnnotationID: editorState.selectedAnnotationID,
                         selectedRectangleColor: Binding(
                             get: { editorState.selectedRectangleColor },
@@ -330,7 +335,8 @@ struct ScreenshotEditorView: View {
         editorState.undoLastAnnotation()
 
         if let editingTextAnnotationID,
-           editorState.annotation(id: editingTextAnnotationID) == nil {
+            editorState.annotation(id: editingTextAnnotationID) == nil
+        {
             self.editingTextAnnotationID = nil
         }
     }
@@ -496,7 +502,8 @@ struct ScreenshotImageCanvas: View {
         DragGesture(minimumDistance: 1, coordinateSpace: .local)
             .onChanged { value in
                 if activeAnnotationDrag == nil,
-                   let activeDrag = annotationDrag(startingAt: value.startLocation, geometry: geometry) {
+                    let activeDrag = annotationDrag(startingAt: value.startLocation, geometry: geometry)
+                {
                     activeAnnotationDrag = activeDrag
                     editorState.selectAnnotation(id: activeDrag.annotationID)
                 }
@@ -579,10 +586,11 @@ struct ScreenshotImageCanvas: View {
                 }
 
                 if editorState.selectedTool == .blur,
-                   let imageRect = geometry.imageRect(
+                    let imageRect = geometry.imageRect(
                         fromViewStart: value.startLocation,
                         toViewEnd: value.location
-                   ) {
+                    )
+                {
                     editorState.addBlurRect(imageRect, radius: editorState.selectedBlurRadius)
                     return
                 }
@@ -591,7 +599,8 @@ struct ScreenshotImageCanvas: View {
                     let arrowStyle = editorState.strokeStyle(for: .pen)
                     let arrowPoints = arrowPoints(from: value, geometry: geometry)
                     if let startPoint = arrowPoints.first,
-                       let endPoint = arrowPoints.last {
+                        let endPoint = arrowPoints.last
+                    {
                         editorState.addArrow(
                             from: startPoint,
                             to: endPoint,
@@ -603,19 +612,21 @@ struct ScreenshotImageCanvas: View {
                 }
 
                 if editorState.selectedTool == .rectangle,
-                   let imageRect = geometry.imageRect(
+                    let imageRect = geometry.imageRect(
                         fromViewStart: value.startLocation,
                         toViewEnd: value.location
-                   ) {
+                    )
+                {
                     editorState.addRectangle(imageRect)
                     return
                 }
 
                 if editorState.selectedTool == .text,
-                   let imageRect = geometry.imageRect(
+                    let imageRect = geometry.imageRect(
                         fromViewStart: value.startLocation,
                         toViewEnd: value.location
-                   ) {
+                    )
+                {
                     editingTextAnnotationID = editorState.addText(rect: imageRect)?.id
                     return
                 }
@@ -637,7 +648,8 @@ struct ScreenshotImageCanvas: View {
 
     private func updateDraftStroke(with value: DragGesture.Value, geometry: ImageCanvasGeometry) {
         guard let strokeKind = editorState.selectedTool.strokeKind,
-              let imagePoint = geometry.imagePoint(forViewPoint: value.location) else {
+            let imagePoint = geometry.imagePoint(forViewPoint: value.location)
+        else {
             return
         }
 
@@ -665,7 +677,8 @@ struct ScreenshotImageCanvas: View {
     private func updateDraftArrow(with value: DragGesture.Value, geometry: ImageCanvasGeometry) {
         let points = arrowPoints(from: value, geometry: geometry)
         guard let startPoint = points.first,
-              let endPoint = points.last else {
+            let endPoint = points.last
+        else {
             return
         }
 
@@ -680,7 +693,8 @@ struct ScreenshotImageCanvas: View {
 
     private func arrowPoints(from value: DragGesture.Value, geometry: ImageCanvasGeometry) -> [CGPoint] {
         guard let startImagePoint = geometry.imagePoint(forViewPoint: value.startLocation),
-              let endImagePoint = geometry.imagePoint(forViewPoint: value.location) else {
+            let endImagePoint = geometry.imagePoint(forViewPoint: value.location)
+        else {
             return []
         }
 
@@ -689,7 +703,8 @@ struct ScreenshotImageCanvas: View {
 
     private func strokePoints(from value: DragGesture.Value, geometry: ImageCanvasGeometry) -> [CGPoint] {
         guard let startImagePoint = geometry.imagePoint(forViewPoint: value.startLocation),
-              let endImagePoint = geometry.imagePoint(forViewPoint: value.location) else {
+            let endImagePoint = geometry.imagePoint(forViewPoint: value.location)
+        else {
             return []
         }
 
@@ -720,8 +735,9 @@ struct ScreenshotImageCanvas: View {
                 suppressSingleTapUntil = Date().addingTimeInterval(0.24)
 
                 guard let imagePoint = geometry.imagePoint(forViewPoint: value.location),
-                      let annotationID = editorState.annotationID(containing: imagePoint),
-                      case .text = editorState.annotation(id: annotationID)?.type else {
+                    let annotationID = editorState.annotationID(containing: imagePoint),
+                    case .text = editorState.annotation(id: annotationID)?.type
+                else {
                     editingTextAnnotationID = nil
                     return
                 }
@@ -754,7 +770,8 @@ struct ScreenshotImageCanvas: View {
         }
 
         if editorState.selectedTool == .text,
-           editorState.annotationID(containing: imagePoint) == nil {
+            editorState.annotationID(containing: imagePoint) == nil
+        {
             let textAnnotation = editorState.addText(
                 rect: ScreenshotEditorState.textRect(
                     startingAt: imagePoint,
@@ -773,8 +790,9 @@ struct ScreenshotImageCanvas: View {
 
     private func annotationDrag(startingAt startLocation: CGPoint, geometry: ImageCanvasGeometry) -> AnnotationDrag? {
         if let selectedAnnotationID = editorState.selectedAnnotationID,
-           let annotation = editorState.annotation(id: selectedAnnotationID),
-           let resizeHandle = resizeHandle(at: startLocation, geometry: geometry) {
+            let annotation = editorState.annotation(id: selectedAnnotationID),
+            let resizeHandle = resizeHandle(at: startLocation, geometry: geometry)
+        {
             return AnnotationDrag(
                 annotationID: selectedAnnotationID,
                 originalAnnotation: annotation,
@@ -783,8 +801,9 @@ struct ScreenshotImageCanvas: View {
         }
 
         guard let startImagePoint = geometry.imagePoint(forViewPoint: startLocation),
-              let annotationID = editorState.annotationID(containing: startImagePoint),
-              let annotation = editorState.annotation(id: annotationID) else {
+            let annotationID = editorState.annotationID(containing: startImagePoint),
+            let annotation = editorState.annotation(id: annotationID)
+        else {
             return nil
         }
 
@@ -793,7 +812,8 @@ struct ScreenshotImageCanvas: View {
 
     private func resizeHandle(at viewPoint: CGPoint, geometry: ImageCanvasGeometry) -> AnnotationResizeHandle? {
         guard let selectedAnnotationID = editorState.selectedAnnotationID,
-              let annotation = editorState.annotation(id: selectedAnnotationID) else {
+            let annotation = editorState.annotation(id: selectedAnnotationID)
+        else {
             return nil
         }
 
@@ -871,8 +891,9 @@ private final class CanvasScrollZoomNSView: NSView {
 
         scrollWheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
             guard let self,
-                  event.window === self.window,
-                  self.bounds.contains(self.convert(event.locationInWindow, from: nil)) else {
+                event.window === self.window,
+                self.bounds.contains(self.convert(event.locationInWindow, from: nil))
+            else {
                 return event
             }
 
@@ -1275,18 +1296,20 @@ private final class PixelatedBlurPreviewNSView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let image,
-              imageFrame.width > 0,
-              imageFrame.height > 0,
-              rect.width > 0,
-              rect.height > 0,
-              let graphicsContext = NSGraphicsContext.current else {
+            imageFrame.width > 0,
+            imageFrame.height > 0,
+            rect.width > 0,
+            rect.height > 0,
+            let graphicsContext = NSGraphicsContext.current
+        else {
             return
         }
 
         let clippedRect = rect.intersection(imageFrame)
         guard !clippedRect.isNull,
-              clippedRect.width > 0,
-              clippedRect.height > 0 else {
+            clippedRect.width > 0,
+            clippedRect.height > 0
+        else {
             return
         }
 
@@ -1375,7 +1398,8 @@ private struct EditorToolbar: View {
 
                 ToolbarIconButton(
                     systemImageName: "trash",
-                    helpText: selectedAnnotationID == nil ? "Select an annotation to delete" : "Delete selected annotation",
+                    helpText: selectedAnnotationID == nil
+                        ? "Select an annotation to delete" : "Delete selected annotation",
                     action: deleteAction
                 )
                 .disabled(selectedAnnotationID == nil)
@@ -1584,7 +1608,9 @@ private struct StrokeControls: View {
                         get: { Double(selectedLineWidth) },
                         set: { selectedLineWidth = CGFloat($0) }
                     ),
-                    in: Double(ScreenshotEditorState.minimumStrokeLineWidth)...Double(ScreenshotEditorState.maximumStrokeLineWidth),
+                    in: Double(
+                        ScreenshotEditorState.minimumStrokeLineWidth)...Double(
+                            ScreenshotEditorState.maximumStrokeLineWidth),
                     step: 1
                 )
                 .frame(width: 104)
@@ -1719,8 +1745,9 @@ private extension NSImage {
         }
 
         guard let bestRepresentation,
-              bestRepresentation.pixelsWide > 0,
-              bestRepresentation.pixelsHigh > 0 else {
+            bestRepresentation.pixelsWide > 0,
+            bestRepresentation.pixelsHigh > 0
+        else {
             return size
         }
 

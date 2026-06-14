@@ -62,7 +62,8 @@ struct ImageRenderer {
 
     private func loadImage(from url: URL) throws -> CIImage {
         guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
+            let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil)
+        else {
             throw ImageRendererError.unreadableImage(url)
         }
 
@@ -72,12 +73,14 @@ struct ImageRenderer {
     private func pngData(from cgImage: CGImage) throws -> Data {
         let data = NSMutableData()
 
-        guard let destination = CGImageDestinationCreateWithData(
-            data,
-            UTType.png.identifier as CFString,
-            1,
-            nil
-        ) else {
+        guard
+            let destination = CGImageDestinationCreateWithData(
+                data,
+                UTType.png.identifier as CFString,
+                1,
+                nil
+            )
+        else {
             throw ImageRendererError.renderFailed
         }
 
@@ -105,9 +108,9 @@ struct ImageRenderer {
         let sampleHeight = max(Int((blurRect.height / pixelBlockSize).rounded(.up)), 1)
 
         guard width > 0, height > 0,
-              let baseCGImage = context.createCGImage(image, from: image.extent),
-              let blurCropCGImage = context.createCGImage(image, from: blurRect),
-              let bitmapContext = CGContext(
+            let baseCGImage = context.createCGImage(image, from: image.extent),
+            let blurCropCGImage = context.createCGImage(image, from: blurRect),
+            let bitmapContext = CGContext(
                 data: nil,
                 width: width,
                 height: height,
@@ -115,8 +118,8 @@ struct ImageRenderer {
                 bytesPerRow: 0,
                 space: CGColorSpaceCreateDeviceRGB(),
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              ),
-              let sampleContext = CGContext(
+            ),
+            let sampleContext = CGContext(
                 data: nil,
                 width: sampleWidth,
                 height: sampleHeight,
@@ -124,7 +127,8 @@ struct ImageRenderer {
                 bytesPerRow: 0,
                 space: CGColorSpaceCreateDeviceRGB(),
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              ) else {
+            )
+        else {
             throw ImageRendererError.renderFailed
         }
 
@@ -156,8 +160,8 @@ struct ImageRenderer {
         let height = Int(image.extent.height.rounded(.up))
 
         guard width > 0, height > 0,
-              let cgImage = context.createCGImage(image, from: image.extent),
-              let bitmapContext = CGContext(
+            let cgImage = context.createCGImage(image, from: image.extent),
+            let bitmapContext = CGContext(
                 data: nil,
                 width: width,
                 height: height,
@@ -165,7 +169,8 @@ struct ImageRenderer {
                 bytesPerRow: 0,
                 space: CGColorSpaceCreateDeviceRGB(),
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              ) else {
+            )
+        else {
             throw ImageRendererError.renderFailed
         }
 
@@ -188,8 +193,8 @@ struct ImageRenderer {
         let height = Int(image.extent.height.rounded(.up))
 
         guard width > 0, height > 0,
-              let cgImage = context.createCGImage(image, from: image.extent),
-              let bitmapContext = CGContext(
+            let cgImage = context.createCGImage(image, from: image.extent),
+            let bitmapContext = CGContext(
                 data: nil,
                 width: width,
                 height: height,
@@ -197,7 +202,8 @@ struct ImageRenderer {
                 bytesPerRow: 0,
                 space: CGColorSpaceCreateDeviceRGB(),
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              ) else {
+            )
+        else {
             throw ImageRendererError.renderFailed
         }
 
@@ -211,7 +217,9 @@ struct ImageRenderer {
         return CIImage(cgImage: renderedCGImage).cropped(to: image.extent)
     }
 
-    private func renderRectangle(_ rectangle: AnnotationRectangle, in rect: CGRect, over image: CIImage) throws -> CIImage {
+    private func renderRectangle(_ rectangle: AnnotationRectangle, in rect: CGRect, over image: CIImage) throws
+        -> CIImage
+    {
         try renderBitmap(over: image) { bitmapContext, imageHeight in
             drawRectangle(rectangle, in: rect, context: bitmapContext, imageHeight: imageHeight)
         }
@@ -231,8 +239,8 @@ struct ImageRenderer {
         let height = Int(image.extent.height.rounded(.up))
 
         guard width > 0, height > 0,
-              let cgImage = context.createCGImage(image, from: image.extent),
-              let bitmapContext = CGContext(
+            let cgImage = context.createCGImage(image, from: image.extent),
+            let bitmapContext = CGContext(
                 data: nil,
                 width: width,
                 height: height,
@@ -240,7 +248,8 @@ struct ImageRenderer {
                 bytesPerRow: 0,
                 space: CGColorSpaceCreateDeviceRGB(),
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-              ) else {
+            )
+        else {
             throw ImageRendererError.renderFailed
         }
 
@@ -298,7 +307,9 @@ struct ImageRenderer {
         context.restoreGState()
     }
 
-    private func drawRectangle(_ rectangle: AnnotationRectangle, in rect: CGRect, context: CGContext, imageHeight: CGFloat) {
+    private func drawRectangle(
+        _ rectangle: AnnotationRectangle, in rect: CGRect, context: CGContext, imageHeight: CGFloat
+    ) {
         context.saveGState()
         context.translateBy(x: 0, y: imageHeight)
         context.scaleBy(x: 1, y: -1)
@@ -322,7 +333,7 @@ struct ImageRenderer {
                 blue: text.color.blue,
                 alpha: 1
             ),
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
         ]
         let attributedText = NSAttributedString(string: text.content, attributes: attributes)
         let textRect = CGRect(

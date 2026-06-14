@@ -61,7 +61,8 @@ struct ShortcutSettingsStore {
         defaultShortcut: GlobalKeyboardShortcut
     ) -> GlobalKeyboardShortcut {
         guard let data = userDefaults.data(forKey: key),
-              let shortcut = try? decoder.decode(GlobalKeyboardShortcut.self, from: data) else {
+            let shortcut = try? decoder.decode(GlobalKeyboardShortcut.self, from: data)
+        else {
             return defaultShortcut
         }
 

@@ -6,6 +6,11 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 
 ## Unreleased
 
+- Fixed screenshot and video editor windows to promote the menu bar app before bringing captures or recordings to the front.
+- Hardened the Release DMG workflow to mount the notarized DMG and verify the contained app signature and bundle versions before upload or publication.
+
+## 2.0.6 - 2026-06-13
+
 - Improved the project website download section with clearer latest-release metadata, GitHub Release links, and official-build signing/notarization context.
 - Added compact History filters for capture type and date ranges that compose with search.
 - Remember the last selected Capture Options pane so the panel reopens on Screenshot or Record.

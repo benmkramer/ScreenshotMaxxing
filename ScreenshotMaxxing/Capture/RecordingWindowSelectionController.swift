@@ -29,8 +29,8 @@ enum RecordingWindowSelectionResolver {
         excludingProcessID processID: pid_t? = nil
     ) -> CGWindowID? {
         candidates.first { candidate in
-            isSelectable(candidate, excludingProcessID: processID) &&
-                appKitRect(forCGWindowBounds: candidate.bounds, displays: displays).contains(screenPoint)
+            isSelectable(candidate, excludingProcessID: processID)
+                && appKitRect(forCGWindowBounds: candidate.bounds, displays: displays).contains(screenPoint)
         }?.windowID
     }
 
@@ -49,18 +49,21 @@ enum RecordingWindowSelectionResolver {
     }
 
     static func currentWindowCandidates() -> [RecordingWindowCandidate] {
-        guard let windowList = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements],
-            kCGNullWindowID
-        ) as? [[String: Any]] else {
+        guard
+            let windowList = CGWindowListCopyWindowInfo(
+                [.optionOnScreenOnly, .excludeDesktopElements],
+                kCGNullWindowID
+            ) as? [[String: Any]]
+        else {
             return []
         }
 
         return windowList.compactMap { windowInfo in
             guard let windowID = (windowInfo[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
-                  let layer = (windowInfo[kCGWindowLayer as String] as? NSNumber)?.intValue,
-                  let boundsDictionary = windowInfo[kCGWindowBounds as String] as? NSDictionary,
-                  let bounds = CGRect(dictionaryRepresentation: boundsDictionary as CFDictionary) else {
+                let layer = (windowInfo[kCGWindowLayer as String] as? NSNumber)?.intValue,
+                let boundsDictionary = windowInfo[kCGWindowBounds as String] as? NSDictionary,
+                let bounds = CGRect(dictionaryRepresentation: boundsDictionary as CFDictionary)
+            else {
                 return nil
             }
 
@@ -96,10 +99,8 @@ enum RecordingWindowSelectionResolver {
         _ candidate: RecordingWindowCandidate,
         excludingProcessID processID: pid_t?
     ) -> Bool {
-        candidate.layer == 0 &&
-            candidate.bounds.width >= 48 &&
-            candidate.bounds.height >= 48 &&
-            candidate.processID != processID
+        candidate.layer == 0 && candidate.bounds.width >= 48 && candidate.bounds.height >= 48
+            && candidate.processID != processID
     }
 
     private static func display(
@@ -155,12 +156,14 @@ struct RecordingWindowSelectionController {
             throw RecordingError.windowSelectionFailed(status: status)
         }
 
-        guard let windowID = RecordingWindowSelectionResolver.selectedWindowID(
-            at: NSEvent.mouseLocation,
-            candidates: RecordingWindowSelectionResolver.currentWindowCandidates(),
-            displays: RecordingWindowSelectionResolver.currentDisplayCoordinateSpaces(),
-            excludingProcessID: processID
-        ) else {
+        guard
+            let windowID = RecordingWindowSelectionResolver.selectedWindowID(
+                at: NSEvent.mouseLocation,
+                candidates: RecordingWindowSelectionResolver.currentWindowCandidates(),
+                displays: RecordingWindowSelectionResolver.currentDisplayCoordinateSpaces(),
+                excludingProcessID: processID
+            )
+        else {
             throw RecordingError.selectedWindowUnavailable
         }
 

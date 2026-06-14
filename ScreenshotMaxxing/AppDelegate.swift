@@ -122,7 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureApplicationIcon() {
         guard let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-              let icon = NSImage(contentsOf: iconURL) else {
+            let icon = NSImage(contentsOf: iconURL)
+        else {
             return
         }
 
@@ -140,7 +141,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleUITestLaunchAction() {
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("--screenshotmaxxing-ui-test-open-capture-options") {
-            let selectedPane: CaptureOptionsPane? = arguments.contains("--screenshotmaxxing-ui-test-record-pane") ? .record : nil
+            let selectedPane: CaptureOptionsPane? =
+                arguments.contains("--screenshotmaxxing-ui-test-record-pane") ? .record : nil
             openCaptureOptions(selectedPane: selectedPane)
         } else if arguments.contains("--screenshotmaxxing-ui-test-open-history") {
             openHistory()
@@ -354,9 +356,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func activateForUserFacingWindow(_ window: NSWindow) {
         accessoryPolicyRefreshWorkItem?.cancel()
         accessoryPolicyRefreshWorkItem = nil
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        AppWindowPresenter.activateAndOrderFront(window)
     }
 
     private func activateForUserFacingWindowController(_ windowController: NSWindowController) {
@@ -366,10 +366,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         accessoryPolicyRefreshWorkItem?.cancel()
         accessoryPolicyRefreshWorkItem = nil
-        NSApp.setActivationPolicy(.regular)
         windowController.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        AppWindowPresenter.activateAndOrderFront(window)
     }
 
     private func refreshAccessoryPolicyAfterWindowClose() {
@@ -388,7 +386,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
-              userFacingWindows.contains(where: { $0 === window }) else {
+            userFacingWindows.contains(where: { $0 === window })
+        else {
             return
         }
 
@@ -407,9 +406,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func makePreferencesView() throws -> PreferencesView {
         let preferences = try PreferencesData.current(
-            areaCaptureShortcut: hotKeyManager?.registeredAreaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut(),
-            captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut ?? shortcutSettingsStore.captureOptionsShortcut(),
-            openHistoryShortcut: hotKeyManager?.registeredOpenHistoryShortcut ?? shortcutSettingsStore.openHistoryShortcut(),
+            areaCaptureShortcut: hotKeyManager?.registeredAreaCaptureShortcut
+                ?? shortcutSettingsStore.areaCaptureShortcut(),
+            captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut
+                ?? shortcutSettingsStore.captureOptionsShortcut(),
+            openHistoryShortcut: hotKeyManager?.registeredOpenHistoryShortcut
+                ?? shortcutSettingsStore.openHistoryShortcut(),
             launchAtLoginEnabled: loginItemController.launchAtLoginEnabled
         )
 
@@ -525,12 +527,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.refreshAccessoryPolicyAfterWindowClose()
                 }
             },
-            showExisting: { controller in
-                controller.show()
+            showExisting: { [weak self] controller in
+                guard let window = controller.window else {
+                    return
+                }
+                self?.activateForUserFacingWindow(window)
             },
-            showNew: { controller in
-                NSApp.setActivationPolicy(.regular)
-                controller.show()
+            showNew: { [weak self] controller in
+                guard let window = controller.window else {
+                    return
+                }
+                self?.activateForUserFacingWindow(window)
             }
         )
     }
@@ -547,12 +554,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.refreshAccessoryPolicyAfterWindowClose()
                 }
             },
-            showExisting: { controller in
-                controller.show()
+            showExisting: { [weak self] controller in
+                guard let window = controller.window else {
+                    return
+                }
+                self?.activateForUserFacingWindow(window)
             },
-            showNew: { controller in
-                NSApp.setActivationPolicy(.regular)
-                controller.show()
+            showNew: { [weak self] controller in
+                guard let window = controller.window else {
+                    return
+                }
+                self?.activateForUserFacingWindow(window)
             }
         )
     }
@@ -571,7 +583,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.openVideoEditor(for: CaptureHistoryData.contentFileURL(for: capture), capture: capture)
             }
         }
-            .modelContainer(PersistenceController.sharedModelContainer)
+        .modelContainer(PersistenceController.sharedModelContainer)
         let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "History - ScreenshotMaxxing"

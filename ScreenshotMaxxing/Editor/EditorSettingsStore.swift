@@ -20,7 +20,8 @@ struct EditorSettingsStore {
 
     func strokeToolSettings() -> StrokeToolSettings {
         guard let data = userDefaults.data(forKey: Self.strokeToolSettingsKey),
-              let settings = try? decoder.decode(StrokeToolSettings.self, from: data) else {
+            let settings = try? decoder.decode(StrokeToolSettings.self, from: data)
+        else {
             return .defaultSettings
         }
 

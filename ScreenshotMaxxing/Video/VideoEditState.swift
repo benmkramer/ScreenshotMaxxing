@@ -212,7 +212,8 @@ struct VideoEditState: Equatable {
 
     func playbackSkipTarget(for time: Double, offset: Double = 0) -> Double? {
         guard trimEnd > trimStart,
-              removedRange(containing: time) != nil else {
+            removedRange(containing: time) != nil
+        else {
             return nil
         }
 
@@ -243,7 +244,8 @@ struct VideoEditState: Equatable {
         removedRanges = normalizedRemovedRanges()
 
         if let selectedRemovedRangeID,
-           !removedRanges.contains(where: { $0.id == selectedRemovedRangeID }) {
+            !removedRanges.contains(where: { $0.id == selectedRemovedRangeID })
+        {
             self.selectedRemovedRangeID = nil
         }
     }
@@ -253,13 +255,15 @@ struct VideoEditState: Equatable {
             return
         }
 
-        selectedRemovedRangeID = removedRanges.first { range in
-            time >= range.start && time <= range.end
-        }?.id
+        selectedRemovedRangeID =
+            removedRanges.first { range in
+                time >= range.start && time <= range.end
+            }?.id
     }
 
     private func normalizedRemovedRanges() -> [VideoTimeRange] {
-        let clamped = removedRanges
+        let clamped =
+            removedRanges
             .map(\.normalized)
             .compactMap { range -> VideoTimeRange? in
                 let start = min(max(range.start, trimStart), trimEnd)

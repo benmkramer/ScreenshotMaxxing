@@ -38,9 +38,8 @@ final class PermissionOnboardingModel: ObservableObject {
 
     var needsRelaunch: Bool {
         states.contains { state in
-            !state.isGranted &&
-            state.permission.requiresRelaunchAfterGrant &&
-            setupStartedPermissions.contains(state.permission)
+            !state.isGranted && state.permission.requiresRelaunchAfterGrant
+                && setupStartedPermissions.contains(state.permission)
         }
     }
 
@@ -54,7 +53,8 @@ final class PermissionOnboardingModel: ObservableObject {
         }
 
         if states.contains(where: { $0.permission == .directScreenAccess && !$0.isGranted && $0.isSetupEnabled }) {
-            return "Approve macOS direct screen access now so your first real screenshot can continue without another setup prompt."
+            return
+                "Approve macOS direct screen access now so your first real screenshot can continue without another setup prompt."
         }
 
         return "Enable Screen Recording in System Settings, then relaunch ScreenshotMaxxing."
@@ -269,11 +269,13 @@ private struct PermissionOnboardingRow: View {
     PermissionOnboardingView(
         model: PermissionOnboardingModel(
             permissionController: AppPermissionController(
-                screenCapturePermissionController: ScreenCapturePermissionController(preflightAccess: {
-                    false
-                }, requestAccess: {
-                    false
-                })
+                screenCapturePermissionController: ScreenCapturePermissionController(
+                    preflightAccess: {
+                        false
+                    },
+                    requestAccess: {
+                        false
+                    })
             )
         )
     )

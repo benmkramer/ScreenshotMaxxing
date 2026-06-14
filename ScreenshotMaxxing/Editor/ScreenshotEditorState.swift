@@ -39,7 +39,8 @@ struct ScreenshotEditorState: Equatable {
 
     var selectedAnnotationUsesStrokeStyle: Bool {
         guard let selectedAnnotationID,
-              let annotation = annotation(id: selectedAnnotationID) else {
+            let annotation = annotation(id: selectedAnnotationID)
+        else {
             return false
         }
 
@@ -53,7 +54,8 @@ struct ScreenshotEditorState: Equatable {
 
     var selectedAnnotationUsesBlurStyle: Bool {
         guard let selectedAnnotationID,
-              let annotation = annotation(id: selectedAnnotationID) else {
+            let annotation = annotation(id: selectedAnnotationID)
+        else {
             return false
         }
 
@@ -67,7 +69,8 @@ struct ScreenshotEditorState: Equatable {
 
     var selectedAnnotationUsesTextContent: Bool {
         guard let selectedAnnotationID,
-              case .text = annotation(id: selectedAnnotationID)?.type else {
+            case .text = annotation(id: selectedAnnotationID)?.type
+        else {
             return false
         }
 
@@ -76,7 +79,8 @@ struct ScreenshotEditorState: Equatable {
 
     var selectedAnnotationUsesRectangleStyle: Bool {
         guard let selectedAnnotationID,
-              case .rectangle = annotation(id: selectedAnnotationID)?.type else {
+            case .rectangle = annotation(id: selectedAnnotationID)?.type
+        else {
             return false
         }
 
@@ -89,7 +93,8 @@ struct ScreenshotEditorState: Equatable {
 
     var selectedText: String {
         guard let selectedAnnotationID,
-              case .text(let text) = annotation(id: selectedAnnotationID)?.type else {
+            case .text(let text) = annotation(id: selectedAnnotationID)?.type
+        else {
             return AnnotationText.defaultText
         }
 
@@ -308,7 +313,8 @@ struct ScreenshotEditorState: Equatable {
         return text.content
     }
 
-    mutating func moveAnnotation(id: UUID, from originalRect: CGRect, by translation: CGSize, within imageSize: CGSize) {
+    mutating func moveAnnotation(id: UUID, from originalRect: CGRect, by translation: CGSize, within imageSize: CGSize)
+    {
         guard let annotation = annotation(id: id) else {
             return
         }
@@ -316,7 +322,9 @@ struct ScreenshotEditorState: Equatable {
         moveAnnotation(id: id, from: annotation.withRect(originalRect), by: translation, within: imageSize)
     }
 
-    mutating func moveAnnotation(id: UUID, from originalAnnotation: Annotation, by translation: CGSize, within imageSize: CGSize) {
+    mutating func moveAnnotation(
+        id: UUID, from originalAnnotation: Annotation, by translation: CGSize, within imageSize: CGSize
+    ) {
         let imageBounds = CGRect(origin: .zero, size: imageSize)
         let movedRect = originalAnnotation.rect.offsetBy(dx: translation.width, dy: translation.height)
 
@@ -334,7 +342,8 @@ struct ScreenshotEditorState: Equatable {
             return
         }
 
-        resizeAnnotation(id: id, from: annotation.withRect(originalRect), handle: handle, by: translation, within: imageSize)
+        resizeAnnotation(
+            id: id, from: annotation.withRect(originalRect), handle: handle, by: translation, within: imageSize)
     }
 
     mutating func resizeAnnotation(
@@ -408,8 +417,9 @@ struct ScreenshotEditorState: Equatable {
 
     mutating func updateText(id: UUID, _ text: String) {
         guard
-              let annotationIndex = annotations.firstIndex(where: { $0.id == id }),
-              case .text(var textAnnotation) = annotations[annotationIndex].type else {
+            let annotationIndex = annotations.firstIndex(where: { $0.id == id }),
+            case .text(var textAnnotation) = annotations[annotationIndex].type
+        else {
             return
         }
 
@@ -481,8 +491,9 @@ struct ScreenshotEditorState: Equatable {
 
     private mutating func updateSelectedStroke(_ update: (inout AnnotationStroke) -> Void) {
         guard let selectedAnnotationID,
-              let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
-              case .stroke(var stroke) = annotations[annotationIndex].type else {
+            let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
+            case .stroke(var stroke) = annotations[annotationIndex].type
+        else {
             return
         }
 
@@ -493,8 +504,9 @@ struct ScreenshotEditorState: Equatable {
 
     private mutating func updateSelectedArrow(_ update: (inout AnnotationArrow) -> Void) {
         guard let selectedAnnotationID,
-              let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
-              case .arrow(var arrow) = annotations[annotationIndex].type else {
+            let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
+            case .arrow(var arrow) = annotations[annotationIndex].type
+        else {
             return
         }
 
@@ -505,8 +517,9 @@ struct ScreenshotEditorState: Equatable {
 
     private mutating func updateSelectedBlur(_ update: (inout AnnotationBlur) -> Void) {
         guard let selectedAnnotationID,
-              let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
-              case .blur(var blur) = annotations[annotationIndex].type else {
+            let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
+            case .blur(var blur) = annotations[annotationIndex].type
+        else {
             return
         }
 
@@ -516,8 +529,9 @@ struct ScreenshotEditorState: Equatable {
 
     private mutating func updateSelectedRectangle(_ update: (inout AnnotationRectangle) -> Void) {
         guard let selectedAnnotationID,
-              let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
-              case .rectangle(var rectangle) = annotations[annotationIndex].type else {
+            let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
+            case .rectangle(var rectangle) = annotations[annotationIndex].type
+        else {
             return
         }
 
@@ -527,8 +541,9 @@ struct ScreenshotEditorState: Equatable {
 
     private mutating func updateSelectedTextAnnotation(_ update: (inout AnnotationText) -> Void) {
         guard let selectedAnnotationID,
-              let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
-              case .text(var text) = annotations[annotationIndex].type else {
+            let annotationIndex = annotations.firstIndex(where: { $0.id == selectedAnnotationID }),
+            case .text(var text) = annotations[annotationIndex].type
+        else {
             return
         }
 
@@ -538,7 +553,8 @@ struct ScreenshotEditorState: Equatable {
 
     private func selectedBlurAnnotation() -> AnnotationBlur? {
         guard let selectedAnnotationID,
-              case .blur(let blur) = annotation(id: selectedAnnotationID)?.type else {
+            case .blur(let blur) = annotation(id: selectedAnnotationID)?.type
+        else {
             return nil
         }
 
@@ -547,7 +563,8 @@ struct ScreenshotEditorState: Equatable {
 
     private func selectedStrokeAnnotation() -> AnnotationStroke? {
         guard let selectedAnnotationID,
-              case .stroke(let stroke) = annotation(id: selectedAnnotationID)?.type else {
+            case .stroke(let stroke) = annotation(id: selectedAnnotationID)?.type
+        else {
             return nil
         }
 
@@ -556,7 +573,8 @@ struct ScreenshotEditorState: Equatable {
 
     private func selectedArrowAnnotation() -> AnnotationArrow? {
         guard let selectedAnnotationID,
-              case .arrow(let arrow) = annotation(id: selectedAnnotationID)?.type else {
+            case .arrow(let arrow) = annotation(id: selectedAnnotationID)?.type
+        else {
             return nil
         }
 
@@ -565,7 +583,8 @@ struct ScreenshotEditorState: Equatable {
 
     private func selectedRectangleAnnotation() -> AnnotationRectangle? {
         guard let selectedAnnotationID,
-              case .rectangle(let rectangle) = annotation(id: selectedAnnotationID)?.type else {
+            case .rectangle(let rectangle) = annotation(id: selectedAnnotationID)?.type
+        else {
             return nil
         }
 
@@ -574,7 +593,8 @@ struct ScreenshotEditorState: Equatable {
 
     private func selectedTextAnnotation() -> AnnotationText? {
         guard let selectedAnnotationID,
-              case .text(let text) = annotation(id: selectedAnnotationID)?.type else {
+            case .text(let text) = annotation(id: selectedAnnotationID)?.type
+        else {
             return nil
         }
 

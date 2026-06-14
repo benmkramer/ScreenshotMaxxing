@@ -42,7 +42,8 @@ struct VideoEditorView: View {
         self.closeAction = closeAction
         let asset = AVURLAsset(url: videoURL)
         self.hasAudioTracks = !asset.tracks(withMediaType: .audio).isEmpty
-        let durationSeconds = (try? VideoMetadataReader.metadata(for: videoURL).durationSeconds)
+        let durationSeconds =
+            (try? VideoMetadataReader.metadata(for: videoURL).durationSeconds)
             ?? capture?.durationSeconds
             ?? 0
         self._player = State(initialValue: AVPlayer(url: videoURL))
@@ -681,15 +682,16 @@ private struct VideoTimelineView: View {
                 }
 
                 if case .createCut(let startTime) = drag,
-                   let range = normalizedCutRange(
-                       start: startTime,
-                       end: metrics.time(
-                           for: value.location.x,
-                           lowerBound: editState.trimStart,
-                           upperBound: editState.trimEnd
-                       )
-                   ),
-                   range.duration >= minimumCutDuration(metrics: metrics) {
+                    let range = normalizedCutRange(
+                        start: startTime,
+                        end: metrics.time(
+                            for: value.location.x,
+                            lowerBound: editState.trimStart,
+                            upperBound: editState.trimEnd
+                        )
+                    ),
+                    range.duration >= minimumCutDuration(metrics: metrics)
+                {
                     recordUndoAction()
                     editState.addRemovedRange(range)
                     if currentTime >= range.start && currentTime < range.end {

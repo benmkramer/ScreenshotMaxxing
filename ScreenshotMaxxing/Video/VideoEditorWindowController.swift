@@ -12,12 +12,18 @@ import SwiftUI
 final class VideoEditorWindowController: NSObject, NSWindowDelegate {
     private let videoURL: URL
     private let capture: Capture?
+    private let presentWindow: @MainActor (NSWindow) -> Void
     private(set) var window: NSWindow?
     var onClose: ((VideoEditorWindowController) -> Void)?
 
-    init(videoURL: URL, capture: Capture? = nil) {
+    init(
+        videoURL: URL,
+        capture: Capture? = nil,
+        presentWindow: @escaping @MainActor (NSWindow) -> Void = AppWindowPresenter.activateAndOrderFront
+    ) {
         self.videoURL = videoURL
         self.capture = capture
+        self.presentWindow = presentWindow
         super.init()
         self.window = makeWindow(videoURL: videoURL, capture: capture)
         self.window?.delegate = self
@@ -32,8 +38,11 @@ final class VideoEditorWindowController: NSObject, NSWindowDelegate {
     }
 
     func show() {
-        window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        guard let window else {
+            return
+        }
+
+        presentWindow(window)
     }
 
     func windowWillClose(_ notification: Notification) {

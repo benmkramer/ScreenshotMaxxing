@@ -34,10 +34,12 @@ struct VideoExporter {
         let asset = AVURLAsset(url: videoURL)
         let composition = try makeComposition(asset: asset, plan: plan)
 
-        guard let exportSession = AVAssetExportSession(
-            asset: composition,
-            presetName: AVAssetExportPresetHighestQuality
-        ) else {
+        guard
+            let exportSession = AVAssetExportSession(
+                asset: composition,
+                presetName: AVAssetExportPresetHighestQuality
+            )
+        else {
             throw VideoExportError.exportUnavailable
         }
 
@@ -65,10 +67,12 @@ struct VideoExporter {
 
         for mediaType in mediaTypes {
             for sourceTrack in asset.tracks(withMediaType: mediaType) {
-                guard let compositionTrack = composition.addMutableTrack(
-                    withMediaType: mediaType,
-                    preferredTrackID: kCMPersistentTrackID_Invalid
-                ) else {
+                guard
+                    let compositionTrack = composition.addMutableTrack(
+                        withMediaType: mediaType,
+                        preferredTrackID: kCMPersistentTrackID_Invalid
+                    )
+                else {
                     throw VideoExportError.compositionFailed
                 }
 

@@ -140,11 +140,12 @@ struct CaptureOptionsView: View {
                     showsRecordingBadge: true,
                     accessibilityIdentifier: mode.captureOptionsAccessibilityIdentifier
                 ) {
-                    onSelectRecording(RecordingOptions(
-                        mode: mode,
-                        microphoneEnabled: microphoneEnabled,
-                        systemAudioEnabled: systemAudioEnabled
-                    ))
+                    onSelectRecording(
+                        RecordingOptions(
+                            mode: mode,
+                            microphoneEnabled: microphoneEnabled,
+                            systemAudioEnabled: systemAudioEnabled
+                        ))
                 }
             }
 

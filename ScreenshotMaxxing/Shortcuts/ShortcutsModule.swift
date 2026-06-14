@@ -93,9 +93,9 @@ final class ShortcutRecorderButton: NSButton {
             return
         }
 
-        let isUnmodifiedDelete = (
-            Int(event.keyCode) == kVK_Delete || Int(event.keyCode) == kVK_ForwardDelete
-        ) && GlobalKeyboardShortcut.carbonModifiers(from: event.modifierFlags) == 0
+        let isUnmodifiedDelete =
+            (Int(event.keyCode) == kVK_Delete || Int(event.keyCode) == kVK_ForwardDelete)
+            && GlobalKeyboardShortcut.carbonModifiers(from: event.modifierFlags) == 0
 
         if isUnmodifiedDelete {
             shortcut = onShortcutReset()

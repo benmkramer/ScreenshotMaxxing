@@ -46,16 +46,18 @@ struct PreferencesView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Open at Login", isOn: Binding(
-                    get: { preferences.launchAtLoginEnabled },
-                    set: { isEnabled in
-                        guard onLaunchAtLoginChange(isEnabled) else {
-                            return
-                        }
+                Toggle(
+                    "Open at Login",
+                    isOn: Binding(
+                        get: { preferences.launchAtLoginEnabled },
+                        set: { isEnabled in
+                            guard onLaunchAtLoginChange(isEnabled) else {
+                                return
+                            }
 
-                        preferences = preferences.updatingLaunchAtLoginEnabled(isEnabled)
-                    }
-                ))
+                            preferences = preferences.updatingLaunchAtLoginEnabled(isEnabled)
+                        }
+                    ))
             } header: {
                 Text("Startup")
                     .accessibilityIdentifier("preferences-startup-section")
@@ -110,9 +112,11 @@ struct PreferencesView: View {
                     .frame(width: 160)
                 }
 
-                Text("Command-Shift-3, Command-Shift-4, and Command-Shift-5 stay reserved for macOS screenshots unless changed in System Settings.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Command-Shift-3, Command-Shift-4, and Command-Shift-5 stay reserved for macOS screenshots unless changed in System Settings."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             } header: {
                 Text("Capture")
                     .accessibilityIdentifier("preferences-shortcuts-section")

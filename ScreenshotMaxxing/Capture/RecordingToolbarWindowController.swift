@@ -53,10 +53,11 @@ final class RecordingToolbarWindowController: NSWindowController {
 
         if let screen {
             let visibleFrame = screen.visibleFrame
-            window.setFrameOrigin(NSPoint(
-                x: visibleFrame.midX - Self.windowSize.width / 2,
-                y: visibleFrame.maxY - Self.windowSize.height - 20
-            ))
+            window.setFrameOrigin(
+                NSPoint(
+                    x: visibleFrame.midX - Self.windowSize.width / 2,
+                    y: visibleFrame.maxY - Self.windowSize.height - 20
+                ))
         } else {
             window.center()
         }

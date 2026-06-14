@@ -58,7 +58,7 @@ final class MenuBarController: NSObject {
             "Capture Fullscreen",
             openHistoryMenuTitle(openHistoryShortcut: openHistoryShortcut),
             "Preferences...",
-            "Quit ScreenshotMaxxing"
+            "Quit ScreenshotMaxxing",
         ]
     }
 
@@ -122,16 +122,18 @@ final class MenuBarController: NSObject {
         openHistoryShortcut: GlobalKeyboardShortcut = .defaultOpenHistory
     ) -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(
-            title: areaCaptureMenuTitle(areaCaptureShortcut: areaCaptureShortcut),
-            action: #selector(captureArea),
-            keyEquivalent: ""
-        ))
-        menu.addItem(NSMenuItem(
-            title: captureOptionsMenuTitle(captureOptionsShortcut: captureOptionsShortcut),
-            action: #selector(captureOptions),
-            keyEquivalent: ""
-        ))
+        menu.addItem(
+            NSMenuItem(
+                title: areaCaptureMenuTitle(areaCaptureShortcut: areaCaptureShortcut),
+                action: #selector(captureArea),
+                keyEquivalent: ""
+            ))
+        menu.addItem(
+            NSMenuItem(
+                title: captureOptionsMenuTitle(captureOptionsShortcut: captureOptionsShortcut),
+                action: #selector(captureOptions),
+                keyEquivalent: ""
+            ))
         menu.addItem(NSMenuItem(title: "Capture Window...", action: #selector(captureWindow), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Capture Fullscreen", action: #selector(captureFullscreen), keyEquivalent: ""))
         menu.addItem(.separator())

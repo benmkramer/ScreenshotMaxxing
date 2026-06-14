@@ -73,7 +73,10 @@ struct AnnotationText: Equatable {
     var color: AnnotationColor
     var fontSize: CGFloat
 
-    init(content: String = Self.defaultText, color: AnnotationColor = Self.defaultColor, fontSize: CGFloat = Self.defaultFontSize) {
+    init(
+        content: String = Self.defaultText, color: AnnotationColor = Self.defaultColor,
+        fontSize: CGFloat = Self.defaultFontSize
+    ) {
         self.content = content
         self.color = color
         self.fontSize = Self.clampedFontSize(fontSize)
@@ -169,9 +172,10 @@ struct AnnotationArrow: Equatable {
         let targetRect = targetRect.standardized
 
         guard !sourceRect.isNull,
-              !targetRect.isNull,
-              sourceRect.width > 0,
-              sourceRect.height > 0 else {
+            !targetRect.isNull,
+            sourceRect.width > 0,
+            sourceRect.height > 0
+        else {
             let translation = CGSize(
                 width: targetRect.minX - sourceRect.minX,
                 height: targetRect.minY - sourceRect.minY
@@ -205,7 +209,7 @@ struct AnnotationArrow: Equatable {
 
         return [
             arrowHeadPoint(at: angle + .pi - arrowHeadAngle),
-            arrowHeadPoint(at: angle + .pi + arrowHeadAngle)
+            arrowHeadPoint(at: angle + .pi + arrowHeadAngle),
         ].map { (endPoint, $0) }
     }
 
@@ -256,9 +260,10 @@ struct AnnotationStroke: Equatable {
         let targetRect = targetRect.standardized
 
         guard !sourceRect.isNull,
-              !targetRect.isNull,
-              sourceRect.width > 0,
-              sourceRect.height > 0 else {
+            !targetRect.isNull,
+            sourceRect.width > 0,
+            sourceRect.height > 0
+        else {
             let translation = CGSize(
                 width: targetRect.minX - sourceRect.minX,
                 height: targetRect.minY - sourceRect.minY
@@ -433,7 +438,8 @@ private extension CGPoint {
             return hypot(x - startPoint.x, y - startPoint.y)
         }
 
-        let projection = ((x - startPoint.x) * segment.width + (y - startPoint.y) * segment.height) / segmentLengthSquared
+        let projection =
+            ((x - startPoint.x) * segment.width + (y - startPoint.y) * segment.height) / segmentLengthSquared
         let clampedProjection = min(max(projection, 0), 1)
         let closestPoint = CGPoint(
             x: startPoint.x + clampedProjection * segment.width,
