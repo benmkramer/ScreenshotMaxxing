@@ -269,15 +269,9 @@ enum CaptureHistoryData {
         fileManager: FileManager = .default,
         fileTrash: CaptureFileTrashing = FileManager.default
     ) throws {
-        let capturesWithExistingContent = capturesToDelete.filter {
-            Self.fileExists(for: $0, fileManager: fileManager)
-        }
-        let missingCapturesToRemove = capturesToDelete.filter {
-            !Self.fileExists(for: $0, fileManager: fileManager)
-        }
         let expandedCapturesToDelete = Self.capturesToDelete(
             from: allCaptures,
-            selectedIDs: Set(capturesWithExistingContent.map(\.id))
+            selectedIDs: Set(capturesToDelete.map(\.id))
         )
         let fileURLs = try fileURLsToDelete(
             for: expandedCapturesToDelete,
@@ -290,8 +284,6 @@ enum CaptureHistoryData {
         }
 
         let idsToDelete = Set(expandedCapturesToDelete.map(\.id))
-            .union(missingCapturesToRemove.map(\.id))
-
         for capture in allCaptures where idsToDelete.contains(capture.id) {
             modelContext.delete(capture)
         }

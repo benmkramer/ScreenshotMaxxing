@@ -3525,7 +3525,7 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
-    @Test func captureHistoryDeletionOfMissingCaptureKeepsLinkedExistingEditedCapture() throws {
+    @Test func captureHistoryDeletionOfMissingOriginalDeletesLinkedExistingEditedCaptures() throws {
         let fileManager = FileManager.default
         let fileTrash = SpyFileTrash()
         let baseDirectory = fileManager.temporaryDirectory
@@ -3540,7 +3540,15 @@ struct ScreenshotMaxxingTests {
         )
         let missingOriginalURL = directories.originals.appendingPathComponent("area-20260526-101500-aaaaaaaa.png")
         let editedURL = directories.edited.appendingPathComponent("area-20260526-101500-aaaaaaaa-edited-bbbbbbbb.png")
-        try Data("png".utf8).write(to: editedURL)
+        let diskOnlyEditedURL = directories.edited.appendingPathComponent(
+            "area-20260526-101500-aaaaaaaa-edited-cccccccc.png")
+        let thumbnailURL = directories.thumbnails.appendingPathComponent("area-20260526-101500-aaaaaaaa-thumbnail.png")
+        let unrelatedURL = directories.edited.appendingPathComponent(
+            "window-20260526-101500-dddddddd-edited-eeeeeeee.png")
+
+        try [editedURL, diskOnlyEditedURL, thumbnailURL, unrelatedURL].forEach { fileURL in
+            try Data("png".utf8).write(to: fileURL)
+        }
 
         let modelContainer = try PersistenceController.makeModelContainer(inMemory: true)
         let missingOriginalCapture = Capture(
@@ -3548,6 +3556,7 @@ struct ScreenshotMaxxingTests {
             captureMode: "area",
             width: 20,
             height: 10,
+            thumbnailFilePath: thumbnailURL.fileSystemPath,
             originalFilePath: missingOriginalURL.fileSystemPath
         )
         let editedCapture = Capture(
@@ -3557,9 +3566,17 @@ struct ScreenshotMaxxingTests {
             height: 10,
             originalFilePath: editedURL.fileSystemPath
         )
+        let unrelatedCapture = Capture(
+            fileName: unrelatedURL.lastPathComponent,
+            captureMode: "window",
+            width: 40,
+            height: 30,
+            originalFilePath: unrelatedURL.fileSystemPath
+        )
 
         modelContainer.mainContext.insert(missingOriginalCapture)
         modelContainer.mainContext.insert(editedCapture)
+        modelContainer.mainContext.insert(unrelatedCapture)
         try modelContainer.mainContext.save()
 
         let allCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
@@ -3572,9 +3589,18 @@ struct ScreenshotMaxxingTests {
         )
         let remainingCaptures = try modelContainer.mainContext.fetch(FetchDescriptor<Capture>())
 
-        #expect(remainingCaptures.map(\.fileName) == [editedURL.lastPathComponent])
-        #expect(fileTrash.trashedFileURLs.isEmpty)
+        #expect(remainingCaptures.map(\.fileName) == [unrelatedURL.lastPathComponent])
+        #expect(
+            Set(fileTrash.trashedFileURLs.map(\.fileSystemPath)) == [
+                editedURL.fileSystemPath,
+                diskOnlyEditedURL.fileSystemPath,
+                thumbnailURL.fileSystemPath,
+            ])
+        #expect(!fileTrash.trashedFileURLs.contains(missingOriginalURL))
         #expect(fileManager.fileExists(atPath: editedURL.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: diskOnlyEditedURL.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: thumbnailURL.fileSystemPath))
+        #expect(fileManager.fileExists(atPath: unrelatedURL.fileSystemPath))
     }
 
     @MainActor
