@@ -171,14 +171,50 @@ jobs:
           DIST_DIR="$GITHUB_WORKSPACE/dist" \
           scripts/release-dmg.sh
 
-      - name: Verify stapled DMG
+      - name: Verify stapled DMG and app
         run: |
           set -euo pipefail
 
           DMG_PATH="dist/ScreenshotMaxxing-${RELEASE_VERSION}.dmg"
+          MOUNT_DIR="$RUNNER_TEMP/ScreenshotMaxxingDmgMount"
+          APP_PATH="$MOUNT_DIR/ScreenshotMaxxing.app"
+
           test -f "$DMG_PATH"
           xcrun stapler validate "$DMG_PATH"
           spctl -a -vv -t open --context context:primary-signature "$DMG_PATH"
+
+          rm -rf "$MOUNT_DIR"
+          mkdir -p "$MOUNT_DIR"
+
+          DMG_DEVICE="$(hdiutil attach "$DMG_PATH" -readonly -nobrowse -noautoopen -mountpoint "$MOUNT_DIR" | awk -F '\t' 'END {gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); print $1}')"
+          if [[ -z "$DMG_DEVICE" ]]; then
+            echo "Could not determine attached DMG device." >&2
+            exit 1
+          fi
+
+          cleanup() {
+            if [[ -n "${DMG_DEVICE:-}" ]]; then
+              hdiutil detach "$DMG_DEVICE" -quiet || hdiutil detach "$DMG_DEVICE" -force -quiet || true
+            fi
+          }
+          trap cleanup EXIT
+
+          test -d "$APP_PATH"
+          codesign --verify --deep --strict --verbose=4 "$APP_PATH"
+          spctl -a -vv -t exec "$APP_PATH"
+
+          APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
+          APP_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_PATH/Contents/Info.plist")"
+
+          if [[ "$APP_VERSION" != "$RELEASE_VERSION" ]]; then
+            echo "Expected app version ${RELEASE_VERSION}, found ${APP_VERSION}." >&2
+            exit 1
+          fi
+
+          if [[ "$APP_BUILD" != "$BUILD_NUMBER" ]]; then
+            echo "Expected app build ${BUILD_NUMBER}, found ${APP_BUILD}." >&2
+            exit 1
+          fi
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4

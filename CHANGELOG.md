@@ -7,6 +7,7 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 ## Unreleased
 
 - Fixed screenshot and video editor windows to promote the menu bar app before bringing captures or recordings to the front.
+- Hardened the Release DMG workflow to mount the notarized DMG and verify the contained app signature and bundle versions before upload or publication.
 
 ## 2.0.6 - 2026-06-13
 
