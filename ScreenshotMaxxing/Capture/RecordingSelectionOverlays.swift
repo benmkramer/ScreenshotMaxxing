@@ -212,8 +212,9 @@ private final class RecordingAreaSelectionView: NSView {
         currentPoint = convert(event.locationInWindow, from: nil)
 
         guard let window, let selectionRect,
-              selectionRect.width >= minimumSelectionSide,
-              selectionRect.height >= minimumSelectionSide else {
+            selectionRect.width >= minimumSelectionSide,
+            selectionRect.height >= minimumSelectionSide
+        else {
             onCancel?()
             return
         }

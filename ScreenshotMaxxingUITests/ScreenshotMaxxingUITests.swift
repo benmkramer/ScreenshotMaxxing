@@ -24,7 +24,7 @@ final class ScreenshotMaxxingUITests: XCTestCase {
         app.terminate()
         let recordApp = launchApp(extraArguments: [
             "--screenshotmaxxing-ui-test-open-capture-options",
-            "--screenshotmaxxing-ui-test-record-pane"
+            "--screenshotmaxxing-ui-test-record-pane",
         ])
 
         XCTAssertTrue(recordApp.windows["capture-options-window"].waitForExistence(timeout: 5))

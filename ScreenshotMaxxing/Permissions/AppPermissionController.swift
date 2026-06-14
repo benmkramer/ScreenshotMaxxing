@@ -45,7 +45,8 @@ enum AppPermission: CaseIterable, Equatable, Identifiable {
     var settingsURL: URL? {
         switch self {
         case .screenCapture:
-            return URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture")
+            return URL(
+                string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture")
         case .directScreenAccess:
             return nil
         }
@@ -100,7 +101,7 @@ struct AppPermissionController {
                 permission: .directScreenAccess,
                 isGranted: screenCaptureGranted && directScreenAccessController.hasAccess(),
                 isSetupEnabled: screenCaptureGranted
-            )
+            ),
         ]
     }
 

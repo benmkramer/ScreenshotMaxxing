@@ -29,7 +29,8 @@ protocol RecordingSessionControlling: AnyObject {
 final class RecordingController {
     private let fileManager: FileManager
     private let sessionFactory: (@MainActor (RecordingOptions, URL?) async throws -> any RecordingSessionControlling)?
-    private let restartSessionFactory: (@MainActor (any RecordingSessionControlling) async throws -> any RecordingSessionControlling)?
+    private let restartSessionFactory:
+        (@MainActor (any RecordingSessionControlling) async throws -> any RecordingSessionControlling)?
     private let recordingResultFactory: (@MainActor (any RecordingSessionControlling) throws -> RecordingResult)?
     private let recoveryRetryCount: Int
     private let recoveryRetryDelayNanoseconds: UInt64
@@ -41,7 +42,9 @@ final class RecordingController {
     init(
         fileManager: FileManager = .default,
         sessionFactory: (@MainActor (RecordingOptions, URL?) async throws -> any RecordingSessionControlling)? = nil,
-        restartSessionFactory: (@MainActor (any RecordingSessionControlling) async throws -> any RecordingSessionControlling)? = nil,
+        restartSessionFactory: (
+            @MainActor (any RecordingSessionControlling) async throws -> any RecordingSessionControlling
+        )? = nil,
         recordingResultFactory: (@MainActor (any RecordingSessionControlling) throws -> RecordingResult)? = nil,
         recoveryRetryCount: Int = 20,
         recoveryRetryDelayNanoseconds: UInt64 = 250_000_000,
@@ -102,8 +105,9 @@ final class RecordingController {
 
     func restartActiveRecording() async {
         guard let activeSession,
-              !activeSession.didRequestStop,
-              !activeSession.didRequestRestart else {
+            !activeSession.didRequestStop,
+            !activeSession.didRequestRestart
+        else {
             return
         }
 
@@ -240,13 +244,15 @@ final class RecordingController {
 
     private func completeRecording(from recordingOutput: SCRecordingOutput? = nil) {
         guard let activeSession,
-              !activeSession.didRequestRestart else {
+            !activeSession.didRequestRestart
+        else {
             return
         }
 
         if let recordingOutput {
             guard let activeSession = activeSession as? ActiveRecordingSession,
-                  activeSession.recordingOutput === recordingOutput else {
+                activeSession.recordingOutput === recordingOutput
+            else {
                 return
             }
         }
@@ -262,7 +268,8 @@ final class RecordingController {
 
     private func handleRecordingOutputFailure(_ error: Error, from recordingOutput: SCRecordingOutput) {
         guard let activeSession = activeSession as? ActiveRecordingSession,
-              activeSession.recordingOutput === recordingOutput else {
+            activeSession.recordingOutput === recordingOutput
+        else {
             return
         }
 
@@ -294,8 +301,9 @@ final class RecordingController {
             await sleep(completionFallbackDelayNanoseconds)
 
             guard let activeSession,
-                  self.activeSession === activeSession,
-                  activeSession.didRequestStop else {
+                self.activeSession === activeSession,
+                activeSession.didRequestStop
+            else {
                 return
             }
 
@@ -336,7 +344,8 @@ final class RecordingController {
             originalFileName: activeSession.outputURL.lastPathComponent,
             baseDirectory: activeSession.thumbnailBaseDirectory
         )
-        let dimensions = metadata.dimensions.width > 0 && metadata.dimensions.height > 0
+        let dimensions =
+            metadata.dimensions.width > 0 && metadata.dimensions.height > 0
             ? metadata.dimensions
             : activeSession.dimensions
 
@@ -382,7 +391,9 @@ final class RecordingController {
         continuation?.resume(throwing: error)
     }
 
-    private func recordingTarget(for mode: RecordingMode, in content: SCShareableContent) async throws -> RecordingTarget {
+    private func recordingTarget(for mode: RecordingMode, in content: SCShareableContent) async throws
+        -> RecordingTarget
+    {
         let screen = currentScreen()
         let currentDisplay = try display(for: screen, in: content)
 
@@ -551,11 +562,8 @@ final class RecordingController {
     private func selectableWindows(in content: SCShareableContent) -> [SCWindow] {
         let processID = ProcessInfo.processInfo.processIdentifier
         return content.windows.filter { window in
-            window.isOnScreen &&
-                window.windowLayer == 0 &&
-                window.frame.width >= 48 &&
-                window.frame.height >= 48 &&
-                window.owningApplication?.processID != processID
+            window.isOnScreen && window.windowLayer == 0 && window.frame.width >= 48 && window.frame.height >= 48
+                && window.owningApplication?.processID != processID
         }
     }
 
@@ -566,7 +574,8 @@ final class RecordingController {
 
     private func display(for screen: NSScreen, in content: SCShareableContent) throws -> SCDisplay {
         guard let screenDisplayID = screen.displayID,
-              let display = content.displays.first(where: { $0.displayID == screenDisplayID }) else {
+            let display = content.displays.first(where: { $0.displayID == screenDisplayID })
+        else {
             throw RecordingError.displayUnavailable
         }
 

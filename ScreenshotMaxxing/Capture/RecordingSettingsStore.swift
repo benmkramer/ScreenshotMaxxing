@@ -22,7 +22,8 @@ struct RecordingSettingsStore {
 
     func captureOptionsPane() -> CaptureOptionsPane {
         guard let rawValue = userDefaults.string(forKey: Keys.captureOptionsPane),
-              let pane = CaptureOptionsPane(rawValue: rawValue) else {
+            let pane = CaptureOptionsPane(rawValue: rawValue)
+        else {
             return .defaultPane
         }
 

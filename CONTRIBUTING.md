@@ -57,6 +57,18 @@ The script stops any running `ScreenshotMaxxing` process, builds into an ignored
 
 ## Testing
 
+Format Swift sources before opening a pull request:
+
+```sh
+scripts/format.sh
+```
+
+To check formatting without rewriting files:
+
+```sh
+scripts/lint.sh
+```
+
 Run the main test suite:
 
 ```sh

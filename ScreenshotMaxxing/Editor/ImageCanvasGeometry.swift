@@ -31,9 +31,10 @@ struct ImageCanvasGeometry: Equatable {
 
     var imageRect: CGRect {
         guard imageSize.width > 0,
-              imageSize.height > 0,
-              containerSize.width > 0,
-              containerSize.height > 0 else {
+            imageSize.height > 0,
+            containerSize.width > 0,
+            containerSize.height > 0
+        else {
             return .zero
         }
 
@@ -75,9 +76,10 @@ struct ImageCanvasGeometry: Equatable {
         let rect = imageRect
 
         guard imageSize.width > 0,
-              imageSize.height > 0,
-              rect.width > 0,
-              rect.height > 0 else {
+            imageSize.height > 0,
+            rect.width > 0,
+            rect.height > 0
+        else {
             return .zero
         }
 
@@ -92,10 +94,11 @@ struct ImageCanvasGeometry: Equatable {
         let clippedRect = viewRect.standardized.intersection(rect)
 
         guard rect.width > 0,
-              rect.height > 0,
-              !clippedRect.isNull,
-              clippedRect.width > 0,
-              clippedRect.height > 0 else {
+            rect.height > 0,
+            !clippedRect.isNull,
+            clippedRect.width > 0,
+            clippedRect.height > 0
+        else {
             return nil
         }
 
@@ -126,9 +129,10 @@ struct ImageCanvasGeometry: Equatable {
         let rect = imageRect
 
         guard imageSize.width > 0,
-              imageSize.height > 0,
-              rect.width > 0,
-              rect.height > 0 else {
+            imageSize.height > 0,
+            rect.width > 0,
+            rect.height > 0
+        else {
             return .zero
         }
 
@@ -142,9 +146,10 @@ struct ImageCanvasGeometry: Equatable {
         let rect = self.imageRect
 
         guard imageSize.width > 0,
-              imageSize.height > 0,
-              rect.width > 0,
-              rect.height > 0 else {
+            imageSize.height > 0,
+            rect.width > 0,
+            rect.height > 0
+        else {
             return .zero
         }
 

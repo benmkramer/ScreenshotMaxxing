@@ -122,7 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureApplicationIcon() {
         guard let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-              let icon = NSImage(contentsOf: iconURL) else {
+            let icon = NSImage(contentsOf: iconURL)
+        else {
             return
         }
 
@@ -140,7 +141,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleUITestLaunchAction() {
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("--screenshotmaxxing-ui-test-open-capture-options") {
-            let selectedPane: CaptureOptionsPane? = arguments.contains("--screenshotmaxxing-ui-test-record-pane") ? .record : nil
+            let selectedPane: CaptureOptionsPane? =
+                arguments.contains("--screenshotmaxxing-ui-test-record-pane") ? .record : nil
             openCaptureOptions(selectedPane: selectedPane)
         } else if arguments.contains("--screenshotmaxxing-ui-test-open-history") {
             openHistory()
@@ -384,7 +386,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func windowWillClose(_ notification: Notification) {
         guard let window = notification.object as? NSWindow,
-              userFacingWindows.contains(where: { $0 === window }) else {
+            userFacingWindows.contains(where: { $0 === window })
+        else {
             return
         }
 
@@ -403,9 +406,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func makePreferencesView() throws -> PreferencesView {
         let preferences = try PreferencesData.current(
-            areaCaptureShortcut: hotKeyManager?.registeredAreaCaptureShortcut ?? shortcutSettingsStore.areaCaptureShortcut(),
-            captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut ?? shortcutSettingsStore.captureOptionsShortcut(),
-            openHistoryShortcut: hotKeyManager?.registeredOpenHistoryShortcut ?? shortcutSettingsStore.openHistoryShortcut(),
+            areaCaptureShortcut: hotKeyManager?.registeredAreaCaptureShortcut
+                ?? shortcutSettingsStore.areaCaptureShortcut(),
+            captureOptionsShortcut: hotKeyManager?.registeredCaptureOptionsShortcut
+                ?? shortcutSettingsStore.captureOptionsShortcut(),
+            openHistoryShortcut: hotKeyManager?.registeredOpenHistoryShortcut
+                ?? shortcutSettingsStore.openHistoryShortcut(),
             launchAtLoginEnabled: loginItemController.launchAtLoginEnabled
         )
 
@@ -577,7 +583,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.openVideoEditor(for: CaptureHistoryData.contentFileURL(for: capture), capture: capture)
             }
         }
-            .modelContainer(PersistenceController.sharedModelContainer)
+        .modelContainer(PersistenceController.sharedModelContainer)
         let hostingController = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "History - ScreenshotMaxxing"

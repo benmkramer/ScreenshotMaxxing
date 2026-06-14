@@ -132,13 +132,14 @@ struct VideoSilenceDetector: Sendable {
             AVLinearPCMIsFloatKey: true,
             AVLinearPCMBitDepthKey: 32,
             AVLinearPCMIsBigEndianKey: false,
-            AVLinearPCMIsNonInterleaved: false
+            AVLinearPCMIsNonInterleaved: false,
         ]
     }
 
     private nonisolated static func audioLevelWindow(for sampleBuffer: CMSampleBuffer) throws -> AudioLevelWindow? {
         guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
-              let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?.pointee else {
+            let streamDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?.pointee
+        else {
             throw VideoSilenceDetectionError.unreadableAudioSamples
         }
 
@@ -215,7 +216,8 @@ struct VideoSilenceDetector: Sendable {
         }
 
         let sampleDuration = CMSampleBufferGetDuration(sampleBuffer).seconds
-        let fallbackDuration = streamDescription.mSampleRate > 0
+        let fallbackDuration =
+            streamDescription.mSampleRate > 0
             ? Double(sampleCount) / streamDescription.mSampleRate
             : 0
         let duration = sampleDuration.isFinite && sampleDuration > 0 ? sampleDuration : fallbackDuration

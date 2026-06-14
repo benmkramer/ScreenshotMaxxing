@@ -119,9 +119,10 @@ final class CaptureMetadataStore {
 
     private func imageDimensions(for url: URL) throws -> (width: Int, height: Int) {
         guard let imageSource = CGImageSourceCreateWithURL(url as CFURL, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int,
-              let height = properties[kCGImagePropertyPixelHeight] as? Int else {
+            let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
+            let width = properties[kCGImagePropertyPixelWidth] as? Int,
+            let height = properties[kCGImagePropertyPixelHeight] as? Int
+        else {
             throw CaptureMetadataError.unreadableImage(url)
         }
 
@@ -134,7 +135,7 @@ final class CaptureMetadataStore {
         let possibleFilePaths = [
             capture.originalFilePath,
             capture.editedFilePath,
-            capture.thumbnailFilePath
+            capture.thumbnailFilePath,
         ]
 
         for filePath in possibleFilePaths.compactMap({ $0 }) where !filePaths.contains(filePath) {

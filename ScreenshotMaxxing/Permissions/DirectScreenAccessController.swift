@@ -25,9 +25,10 @@ struct DirectScreenAccessController {
         self.preflightApproval = {
             userDefaults.bool(forKey: Self.approvalCompletedKey)
         }
-        self.requestApproval = requestApproval ?? {
-            await DirectScreenAccessController.requestSystemApproval()
-        }
+        self.requestApproval =
+            requestApproval ?? {
+                await DirectScreenAccessController.requestSystemApproval()
+            }
         self.markApprovalCompleted = {
             userDefaults.set(true, forKey: Self.approvalCompletedKey)
         }
