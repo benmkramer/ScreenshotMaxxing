@@ -14,6 +14,7 @@ struct VideoEditorView: View {
     private let capture: Capture?
     private let hasAudioTracks: Bool
     private let savedFilePresenter: SavedFilePresenter
+    private let videoExportSettingsStore: VideoExportSettingsStore
     private let closeAction: () -> Void
 
     @State private var player: AVPlayer
@@ -34,11 +35,13 @@ struct VideoEditorView: View {
         videoURL: URL,
         capture: Capture? = nil,
         savedFilePresenter: SavedFilePresenter = SavedFilePresenter(),
+        videoExportSettingsStore: VideoExportSettingsStore = VideoExportSettingsStore(),
         closeAction: @escaping () -> Void = {}
     ) {
         self.videoURL = videoURL
         self.capture = capture
         self.savedFilePresenter = savedFilePresenter
+        self.videoExportSettingsStore = videoExportSettingsStore
         self.closeAction = closeAction
         let asset = AVURLAsset(url: videoURL)
         self.hasAudioTracks = !asset.tracks(withMediaType: .audio).isEmpty
@@ -340,7 +343,8 @@ struct VideoEditorView: View {
         let exportResult = try await VideoExporter().export(
             videoURL: videoURL,
             editState: editState,
-            outputURL: editedFileURL
+            outputURL: editedFileURL,
+            monoAudio: videoExportSettingsStore.monoAudioEnabled()
         )
         let thumbnailURL = try VideoThumbnailGenerator().writeThumbnail(
             for: exportResult.fileURL,
@@ -364,7 +368,8 @@ struct VideoEditorView: View {
         return try await VideoExporter().export(
             videoURL: videoURL,
             editState: editState,
-            outputURL: outputURL
+            outputURL: outputURL,
+            monoAudio: videoExportSettingsStore.monoAudioEnabled()
         )
     }
 
