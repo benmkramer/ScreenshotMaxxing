@@ -17,6 +17,7 @@ struct PreferencesView: View {
     private let onCaptureOptionsShortcutReset: () -> GlobalKeyboardShortcut
     private let onOpenHistoryShortcutReset: () -> GlobalKeyboardShortcut
     private let onLaunchAtLoginChange: (Bool) -> Bool
+    private let onMonoAudioExportChange: (Bool) -> Bool
     private let onOpenStorageFolder: (String) -> Void
 
     init(
@@ -28,6 +29,7 @@ struct PreferencesView: View {
         onCaptureOptionsShortcutReset: @escaping () -> GlobalKeyboardShortcut = { .defaultCaptureOptions },
         onOpenHistoryShortcutReset: @escaping () -> GlobalKeyboardShortcut = { .defaultOpenHistory },
         onLaunchAtLoginChange: @escaping (Bool) -> Bool = { _ in true },
+        onMonoAudioExportChange: @escaping (Bool) -> Bool = { _ in true },
         onOpenStorageFolder: @escaping (String) -> Void = { path in
             NSWorkspace.shared.open(URL(fileURLWithPath: path, isDirectory: true))
         }
@@ -40,6 +42,7 @@ struct PreferencesView: View {
         self.onCaptureOptionsShortcutReset = onCaptureOptionsShortcutReset
         self.onOpenHistoryShortcutReset = onOpenHistoryShortcutReset
         self.onLaunchAtLoginChange = onLaunchAtLoginChange
+        self.onMonoAudioExportChange = onMonoAudioExportChange
         self.onOpenStorageFolder = onOpenStorageFolder
     }
 
@@ -133,6 +136,30 @@ struct PreferencesView: View {
             } header: {
                 Text("Storage")
                     .accessibilityIdentifier("preferences-storage-section")
+            }
+
+            Section {
+                Toggle(
+                    "Export audio as mono",
+                    isOn: Binding(
+                        get: { preferences.monoAudioExportEnabled },
+                        set: { isEnabled in
+                            guard onMonoAudioExportChange(isEnabled) else {
+                                return
+                            }
+
+                            preferences = preferences.updatingMonoAudioExportEnabled(isEnabled)
+                        }
+                    )
+                )
+                .accessibilityIdentifier("preferences-mono-audio-toggle")
+
+                Text("Downmixes recorded audio to a single channel when exporting edited videos.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Video Export")
+                    .accessibilityIdentifier("preferences-video-export-section")
             }
         }
         .formStyle(.grouped)
