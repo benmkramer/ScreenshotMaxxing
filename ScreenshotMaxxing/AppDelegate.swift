@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let metadataStore = CaptureMetadataStore()
     private let shortcutSettingsStore = ShortcutSettingsStore()
     private let recordingSettingsStore = RecordingSettingsStore()
+    private let videoExportSettingsStore = VideoExportSettingsStore()
     private let loginItemController = LoginItemController()
     private let permissionController = AppPermissionController()
     private var permissionOnboardingWindowController: PermissionOnboardingWindowController?
@@ -412,7 +413,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ?? shortcutSettingsStore.captureOptionsShortcut(),
             openHistoryShortcut: hotKeyManager?.registeredOpenHistoryShortcut
                 ?? shortcutSettingsStore.openHistoryShortcut(),
-            launchAtLoginEnabled: loginItemController.launchAtLoginEnabled
+            launchAtLoginEnabled: loginItemController.launchAtLoginEnabled,
+            monoAudioExportEnabled: videoExportSettingsStore.monoAudioEnabled()
         )
 
         return PreferencesView(
@@ -437,8 +439,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onLaunchAtLoginChange: { [weak self] isEnabled in
                 self?.updateLaunchAtLoginEnabled(isEnabled) ?? false
+            },
+            onMonoAudioExportChange: { [weak self] isEnabled in
+                self?.updateMonoAudioExportEnabled(isEnabled) ?? false
             }
         )
+    }
+
+    private func updateMonoAudioExportEnabled(_ isEnabled: Bool) -> Bool {
+        do {
+            try videoExportSettingsStore.saveMonoAudioEnabled(isEnabled)
+            return true
+        } catch {
+            presentError(error, title: "Preferences Unavailable")
+            return false
+        }
     }
 
     private func openCaptureOptions(selectedPane: CaptureOptionsPane? = nil) {
