@@ -71,6 +71,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if isRunningHostedUnitTests {
+            return
+        }
+
         configureApplicationIcon()
         NSApp.setActivationPolicy(.accessory)
         NotificationCenter.default.addObserver(
@@ -137,6 +141,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var isRunningUITests: Bool {
         ProcessInfo.processInfo.arguments.contains("--screenshotmaxxing-ui-testing")
+    }
+
+    private var isRunningHostedUnitTests: Bool {
+        isRunningUnderTests && !isRunningUITests
     }
 
     private func handleUITestLaunchAction() {
