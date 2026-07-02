@@ -13,19 +13,10 @@ struct ScreenshotMaxxingApp: App {
 
     var body: some Scene {
         Settings {
-            if Self.isRunningHostedUnitTests {
-                EmptyView()
-            } else {
-                PreferencesSettingsScene {
-                    try appDelegate.makePreferencesView()
-                }
+            PreferencesSettingsScene {
+                try appDelegate.makePreferencesView()
             }
         }
-    }
-
-    private static var isRunningHostedUnitTests: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-            && !ProcessInfo.processInfo.arguments.contains("--screenshotmaxxing-ui-testing")
     }
 }
 
