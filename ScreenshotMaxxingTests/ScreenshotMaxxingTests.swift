@@ -4054,6 +4054,8 @@ struct ScreenshotMaxxingTests {
             .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
         let inputURL = baseDirectory.appendingPathComponent("source.mp4")
         let outputURL = baseDirectory.appendingPathComponent("edited.mp4")
+        let fixtureDuration = 0.25
+        let fixtureSize = CGSize(width: 32, height: 24)
         defer {
             try? fileManager.removeItem(at: baseDirectory)
         }
@@ -4061,8 +4063,8 @@ struct ScreenshotMaxxingTests {
         try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
         try await makeTestVideo(
             at: inputURL,
-            durationSeconds: 2,
-            size: CGSize(width: 96, height: 64),
+            durationSeconds: fixtureDuration,
+            size: fixtureSize,
             audioChannels: 2
         )
 
@@ -4070,7 +4072,7 @@ struct ScreenshotMaxxingTests {
 
         let result = try await VideoExporter(fileManager: fileManager).export(
             videoURL: inputURL,
-            editState: VideoEditState(durationSeconds: 2),
+            editState: VideoEditState(durationSeconds: fixtureDuration),
             outputURL: outputURL,
             monoAudio: true
         )
@@ -4078,7 +4080,7 @@ struct ScreenshotMaxxingTests {
         let exportedVideoTracks = try await AVURLAsset(url: outputURL).loadTracks(withMediaType: .video)
 
         #expect(result.fileURL == outputURL)
-        #expect(result.dimensions == CGSize(width: 96, height: 64))
+        #expect(result.dimensions == fixtureSize)
         #expect(!exportedVideoTracks.isEmpty)
         #expect(try await audioChannelCount(of: outputURL) == 1)
     }
@@ -4090,6 +4092,8 @@ struct ScreenshotMaxxingTests {
             .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
         let inputURL = baseDirectory.appendingPathComponent("source.mp4")
         let outputURL = baseDirectory.appendingPathComponent("edited.mp4")
+        let fixtureDuration = 0.25
+        let fixtureSize = CGSize(width: 32, height: 24)
         defer {
             try? fileManager.removeItem(at: baseDirectory)
         }
@@ -4097,14 +4101,14 @@ struct ScreenshotMaxxingTests {
         try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
         try await makeTestVideo(
             at: inputURL,
-            durationSeconds: 2,
-            size: CGSize(width: 96, height: 64),
+            durationSeconds: fixtureDuration,
+            size: fixtureSize,
             audioChannels: 2
         )
 
         let result = try await VideoExporter(fileManager: fileManager).export(
             videoURL: inputURL,
-            editState: VideoEditState(durationSeconds: 2),
+            editState: VideoEditState(durationSeconds: fixtureDuration),
             outputURL: outputURL,
             monoAudio: false
         )
@@ -4398,7 +4402,10 @@ struct ScreenshotMaxxingTests {
         writer.finishWriting {
             semaphore.signal()
         }
-        semaphore.wait()
+        guard semaphore.wait(timeout: .now() + 10) == .success else {
+            writer.cancelWriting()
+            throw TestFixtureError.conditionTimedOut
+        }
 
         if let error = writer.error {
             throw error
