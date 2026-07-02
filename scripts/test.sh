@@ -2,7 +2,6 @@
 set -euo pipefail
 
 APP_NAME="ScreenshotMaxxing"
-SCHEME="ScreenshotMaxxing"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 MODE="${1:-unit}"
 
@@ -12,12 +11,13 @@ DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$REPO_ROOT/build/DerivedData/Test}"
 
 usage() {
   cat <<USAGE
-Usage: scripts/test.sh [unit|--all]
+Usage: scripts/test.sh [unit|ui|--all]
 
 Runs ScreenshotMaxxing tests with xcodebuild.
 
 Modes:
-  unit      Run the deterministic unit test target. This is the default.
+  unit      Run the target-isolated unit test scheme. This is the default.
+  ui        Run the target-isolated UI test scheme.
   --all     Run the full scheme, including UI tests.
 
 Environment:
@@ -41,10 +41,13 @@ case "$MODE" in
     exit 0
     ;;
   unit|--unit)
-    ONLY_TESTING_TARGET="ScreenshotMaxxingTests"
+    SCHEME="ScreenshotMaxxing-UnitTests"
+    ;;
+  ui|--ui)
+    SCHEME="ScreenshotMaxxing-UITests"
     ;;
   --all|all)
-    ONLY_TESTING_TARGET=""
+    SCHEME="ScreenshotMaxxing"
     ;;
   *)
     usage >&2
@@ -63,9 +66,5 @@ test_args=(
   -derivedDataPath "$DERIVED_DATA_PATH"
   CODE_SIGNING_ALLOWED=NO
 )
-
-if [[ -n "$ONLY_TESTING_TARGET" ]]; then
-  test_args+=("-only-testing:$ONLY_TESTING_TARGET")
-fi
 
 xcodebuild "${test_args[@]}"
