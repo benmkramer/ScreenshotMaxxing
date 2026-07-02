@@ -12,12 +12,13 @@ DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$REPO_ROOT/build/DerivedData/Test}"
 
 usage() {
   cat <<USAGE
-Usage: scripts/test.sh [unit|--all]
+Usage: scripts/test.sh [unit|ui|--all]
 
 Runs ScreenshotMaxxing tests with xcodebuild.
 
 Modes:
   unit      Run the deterministic unit test target. This is the default.
+  ui        Run the UI test target.
   --all     Run the full scheme, including UI tests.
 
 Environment:
@@ -42,6 +43,9 @@ case "$MODE" in
     ;;
   unit|--unit)
     ONLY_TESTING_TARGET="ScreenshotMaxxingTests"
+    ;;
+  ui|--ui)
+    ONLY_TESTING_TARGET="ScreenshotMaxxingUITests"
     ;;
   --all|all)
     ONLY_TESTING_TARGET=""

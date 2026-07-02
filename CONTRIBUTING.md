@@ -75,7 +75,7 @@ Run the main test suite:
 scripts/test.sh
 ```
 
-The default runs the deterministic unit test target. Use `scripts/test.sh --all` for the full scheme, including UI tests. UI tests may require a local GUI session and macOS automation permissions. If the full scheme is blocked by automation setup, run the unit tests first and include the UI-test limitation in your PR notes.
+The default runs the deterministic unit test target. Use `scripts/test.sh ui` for the UI smoke target, or `scripts/test.sh --all` for the full scheme. UI tests may require a local GUI session and macOS automation permissions. If UI automation is blocked by local setup, run the unit tests first and include the UI-test limitation in your PR notes.
 
 Follow-up testing coverage to add separately:
 

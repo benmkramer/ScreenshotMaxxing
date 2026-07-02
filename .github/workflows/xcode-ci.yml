@@ -33,7 +33,14 @@ jobs:
       - name: Run lint
         run: scripts/lint.sh
 
-      - name: Run tests
-        run: scripts/test.sh --all
+      - name: Run unit tests
+        timeout-minutes: 15
+        run: scripts/test.sh unit
         env:
-          DERIVED_DATA_PATH: ${{ runner.temp }}/ScreenshotMaxxingDerivedData
+          DERIVED_DATA_PATH: ${{ runner.temp }}/ScreenshotMaxxingUnitDerivedData
+
+      - name: Run UI tests
+        timeout-minutes: 15
+        run: scripts/test.sh ui
+        env:
+          DERIVED_DATA_PATH: ${{ runner.temp }}/ScreenshotMaxxingUIDerivedData
