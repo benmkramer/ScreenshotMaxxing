@@ -463,13 +463,17 @@
 		77FEF3A52FC69F760047BAEC /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = 76UV94T5E2;
 				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(BUILT_PRODUCTS_DIR)/ScreenshotMaxxing.app/Contents/MacOS",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 2.0.6;
+				OTHER_LDFLAGS = "$(BUILT_PRODUCTS_DIR)/ScreenshotMaxxing.app/Contents/MacOS/ScreenshotMaxxing.debug.dylib";
 				PRODUCT_BUNDLE_IDENTIFIER = com.benmkramer.ScreenshotMaxxingTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -477,7 +481,6 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ScreenshotMaxxing.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/ScreenshotMaxxing";
 			};
 			name = Debug;
 		};
