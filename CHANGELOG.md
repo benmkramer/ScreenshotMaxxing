@@ -6,6 +6,8 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 
 ## Unreleased
 
+## 2.0.7 - 2026-07-04
+
 - Fixed History deletion so deleting a capture whose original file is already missing also removes linked edited captures and trashes related local files that still exist.
 - Fixed screenshot and video editor windows to promote the menu bar app before bringing captures or recordings to the front.
 - Hardened the Release DMG workflow to mount the notarized DMG and verify the contained app signature and bundle versions before upload or publication.
