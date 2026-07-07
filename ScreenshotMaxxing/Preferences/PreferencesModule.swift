@@ -14,12 +14,32 @@ struct PreferencesData: Equatable {
     let launchAtLoginEnabled: Bool
     let originalsFolderPath: String
     let editedFolderPath: String
+    let monoAudioExportEnabled: Bool
+
+    init(
+        areaCaptureShortcut: GlobalKeyboardShortcut,
+        captureOptionsShortcut: GlobalKeyboardShortcut,
+        openHistoryShortcut: GlobalKeyboardShortcut,
+        launchAtLoginEnabled: Bool,
+        originalsFolderPath: String,
+        editedFolderPath: String,
+        monoAudioExportEnabled: Bool = false
+    ) {
+        self.areaCaptureShortcut = areaCaptureShortcut
+        self.captureOptionsShortcut = captureOptionsShortcut
+        self.openHistoryShortcut = openHistoryShortcut
+        self.launchAtLoginEnabled = launchAtLoginEnabled
+        self.originalsFolderPath = originalsFolderPath
+        self.editedFolderPath = editedFolderPath
+        self.monoAudioExportEnabled = monoAudioExportEnabled
+    }
 
     static func current(
         areaCaptureShortcut: GlobalKeyboardShortcut,
         captureOptionsShortcut: GlobalKeyboardShortcut = .defaultCaptureOptions,
         openHistoryShortcut: GlobalKeyboardShortcut = .defaultOpenHistory,
         launchAtLoginEnabled: Bool = false,
+        monoAudioExportEnabled: Bool = false,
         baseDirectory: URL? = nil,
         fileManager: FileManager = .default
     ) throws -> PreferencesData {
@@ -34,7 +54,8 @@ struct PreferencesData: Equatable {
             openHistoryShortcut: openHistoryShortcut,
             launchAtLoginEnabled: launchAtLoginEnabled,
             originalsFolderPath: directories.originals.fileSystemPath,
-            editedFolderPath: directories.edited.fileSystemPath
+            editedFolderPath: directories.edited.fileSystemPath,
+            monoAudioExportEnabled: monoAudioExportEnabled
         )
     }
 
@@ -45,7 +66,8 @@ struct PreferencesData: Equatable {
             openHistoryShortcut: openHistoryShortcut,
             launchAtLoginEnabled: launchAtLoginEnabled,
             originalsFolderPath: originalsFolderPath,
-            editedFolderPath: editedFolderPath
+            editedFolderPath: editedFolderPath,
+            monoAudioExportEnabled: monoAudioExportEnabled
         )
     }
 
@@ -60,7 +82,8 @@ struct PreferencesData: Equatable {
             openHistoryShortcut: openHistoryShortcut,
             launchAtLoginEnabled: launchAtLoginEnabled,
             originalsFolderPath: originalsFolderPath,
-            editedFolderPath: editedFolderPath
+            editedFolderPath: editedFolderPath,
+            monoAudioExportEnabled: monoAudioExportEnabled
         )
     }
 
@@ -75,7 +98,8 @@ struct PreferencesData: Equatable {
             openHistoryShortcut: shortcut,
             launchAtLoginEnabled: launchAtLoginEnabled,
             originalsFolderPath: originalsFolderPath,
-            editedFolderPath: editedFolderPath
+            editedFolderPath: editedFolderPath,
+            monoAudioExportEnabled: monoAudioExportEnabled
         )
     }
 
@@ -90,7 +114,20 @@ struct PreferencesData: Equatable {
             openHistoryShortcut: openHistoryShortcut,
             launchAtLoginEnabled: isEnabled,
             originalsFolderPath: originalsFolderPath,
-            editedFolderPath: editedFolderPath
+            editedFolderPath: editedFolderPath,
+            monoAudioExportEnabled: monoAudioExportEnabled
+        )
+    }
+
+    func updatingMonoAudioExportEnabled(_ isEnabled: Bool) -> PreferencesData {
+        PreferencesData(
+            areaCaptureShortcut: areaCaptureShortcut,
+            captureOptionsShortcut: captureOptionsShortcut,
+            openHistoryShortcut: openHistoryShortcut,
+            launchAtLoginEnabled: launchAtLoginEnabled,
+            originalsFolderPath: originalsFolderPath,
+            editedFolderPath: editedFolderPath,
+            monoAudioExportEnabled: isEnabled
         )
     }
 }

@@ -556,6 +556,40 @@ struct ScreenshotMaxxingTests {
         #expect(launchAtLoginEnabled.launchAtLoginEnabled)
     }
 
+    @MainActor
+    @Test func preferencesDataUpdatesMonoAudioExportSetting() throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+        let preferences = try PreferencesData.current(
+            areaCaptureShortcut: .defaultAreaCapture,
+            baseDirectory: baseDirectory,
+            fileManager: fileManager
+        )
+
+        let monoEnabled = preferences.updatingMonoAudioExportEnabled(true)
+
+        #expect(!preferences.monoAudioExportEnabled)
+        #expect(monoEnabled.monoAudioExportEnabled)
+        #expect(!monoEnabled.updatingMonoAudioExportEnabled(false).monoAudioExportEnabled)
+    }
+
+    @Test func videoExportSettingsStoreRoundTripsMonoAudioSetting() throws {
+        let userDefaults = try #require(UserDefaults(suiteName: "VideoExportSettingsStoreTests-\(UUID().uuidString)"))
+        let store = VideoExportSettingsStore(userDefaults: userDefaults)
+
+        #expect(!store.monoAudioEnabled())
+
+        try store.saveMonoAudioEnabled(true)
+        #expect(store.monoAudioEnabled())
+
+        try store.saveMonoAudioEnabled(false)
+        #expect(!store.monoAudioEnabled())
+    }
+
     @Test func captureOptionsOnlyIncludeStillImageCaptureModes() {
         #expect(CaptureOptionsView.availableModes == [.area, .window, .fullscreen])
         #expect(CaptureOptionsView.availableRecordingModes == [.area, .window, .fullscreen])
@@ -4013,6 +4047,92 @@ struct ScreenshotMaxxingTests {
         #expect(!exportedVideoTracks.isEmpty)
     }
 
+    @MainActor
+    @Test func videoExporterDownmixesAudioToMonoWhenRequested() async throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let inputURL = baseDirectory.appendingPathComponent("source.mp4")
+        let outputURL = baseDirectory.appendingPathComponent("edited.mp4")
+        let fixtureDuration = 0.25
+        let fixtureSize = CGSize(width: 32, height: 24)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try await makeTestVideo(
+            at: inputURL,
+            durationSeconds: fixtureDuration,
+            size: fixtureSize,
+            audioChannels: 2
+        )
+
+        #expect(try await audioChannelCount(of: inputURL) == 2)
+
+        let result = try await VideoExporter(fileManager: fileManager).export(
+            videoURL: inputURL,
+            editState: VideoEditState(durationSeconds: fixtureDuration),
+            outputURL: outputURL,
+            monoAudio: true
+        )
+
+        let exportedVideoTracks = try await AVURLAsset(url: outputURL).loadTracks(withMediaType: .video)
+
+        #expect(result.fileURL == outputURL)
+        #expect(result.dimensions == fixtureSize)
+        #expect(!exportedVideoTracks.isEmpty)
+        #expect(try await audioChannelCount(of: outputURL) == 1)
+    }
+
+    @MainActor
+    @Test func videoExporterPreservesStereoAudioWhenMonoDisabled() async throws {
+        let fileManager = FileManager.default
+        let baseDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("ScreenshotMaxxingTests-\(UUID().uuidString)", isDirectory: true)
+        let inputURL = baseDirectory.appendingPathComponent("source.mp4")
+        let outputURL = baseDirectory.appendingPathComponent("edited.mp4")
+        let fixtureDuration = 0.25
+        let fixtureSize = CGSize(width: 32, height: 24)
+        defer {
+            try? fileManager.removeItem(at: baseDirectory)
+        }
+
+        try fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
+        try await makeTestVideo(
+            at: inputURL,
+            durationSeconds: fixtureDuration,
+            size: fixtureSize,
+            audioChannels: 2
+        )
+
+        let result = try await VideoExporter(fileManager: fileManager).export(
+            videoURL: inputURL,
+            editState: VideoEditState(durationSeconds: fixtureDuration),
+            outputURL: outputURL,
+            monoAudio: false
+        )
+
+        #expect(result.fileURL == outputURL)
+        #expect(try await audioChannelCount(of: outputURL) == 2)
+    }
+
+    private func audioChannelCount(of url: URL) async throws -> UInt32 {
+        let audioTracks = try await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
+        guard let audioTrack = audioTracks.first else {
+            return 0
+        }
+
+        let formatDescriptions = try await audioTrack.load(.formatDescriptions)
+        guard let formatDescription = formatDescriptions.first,
+            let basicDescription = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)
+        else {
+            return 0
+        }
+
+        return basicDescription.pointee.mChannelsPerFrame
+    }
+
     private func rangePairs(_ ranges: [VideoTimeRange]) -> [[Double]] {
         ranges.map { [$0.start, $0.end] }
     }
@@ -4036,7 +4156,12 @@ struct ScreenshotMaxxingTests {
         throw TestFixtureError.conditionTimedOut
     }
 
-    private func makeTestVideo(at outputURL: URL, durationSeconds: Double, size: CGSize) async throws {
+    private func makeTestVideo(
+        at outputURL: URL,
+        durationSeconds: Double,
+        size: CGSize,
+        audioChannels: Int? = nil
+    ) async throws {
         let width = Int(size.width)
         let height = Int(size.height)
         let frameRate: Int32 = 30
@@ -4067,6 +4192,26 @@ struct ScreenshotMaxxingTests {
 
         writer.add(videoInput)
 
+        let audioSampleRate: Double = 44_100
+        var audioInput: AVAssetWriterInput?
+        if let audioChannels {
+            let input = AVAssetWriterInput(
+                mediaType: .audio,
+                outputSettings: [
+                    AVFormatIDKey: kAudioFormatMPEG4AAC,
+                    AVNumberOfChannelsKey: audioChannels,
+                    AVSampleRateKey: audioSampleRate,
+                    AVEncoderBitRateKey: 128_000,
+                ]
+            )
+            input.expectsMediaDataInRealTime = false
+            guard writer.canAdd(input) else {
+                throw TestFixtureError.videoWriterFailed("Could not add audio input")
+            }
+            writer.add(input)
+            audioInput = input
+        }
+
         guard writer.startWriting() else {
             throw writer.error ?? TestFixtureError.videoWriterFailed("Could not start writing")
         }
@@ -4093,7 +4238,117 @@ struct ScreenshotMaxxingTests {
         }
 
         videoInput.markAsFinished()
+
+        if let audioInput, let audioChannels {
+            while !audioInput.isReadyForMoreMediaData {
+                try await Task.sleep(nanoseconds: 1_000_000)
+            }
+
+            let sampleBuffer = try makeAudioSampleBuffer(
+                channels: audioChannels,
+                sampleRate: audioSampleRate,
+                durationSeconds: durationSeconds
+            )
+
+            guard audioInput.append(sampleBuffer) else {
+                throw writer.error ?? TestFixtureError.videoWriterFailed("Could not append audio")
+            }
+
+            audioInput.markAsFinished()
+        }
+
         try finishWriting(writer)
+    }
+
+    private func makeAudioSampleBuffer(
+        channels: Int,
+        sampleRate: Double,
+        durationSeconds: Double
+    ) throws -> CMSampleBuffer {
+        let frameCount = max(Int(durationSeconds * sampleRate), 1)
+        let bytesPerFrame = 2 * channels
+
+        var asbd = AudioStreamBasicDescription(
+            mSampleRate: sampleRate,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: UInt32(bytesPerFrame),
+            mFramesPerPacket: 1,
+            mBytesPerFrame: UInt32(bytesPerFrame),
+            mChannelsPerFrame: UInt32(channels),
+            mBitsPerChannel: 16,
+            mReserved: 0
+        )
+
+        var formatDescription: CMAudioFormatDescription?
+        let formatStatus = CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &asbd,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &formatDescription
+        )
+        guard formatStatus == noErr, let formatDescription else {
+            throw TestFixtureError.audioWriterFailed("Could not create audio format description")
+        }
+
+        // Distinct per-channel tones so a real downmix is observable, not just a dropped channel.
+        var samples = [Int16](repeating: 0, count: frameCount * channels)
+        for frame in 0..<frameCount {
+            for channel in 0..<channels {
+                let frequency = 220.0 * Double(channel + 1)
+                let value = sin(2.0 * Double.pi * frequency * Double(frame) / sampleRate)
+                samples[frame * channels + channel] = Int16(value * 12_000)
+            }
+        }
+
+        let dataByteCount = samples.count * MemoryLayout<Int16>.size
+        var blockBuffer: CMBlockBuffer?
+        let blockStatus = CMBlockBufferCreateWithMemoryBlock(
+            allocator: kCFAllocatorDefault,
+            memoryBlock: nil,
+            blockLength: dataByteCount,
+            blockAllocator: kCFAllocatorDefault,
+            customBlockSource: nil,
+            offsetToData: 0,
+            dataLength: dataByteCount,
+            flags: 0,
+            blockBufferOut: &blockBuffer
+        )
+        guard blockStatus == kCMBlockBufferNoErr, let blockBuffer else {
+            throw TestFixtureError.audioWriterFailed("Could not create block buffer")
+        }
+
+        let copyStatus = samples.withUnsafeBytes { rawBuffer in
+            CMBlockBufferReplaceDataBytes(
+                with: rawBuffer.baseAddress!,
+                blockBuffer: blockBuffer,
+                offsetIntoDestination: 0,
+                dataLength: dataByteCount
+            )
+        }
+        guard copyStatus == kCMBlockBufferNoErr else {
+            throw TestFixtureError.audioWriterFailed("Could not copy audio bytes")
+        }
+
+        var sampleBuffer: CMSampleBuffer?
+        let sampleStatus = CMAudioSampleBufferCreateReadyWithPacketDescriptions(
+            allocator: kCFAllocatorDefault,
+            dataBuffer: blockBuffer,
+            formatDescription: formatDescription,
+            sampleCount: frameCount,
+            presentationTimeStamp: .zero,
+            packetDescriptions: nil,
+            sampleBufferOut: &sampleBuffer
+        )
+        guard sampleStatus == noErr, let sampleBuffer else {
+            throw TestFixtureError.audioWriterFailed("Could not create audio sample buffer")
+        }
+
+        return sampleBuffer
     }
 
     private func makePixelBuffer(width: Int, height: Int, red: UInt8, green: UInt8, blue: UInt8) throws -> CVPixelBuffer
@@ -4147,7 +4402,10 @@ struct ScreenshotMaxxingTests {
         writer.finishWriting {
             semaphore.signal()
         }
-        semaphore.wait()
+        guard semaphore.wait(timeout: .now() + 10) == .success else {
+            writer.cancelWriting()
+            throw TestFixtureError.conditionTimedOut
+        }
 
         if let error = writer.error {
             throw error
@@ -4160,6 +4418,7 @@ struct ScreenshotMaxxingTests {
 
     private enum TestFixtureError: Error {
         case videoWriterFailed(String)
+        case audioWriterFailed(String)
         case pixelBufferCreationFailed(CVReturn)
         case conditionTimedOut
     }
