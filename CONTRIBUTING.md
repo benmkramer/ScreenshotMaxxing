@@ -63,7 +63,7 @@ Format Swift sources before opening a pull request:
 scripts/format.sh
 ```
 
-To check formatting without rewriting files:
+To check formatting and GitHub issue-template YAML without rewriting files:
 
 ```sh
 scripts/lint.sh
