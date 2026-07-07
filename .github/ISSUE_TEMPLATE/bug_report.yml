@@ -7,7 +7,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting a bug. Do not attach screenshots or recordings that contain private information.
+        Thanks for reporting a bug.
+
+        Do not use this public issue form for vulnerabilities, exposed secrets, privacy-sensitive bugs, or reports involving recoverable sensitive screen contents. Use the private reporting path in [SECURITY.md](https://github.com/benmkramer/ScreenshotMaxxing/security/policy) instead.
+
+        Do not attach screenshots or recordings that contain private information. Redact or recreate the issue with non-sensitive content when possible.
   - type: input
     id: version
     attributes:
