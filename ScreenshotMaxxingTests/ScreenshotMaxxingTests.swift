@@ -126,7 +126,7 @@ struct ScreenshotMaxxingTests {
         let result = try await controller.captureArea(baseDirectory: baseDirectory)
 
         #expect(result.mode == .area)
-        #expect(recordedCommand.arguments == ["-i", "-s", "-x", result.fileURL.fileSystemPath])
+        #expect(recordedCommand.arguments == ["-i", "-Jselection", "-x", result.fileURL.fileSystemPath])
         #expect(!recordedCommand.arguments.joined(separator: " ").contains("%20"))
         #expect(result.fileURL.deletingLastPathComponent().lastPathComponent == "originals")
         #expect(fileManager.fileExists(atPath: result.fileURL.fileSystemPath))
@@ -203,7 +203,7 @@ struct ScreenshotMaxxingTests {
 
         #expect(
             CaptureMode.area.screencaptureArguments(outputURL: outputURL) == [
-                "-i", "-s", "-x", "/tmp/Application Support/screenshot.png",
+                "-i", "-Jselection", "-x", "/tmp/Application Support/screenshot.png",
             ])
         #expect(
             CaptureMode.window.screencaptureArguments(outputURL: outputURL) == [
