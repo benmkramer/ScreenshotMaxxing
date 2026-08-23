@@ -6,6 +6,8 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 
 ## Unreleased
 
+## 2.0.8 - 2026-08-23
+
 - Added the native Space-key toggle between area and window targeting while selecting an area screenshot.
 
 ## 2.0.7 - 2026-07-04
