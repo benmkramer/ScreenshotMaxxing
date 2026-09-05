@@ -145,19 +145,33 @@ enum AppWindowPresenter {
             activateIgnoringOtherApps: {
                 NSApp.activate(ignoringOtherApps: true)
             },
-            makeKeyAndOrderFront: {
-                window.makeKeyAndOrderFront(nil)
+            makeKeyAndOrderFront: { [weak window] in
+                window?.makeKeyAndOrderFront(nil)
+            },
+            canStillPresent: { [weak window] in
+                window?.isVisible == true && window?.isMiniaturized == false
+            },
+            scheduleActivation: { action in
+                DispatchQueue.main.async { action() }
             }
         )
     }
 
     static func activateAndOrderFront(
         setRegularActivationPolicy: () -> Bool,
-        activateIgnoringOtherApps: () -> Void,
-        makeKeyAndOrderFront: () -> Void
+        activateIgnoringOtherApps: @escaping @MainActor () -> Void,
+        makeKeyAndOrderFront: @escaping @MainActor () -> Void,
+        canStillPresent: @escaping @MainActor () -> Bool,
+        scheduleActivation: (@escaping @MainActor () -> Void) -> Void
     ) {
         _ = setRegularActivationPolicy()
-        activateIgnoringOtherApps()
+        // Show immediately so window-close bookkeeping sees the pending editor.
         makeKeyAndOrderFront()
+        // Let AppKit process the accessory-to-regular transition before requesting focus.
+        scheduleActivation {
+            guard canStillPresent() else { return }
+            activateIgnoringOtherApps()
+            makeKeyAndOrderFront()
+        }
     }
 }
