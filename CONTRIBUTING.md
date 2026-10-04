@@ -10,7 +10,7 @@ ScreenshotMaxxing is a local-first Mac utility for screenshots, lightweight edit
 - No accounts, telemetry, hosted capture library, or cloud sync.
 - Permission prompts should be explained clearly and requested only when needed.
 - Blur is an obscuration tool, not a certified irreversible redaction system.
-- Official distribution remains the signed and notarized DMG release channel from this repository.
+- Official distribution uses signed and notarized DMGs from this repository, including installation of those DMGs through the public Homebrew tap.
 
 ## Development Requirements
 
@@ -101,6 +101,14 @@ LOCAL_ONLY=1 scripts/release-dmg.sh
 ```
 
 Official release details live in [docs/RELEASING.md](docs/RELEASING.md). Do not include Apple certificates, notary credentials, Sparkle private keys, or GitHub release secrets in pull requests.
+
+Homebrew release tooling tests run independently of Xcode:
+
+```sh
+python3 -m unittest discover -s scripts/tests -v
+```
+
+The updater must verify the published public DMG before writing the cask. Maintainer credentials and retry instructions are in [Homebrew distribution](docs/RELEASING.md#homebrew-distribution).
 
 ## Planning Documents
 

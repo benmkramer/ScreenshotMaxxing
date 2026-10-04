@@ -8,6 +8,7 @@ releases/
 *.tar.gz
 *.aar
 site/release.json
+__pycache__/
 
 # Local credentials and signing material.
 .env

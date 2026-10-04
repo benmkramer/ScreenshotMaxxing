@@ -6,6 +6,7 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 
 ## Unreleased
 
+- Added Homebrew installation through `benmkramer/tap/screenshotmaxxing`, using the official signed and notarized release DMG, and automated verified stable-release cask updates.
 ## 2.0.9 - 2026-10-04
 
 - Fixed first-capture editor focus by deferring activation until after the menu bar app has been promoted and its window shown.

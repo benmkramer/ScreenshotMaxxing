@@ -14,7 +14,7 @@ Open a GitHub issue with:
 
 - ScreenshotMaxxing version.
 - macOS version.
-- Whether you installed the official DMG, built from source, or used a fork.
+- Whether you installed the official DMG manually, used `benmkramer/tap/screenshotmaxxing`, built from source, or used a fork.
 - Capture or recording mode: area, window, fullscreen, screenshot, or video.
 - Whether microphone or system audio was enabled.
 - Whether Screen Recording and Microphone permissions are granted in System Settings.
@@ -36,7 +36,9 @@ Large features such as cloud sync, hosted sharing, accounts, team workflows, or 
 
 ## Official Builds
 
-Official builds are the signed and notarized DMGs published by Ben Kramer from this repository. Builds from forks, local source checkouts, or other distribution channels are unofficial and may have different code signing, permissions, update, or bundle identity behavior.
+Official builds are the signed and notarized DMGs published by Ben Kramer from this repository. The Homebrew cask `benmkramer/tap/screenshotmaxxing` installs the same DMG. Builds from forks, local source checkouts, or other distribution channels are unofficial and may have different code signing, permissions, update, or bundle identity behavior.
+
+For Homebrew problems, include `brew info --cask benmkramer/tap/screenshotmaxxing` and the failing command's output. Installation, upgrade, and uninstall instructions are in [README.md](README.md#homebrew). Do not disable Gatekeeper to work around a packaging problem.
 
 ## Local Development Help
 

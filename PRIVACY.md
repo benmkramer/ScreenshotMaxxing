@@ -61,7 +61,7 @@ Release downloads, GitHub Releases, the project website, and any future auto-upd
 
 ## Official Builds
 
-Official builds are the signed and notarized DMGs published by Ben Kramer from this repository. Builds from forks, local source checkouts, or other distribution channels may have different code signing, notarization, update, bundle identity, or privacy behavior.
+Official builds are the signed and notarized DMGs published by Ben Kramer from this repository, including those installed through `benmkramer/tap/screenshotmaxxing`, which downloads the same DMG. Homebrew installation, upgrades, and normal uninstall do not remove captures, local history, or preferences. The cask has no `zap` stanza. Builds from forks, local source checkouts, or other distribution channels may have different code signing, notarization, update, bundle identity, or privacy behavior.
 
 ## Contact
 
