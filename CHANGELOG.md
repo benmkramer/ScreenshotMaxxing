@@ -6,6 +6,8 @@ This project uses GitHub Releases for official downloadable DMGs. The changelog 
 
 ## Unreleased
 
+## 2.0.9 - 2026-10-04
+
 - Fixed first-capture editor focus by deferring activation until after the menu bar app has been promoted and its window shown.
 
 ## 2.0.8 - 2026-08-23
