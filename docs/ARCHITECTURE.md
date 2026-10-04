@@ -6,7 +6,7 @@ ScreenshotMaxxing is a local-first native macOS utility. It is built with Swift,
 
 The app intentionally avoids accounts, telemetry, hosted screenshot libraries, subscriptions, and cloud sync. Captures, recordings, edits, thumbnails, and metadata stay on the user's Mac unless the user explicitly shares, copies, saves, backs up, or syncs them through macOS or another app.
 
-Official distribution is a signed and notarized Developer ID DMG. Release mechanics are documented in [RELEASING.md](RELEASING.md).
+Official distribution is a signed and notarized Developer ID DMG, installed manually or through the public Homebrew cask. Release mechanics are documented in [RELEASING.md](RELEASING.md).
 
 ## App Entry
 
@@ -105,6 +105,8 @@ Debug and Release builds use separate bundle identifiers so macOS permissions fo
 - `scripts/release-dmg.sh` builds the app, exports a Developer ID app, creates the DMG, and can notarize/staple it.
 - `.github/workflows/prepare-release.yml` opens version bump PRs.
 - `.github/workflows/release-dmg.yml` builds, signs, notarizes, uploads, and publishes release DMGs.
+- `.github/workflows/update-homebrew.yml` runs after public release asset upload, or manually to retry an existing release. It uses `scripts/update-homebrew-cask.py` to verify the public asset and update only `Casks/screenshotmaxxing.rb` in `benmkramer/homebrew-tap`. Drafts and prereleases do not change the stable cask.
+- `.github/workflows/homebrew-ci.yml` checks the updater's channel policy, checksum validation, bundle requirements, idempotency, and downgrade protection.
 - `.github/workflows/deploy-site.yml` deploys the static website in `site/`.
 
 The release path should keep signing and notary secrets out of the repository.

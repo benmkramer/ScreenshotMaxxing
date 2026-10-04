@@ -1,6 +1,6 @@
 # Releasing ScreenshotMaxxing
 
-ScreenshotMaxxing should be distributed as a Developer ID-signed, notarized DMG. Auto updates should use Sparkle with a public HTTPS appcast.
+ScreenshotMaxxing is distributed as a Developer ID-signed, notarized DMG, manually or through the public Homebrew tap. Sparkle integration and a public HTTPS appcast remain planned; the app currently uses manual downloads or Homebrew for upgrades.
 
 ## Release Artifact
 
@@ -88,6 +88,8 @@ Public release artifacts are named after `MARKETING_VERSION`, for example `Scree
 
 The `Release DMG` workflow can also be triggered manually from `main` with `publish_release` left disabled. That builds, signs, notarizes, validates, and uploads a workflow artifact without creating or updating a GitHub Release.
 
+After a GitHub Release asset is uploaded, the workflow calls `Update Homebrew Cask`. Artifact-only manual builds do not update the tap. A tap update failure leaves the already published release available and marks the workflow failed so the maintainer can retry the tap update separately.
+
 Required GitHub repository secrets:
 
 ```text
@@ -119,7 +121,71 @@ base64 -i DeveloperIDApplication.p12 | pbcopy
 base64 -i AuthKey_<key-id>.p8 | pbcopy
 ```
 
-## Auto Updates
+## Homebrew Distribution
+
+The public [benmkramer/homebrew-tap](https://github.com/benmkramer/homebrew-tap) contains `Casks/screenshotmaxxing.rb`. Once that cask PR merges, users can install, launch, upgrade, and uninstall with:
+
+```sh
+brew install --cask benmkramer/tap/screenshotmaxxing
+open -a ScreenshotMaxxing
+brew update
+brew upgrade --cask benmkramer/tap/screenshotmaxxing
+brew uninstall --cask benmkramer/tap/screenshotmaxxing
+```
+
+Quit the app before upgrades or uninstall. Captures, SwiftData history, and preferences are preserved; there is no `zap` stanza. Existing manually installed app bundles must be moved out of `/Applications` before installation, without deleting user data.
+
+The seed is stable `v2.0.9`, bundle build 14. Its public DMG is universal (`arm64` and `x86_64`) and its bundle declares macOS 26.2. Homebrew's supported dependency syntax expresses macOS by major release (`:tahoe`); the cask caveat states the exact 26.2 requirement, and macOS enforces the bundle minimum at launch. No quarantine removal, ad hoc signing, or Gatekeeper bypass is used.
+
+The cask version is `<marketing-version>,<bundle-build>`, so build-only releases also produce Homebrew upgrades. Its versioned URL points at the published DMG. Do not replace an existing release with different bytes at the same marketing version and build: bump at least the build number. Otherwise existing Homebrew users need `brew reinstall --cask benmkramer/tap/screenshotmaxxing` to fetch the replacement.
+
+### Channel And Verification Policy
+
+The cask follows numeric stable tags, matching `scripts/set-release-version.sh`, and skips GitHub drafts and prereleases. The existing release-preparation script accepts numeric marketing versions only; this change does not add a prerelease publishing channel. Manually published prereleases remain available through GitHub Releases and are excluded from the stable cask.
+
+`scripts/update-homebrew-cask.py` reads release metadata with GitHub's API, selects the exact final DMG asset, downloads its public URL without authentication, computes SHA-256, and compares the size and published digest when available. It verifies DMG integrity, its signature and stapled notarization ticket, Gatekeeper acceptance of the DMG and contained app, the app's Developer ID team/hardened runtime, bundle identity/version/build, and executable architectures. It derives the cask requirements from that bundle and fails on unsupported future macOS major versions until the Homebrew symbol mapping is updated.
+
+The updater serializes tap writes, ignores older version/build pairs, and makes no commit when the cask already matches. Homebrew syntax, style, and strict online audits must pass before pushing a commit that stages only the app cask. Stable release assets remain hosted in this public app repository; no separate public artifact destination is needed.
+
+### Maintainer Credential Setup
+
+First inspect secret names, without retrieving values:
+
+```sh
+gh secret list --repo benmkramer/ScreenshotMaxxing
+```
+
+The existing six Apple signing/notarization secrets above remain required. Also configure `HOMEBREW_TAP_TOKEN` in **ScreenshotMaxxing**, with a fine-grained GitHub token whose repository access is restricted to **benmkramer/homebrew-tap**, and whose repository permission is **Contents: Read and write**. GitHub also grants mandatory metadata read access. No Pull requests or Workflows permission is needed because automation commits only the cask directly to tap `main`. That branch must permit the token owner to push; the initial cask and automation changes are reviewed in PRs.
+
+Add or rotate the token through [Actions secrets](https://github.com/benmkramer/ScreenshotMaxxing/settings/secrets/actions), or use the interactive CLI prompt:
+
+```sh
+gh secret set HOMEBREW_TAP_TOKEN --repo benmkramer/ScreenshotMaxxing
+```
+
+Do not put the token in command arguments, source, logs, or chat. GitHub can list the secret's presence but cannot reveal or verify its contents/scope. Expiration, repository selection, and write access need to be checked by the owner or a real tap update.
+
+Merge the tap cask PR before the app automation PR. After the app PR merges, future published stable releases update the tap automatically. To retry a failed update or sync an existing stable release without rebuilding, run **Update Homebrew Cask** on `main` with its tag:
+
+```sh
+gh workflow run update-homebrew.yml --repo benmkramer/ScreenshotMaxxing --ref main -f tag=v2.0.9
+```
+
+For local maintainer validation, use a clean tap feature-branch checkout:
+
+```sh
+python3 -m unittest discover -s scripts/tests -v
+python3 scripts/update-homebrew-cask.py v2.0.9 /path/to/homebrew-tap
+ruby -c /path/to/homebrew-tap/Casks/screenshotmaxxing.rb
+brew style /path/to/homebrew-tap/Casks/screenshotmaxxing.rb
+brew audit --cask --strict --online /path/to/homebrew-tap/Casks/screenshotmaxxing.rb
+```
+
+Installation/upgrade smoke tests should use a disposable macOS user or CI runner with no existing app and an isolated `--appdir`. Launch the official bundle only in a disposable user if validating startup could touch existing history/preferences. Do not use `--force`, `--adopt`, `--zap`, reset TCC, or alter the installed app during packaging tests on a user's working Mac.
+
+The cask and validation commands follow the official [Cask Cookbook](https://docs.brew.sh/Cask-Cookbook), [tap guide](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap), and [brew manual](https://docs.brew.sh/Manpage).
+
+## Planned Sparkle Auto Updates
 
 Use Sparkle 2. The release channel needs three things:
 
@@ -185,6 +251,6 @@ Upload the whole updates directory, including `appcast.xml`, DMGs, release notes
    NOTARIZE=1 NOTARY_PROFILE=screenshotmaxxing-notary scripts/release-dmg.sh
    ```
 
-4. Upload the updates directory to GitHub Pages.
-5. Optionally upload the same DMG to GitHub Releases for manual installs.
-6. Launch an older installed build and use `Check for Updates...` to verify the update path.
+4. Confirm `Update Homebrew Cask` succeeds after publication; retry that workflow separately if needed.
+5. Test `brew update` and `brew upgrade --cask benmkramer/tap/screenshotmaxxing` on a disposable installation.
+6. When Sparkle is implemented, publish its updates directory and verify `Check for Updates...` from an older build.

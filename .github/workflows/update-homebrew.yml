@@ -1,0 +1,87 @@
+name: Update Homebrew Cask
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+    secrets:
+      HOMEBREW_TAP_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing published stable release tag to sync (without rebuilding).
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Serialize retries/releases so an older run cannot overwrite a newer cask.
+concurrency:
+  group: homebrew-tap-screenshotmaxxing
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Verify Published DMG and Update Tap
+    runs-on: macos-26
+    steps:
+      - name: Require the official main branch and tap credential
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REPOSITORY" == "benmkramer/ScreenshotMaxxing" && "$GITHUB_REF" == "refs/heads/main" ]] || {
+            echo "Tap updates must run from benmkramer/ScreenshotMaxxing main." >&2
+            exit 1
+          }
+          : "${HOMEBREW_TAP_TOKEN:?Missing HOMEBREW_TAP_TOKEN secret}"
+
+      - name: Check out app release tooling
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # actions/checkout v4
+        with:
+          persist-credentials: false
+
+      - name: Check out the public tap
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # actions/checkout v4
+        with:
+          repository: benmkramer/homebrew-tap
+          ref: main
+          path: homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Derive cask from the verified public asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: python3 scripts/update-homebrew-cask.py "$RELEASE_TAG" homebrew-tap
+
+      - name: Validate and push only the app cask
+        working-directory: homebrew-tap
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_ANALYTICS: "1"
+        run: |
+          set -euo pipefail
+          CASK="Casks/screenshotmaxxing.rb"
+          if [[ -z "$(git status --porcelain -- "$CASK")" ]]; then
+            echo "No cask update needed."
+            exit 0
+          fi
+          ruby -c "$CASK"
+          # Homebrew requires installed casks to belong to a registered tap.
+          brew tap benmkramer/tap
+          BREW_TAP="$(brew --repository benmkramer/tap)"
+          mkdir -p "$BREW_TAP/Casks"
+          cp "$CASK" "$BREW_TAP/$CASK"
+          brew style --cask benmkramer/tap/screenshotmaxxing
+          brew audit --cask --strict --online benmkramer/tap/screenshotmaxxing
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "$CASK"
+          git commit -m "Update ScreenshotMaxxing cask from verified release"
+          git push origin HEAD:main

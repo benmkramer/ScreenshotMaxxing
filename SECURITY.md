@@ -44,6 +44,7 @@ Reports are especially useful in these areas:
 - Confused-deputy or time-of-check/time-of-use bugs in window or screen selection.
 - Temporary files used during capture, recording, editing, or release.
 - Developer ID signing, notarization, release workflows, GitHub Actions, and future auto-update metadata.
+- The public Homebrew cask, its pinned release checksum, and the token used to update `benmkramer/homebrew-tap`.
 
 ## Redaction And Sensitive Content
 
@@ -52,5 +53,7 @@ ScreenshotMaxxing's pixelated blur tool modifies exported pixels, but blur is no
 ## Secrets
 
 The repository must not contain private signing certificates, certificate passwords, App Store Connect private keys, notary credentials, Sparkle private keys, GitHub personal access tokens, or other deployment secrets.
+
+`HOMEBREW_TAP_TOKEN` should be a fine-grained GitHub token restricted to `benmkramer/homebrew-tap`, with only Contents: Read and write (and GitHub's mandatory metadata access). It belongs in this app repository's Actions secrets, never in source, logs, or chat. The Homebrew updater runs only from the official repository's `main`, verifies the public signed/notarized DMG, and commits only `Casks/screenshotmaxxing.rb`.
 
 If you believe a secret was exposed, report it privately and include the file path, commit, or artifact where it appears.

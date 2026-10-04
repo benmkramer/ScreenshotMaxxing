@@ -88,6 +88,8 @@ jobs:
     runs-on: macos-26
     needs: detect-version-change
     if: needs.detect-version-change.outputs.changed == 'true'
+    outputs:
+      published_tag: ${{ steps.publish.outputs.tag }}
     env:
       RELEASE_VERSION: ${{ needs.detect-version-change.outputs.version }}
       BUILD_NUMBER: ${{ needs.detect-version-change.outputs.build }}
@@ -224,6 +226,7 @@ jobs:
           if-no-files-found: error
 
       - name: Create or update GitHub Release
+        id: publish
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.publish_release)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -240,3 +243,17 @@ jobs:
               --title "ScreenshotMaxxing ${RELEASE_VERSION}" \
               --notes "Notarized Developer ID DMG for build ${BUILD_NUMBER}."
           fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  update-homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    if: needs.release.outputs.published_tag != ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/update-homebrew.yml
+    with:
+      tag: ${{ needs.release.outputs.published_tag }}
+    secrets:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

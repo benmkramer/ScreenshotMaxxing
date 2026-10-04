@@ -20,7 +20,30 @@ Captures, recordings, edits, thumbnails, and metadata stay on your Mac unless yo
 
 ## Distribution
 
-Official builds are only the signed and notarized DMGs published by Ben Kramer from this repository. Builds from forks, local source checkouts, or other distribution channels are unofficial and may have different code signing, notarization, update, or bundle identity behavior.
+Official builds are the signed and notarized DMGs published by Ben Kramer from this repository. The public [benmkramer/tap cask](https://github.com/benmkramer/homebrew-tap/blob/main/Casks/screenshotmaxxing.rb) installs the same official DMG, with its SHA-256 checked by Homebrew. Builds from forks, local source checkouts, or other distribution channels are unofficial and may have different code signing, notarization, update, or bundle identity behavior.
+
+### Homebrew
+
+Requires macOS 26.2 or later on Apple Silicon or Intel. After the cask is merged into the tap:
+
+```sh
+brew install --cask benmkramer/tap/screenshotmaxxing
+open -a ScreenshotMaxxing
+```
+
+Quit the app before upgrading or uninstalling:
+
+```sh
+brew update
+brew upgrade --cask benmkramer/tap/screenshotmaxxing
+brew uninstall --cask benmkramer/tap/screenshotmaxxing
+```
+
+The cask follows stable releases only. Upgrades and normal uninstall preserve captures, local history, and preferences. The cask has no `zap` stanza. Homebrew uses the original release bundle identity, so macOS manages Screen Recording and optional Microphone permissions as usual.
+
+If you already installed the DMG manually, quit the app and move only `/Applications/ScreenshotMaxxing.app` to Trash before installing the cask. Keep your data in `~/Library/Application Support/ScreenshotMaxxing/`. Homebrew refuses to overwrite an existing app by default.
+
+Homebrew distribution is maintained using the setup in [docs/RELEASING.md](docs/RELEASING.md#homebrew-distribution).
 
 ## Branding And Forks
 
