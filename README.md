@@ -36,6 +36,7 @@ The MIT License grants broad rights to use, modify, and redistribute the code. P
 - [Architecture](docs/ARCHITECTURE.md)
 - [Releasing](docs/RELEASING.md)
 - [Product plan](docs/PRD.md)
+- [Implementation plans](docs/plans/README.md)
 
 ## License
 

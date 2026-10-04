@@ -102,6 +102,10 @@ LOCAL_ONLY=1 scripts/release-dmg.sh
 
 Official release details live in [docs/RELEASING.md](docs/RELEASING.md). Do not include Apple certificates, notary credentials, Sparkle private keys, or GitHub release secrets in pull requests.
 
+## Planning Documents
+
+Use the [implementation plan index](docs/plans/README.md) to find plans and their design specifications. Follow the documentation layout convention in [AGENTS.md](AGENTS.md) when adding or moving planning documents.
+
 ## Pull Requests
 
 Before opening a pull request:

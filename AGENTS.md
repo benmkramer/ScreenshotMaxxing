@@ -18,6 +18,8 @@ Do not strengthen redaction, privacy, or security claims beyond what the code ac
 
 For local-only ScreenshotMaxxing security reviews, do not over-rank issues that only produce visible local output the user can inspect and delete. Treat wrong-window or wrong-region capture outcomes as product correctness or privacy UX bugs unless there is a path to silent persistence, disclosure outside the Mac, or misleading deletion/redaction behavior.
 
+Store implementation plans in `docs/plans/` and design specifications in `docs/specs/`. Do not create root-level or tool-specific planning directories. When adding or moving a plan, update `docs/plans/README.md` and its path references.
+
 When editing GitHub issue forms, validate the YAML.
 
 For local verification, prefer the project scripts over long inline commands:
