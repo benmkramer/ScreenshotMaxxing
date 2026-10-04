@@ -46,6 +46,7 @@ Recordings are saved locally as MP4 or MOV files. Microphone-enabled recordings 
 Screenshot editing code lives in `Editor/`.
 
 - `ScreenshotEditorWindowController` creates the editor window.
+- `AppWindowPresenter` promotes the menu bar app and shows user-facing windows, then requests activation on the next main-queue turn. The deferred request skips windows that have been closed, hidden, or minimized.
 - `ScreenshotEditorView` renders the editor UI and user interactions.
 - `ScreenshotEditorState` manages annotation state, selection, tool settings, undoable editing state, and export state.
 - `Annotation` and `EditorTool` define supported annotations and tools.

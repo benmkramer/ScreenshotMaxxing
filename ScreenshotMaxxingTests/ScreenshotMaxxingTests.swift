@@ -900,8 +900,9 @@ struct ScreenshotMaxxingTests {
     }
 
     @MainActor
-    @Test func appWindowPresenterPromotesActivatesThenOrdersFront() {
+    @Test func appWindowPresenterDefersActivationUntilAfterPromotionAndShowingWindow() {
         var events: [String] = []
+        var pendingActivation: (@MainActor () -> Void)?
 
         AppWindowPresenter.activateAndOrderFront(
             setRegularActivationPolicy: {
@@ -913,10 +914,40 @@ struct ScreenshotMaxxingTests {
             },
             makeKeyAndOrderFront: {
                 events.append("front")
-            }
+            },
+            canStillPresent: { true },
+            scheduleActivation: { pendingActivation = $0 }
         )
 
-        #expect(events == ["regular", "activate", "front"])
+        #expect(events == ["regular", "front"])
+        #expect(pendingActivation != nil)
+        pendingActivation?()
+        #expect(events == ["regular", "front", "activate", "front"])
+    }
+
+    @MainActor
+    @Test func appWindowPresenterDoesNotReactivateDismissedWindow() {
+        @MainActor
+        final class WindowState {
+            var isVisible = true
+        }
+        let state = WindowState()
+        var activationCount = 0
+        var orderFrontCount = 0
+        var pendingActivation: (@MainActor () -> Void)?
+
+        AppWindowPresenter.activateAndOrderFront(
+            setRegularActivationPolicy: { true },
+            activateIgnoringOtherApps: { activationCount += 1 },
+            makeKeyAndOrderFront: { orderFrontCount += 1 },
+            canStillPresent: { state.isVisible },
+            scheduleActivation: { pendingActivation = $0 }
+        )
+
+        state.isVisible = false
+        pendingActivation?()
+        #expect(activationCount == 0)
+        #expect(orderFrontCount == 1)
     }
 
     @MainActor
