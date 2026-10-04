@@ -26,7 +26,8 @@ if brew list --cask "$TOKEN" >/dev/null 2>&1; then
   exit 1
 fi
 if [[ "${1:-}" == "--launch" ]] && {
-  [[ -e /Applications/ScreenshotMaxxing.app ]] || pgrep -x ScreenshotMaxxing >/dev/null;
+  [[ -e /Applications/ScreenshotMaxxing.app ]] ||
+    pgrep -f '/ScreenshotMaxxing.app/Contents/MacOS/ScreenshotMaxxing($| )' >/dev/null;
 }; then
   echo "Refusing launch testing while another official installation/process exists." >&2
   exit 1
@@ -102,7 +103,9 @@ if [[ "${1:-}" == "--launch" ]]; then
   open -n "$APP_PATH" > "$TEST_ROOT/open.log" 2>&1 &
   OPEN_PID=$!
   for attempt in {1..30}; do
-    LAUNCH_PID="$(pgrep -f "^$APP_PATH/Contents/MacOS/ScreenshotMaxxing$" || true)"
+    # Launch Services normalizes /var symlinks and repeated path separators.
+    # The preflight above ensures this disposable account has no other app.
+    LAUNCH_PID="$(pgrep -f '/ScreenshotMaxxing.app/Contents/MacOS/ScreenshotMaxxing($| )' || true)"
     [[ -n "$LAUNCH_PID" ]] && break
     sleep 1
   done
