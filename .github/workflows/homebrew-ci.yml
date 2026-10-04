@@ -32,3 +32,10 @@ jobs:
           persist-credentials: false
       - name: Verify published releases and exercise a disposable installation
         run: scripts/test-homebrew.sh --launch
+      - name: Upload launch diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4
+        with:
+          name: homebrew-launch-diagnostics
+          path: ${{ runner.temp }}/HomebrewLaunchDiagnostics
+          if-no-files-found: ignore

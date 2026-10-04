@@ -16,6 +16,7 @@ TEST_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/screenshotmaxxing-homebrew-test.XXXXXX")
 APP_DIR="$TEST_ROOT/Applications"
 APP_PATH="$APP_DIR/ScreenshotMaxxing.app"
 LAUNCH_PID=""
+OPEN_PID=""
 INSTALLED=0
 DATA_SENTINEL=""
 PREFERENCE_KEY="HomebrewPackagingTest"
@@ -41,6 +42,9 @@ if [[ -f "$CASK_PATH" ]]; then
 fi
 
 cleanup() {
+  if [[ -n "$OPEN_PID" ]] && kill -0 "$OPEN_PID" 2>/dev/null; then
+    kill "$OPEN_PID" || true
+  fi
   if [[ -n "$LAUNCH_PID" ]] && kill -0 "$LAUNCH_PID" 2>/dev/null; then
     kill "$LAUNCH_PID" || true
   fi
@@ -93,13 +97,23 @@ spctl --assess --verbose=2 --type execute "$APP_PATH"
 xattr -p com.apple.quarantine "$APP_PATH"
 
 if [[ "${1:-}" == "--launch" ]]; then
-  open -n "$APP_PATH"
-  for attempt in 1 2 3 4 5; do
+  # Launch Services can wait for a first-open dialog on a hosted GUI session.
+  # Bound that wait and keep diagnostics instead of hanging the entire job.
+  open -n "$APP_PATH" > "$TEST_ROOT/open.log" 2>&1 &
+  OPEN_PID=$!
+  for attempt in {1..30}; do
     LAUNCH_PID="$(pgrep -f "^$APP_PATH/Contents/MacOS/ScreenshotMaxxing$" || true)"
     [[ -n "$LAUNCH_PID" ]] && break
     sleep 1
   done
-  test -n "$LAUNCH_PID"
+  if [[ -z "$LAUNCH_PID" ]]; then
+    DIAGNOSTICS="${RUNNER_TEMP:-$TEST_ROOT}/HomebrewLaunchDiagnostics"
+    mkdir -p "$DIAGNOSTICS"
+    cp "$TEST_ROOT/open.log" "$DIAGNOSTICS/open.log"
+    screencapture -x "$DIAGNOSTICS/desktop.png" || true
+    echo "Launch Services did not start the app within 30 seconds; inspect launch diagnostics." >&2
+    exit 1
+  fi
   sleep 2
   kill -0 "$LAUNCH_PID"
   echo "Official quarantined app launched and stayed running."
